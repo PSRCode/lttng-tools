@@ -9,14 +9,7 @@ JCC=javac
 endif
 
 # We still need to copy static files for out of tree and dist build
-if BUILD_JAVA_LOG4J_AGENT
-all-local: static_file JTestLTTng.class
-
-%.class: %.java
-	$(JCC) -d "$(builddir)" $(JAVACFLAGS) $<
-else
 all-local: static_file
-endif # BUILD_JAVA_LOG4J_AGENT
 
 JTestLTTng.class: JTestLTTng.java
 

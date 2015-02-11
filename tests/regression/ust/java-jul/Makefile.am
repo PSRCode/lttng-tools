@@ -12,13 +12,7 @@ AGENT_JAR_FILE=$(java_agent_jar_path)
 
 
 # Still need to copy test files in case of out of tree build
-if BUILD_JAVA_AGENT
-all-local: static_file JTestLTTng.class
-%.class: %.java
-	$(JCC) -d "$(builddir)" -cp "$(AGENT_JAR_FILE):." $<
-else
 all-local: static_file
-endif # BUILD_JAVA_AGENT
 
 
 static_file:

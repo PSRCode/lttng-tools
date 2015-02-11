@@ -364,44 +364,80 @@ AS_IF([test $JAVA_JDK],[
 	)
 ])
 
-# Check for the UST agent jar file in the system. Hardcoded path is added here
-# since we have *no* idea where this could be installed. Note that this is only
-# used for agent testing.
-AC_MSG_CHECKING(Java UST agent jar file)
-java_agent_jar_path="${prefix}/share/java/liblttng-ust-agent.jar"
-if test -f $java_agent_jar_path; then
-	build_java_agent=yes
-	AC_MSG_RESULT(found)
-else
-	build_java_agent=no
-	AC_MSG_RESULT(not found)
-fi
-AM_CONDITIONAL([BUILD_JAVA_AGENT], [test "x$build_java_agent" = "xyes"])
-AC_SUBST([java_agent_jar_path])
+AC_ARG_WITH([java-classpath],
+	[AS_HELP_STRING([--with-java-classpath=DIR],[use the Java classpath in DIR. Ex : $JAVA_HOME.])],
+	[JAVA_CLASSPATH=$withval],
+	[JAVA_CLASSPATH=""]
+)
 
-# Check for log4j support on the system to know if we can build or not the
-# log4j tests.
-if test "x$build_java_agent" = "xyes"; then
-	AC_MSG_CHECKING(Java agent support for log4j)
+AC_ARG_ENABLE([java-agent-tests-jul],
+    [AC_HELP_STRING(
+        [--enable-java-agent-tests-jul],
+        [enable the lttng-ust java jul agent tests. Use --with-java-classpath=CLASSPATH to define the java CLASSPATH.[default=no]]
+    )],
+    [enable_java_agent_tests_jul=yes], [enable_java_agent_tests_jul=no]
+)
+
+AC_ARG_ENABLE([java-agent-tests-log4j],
+    [AC_HELP_STRING(
+        [--enable-java-agent-tests-log4j],
+        [enable the lttng-ust java log4j agent tests. Use --with-java-classpath=CLASSPATH to define the java CLASSPATH.[default=no]]
+    )],
+    [enable_java_agent_tests_log4j=yes], [enable_java_agent_tests_log4j=no]
+)
+
+AC_ARG_ENABLE([java-agent-tests-all],
+	[AC_HELP_STRING(
+		[--enable-java-agent-tests-all],
+		[enable the lttng-ust java log4j agent tests. Use --with-java-classpath=CLASSPATH to define the java CLASSPATH.[default=no]]
+	)],[
+		enable_java_agent_tests_log4j=yes
+		enable_java_agent_tests_jul=yes
+	],[
+		enable_java_agent_tests_log4j=no
+		enable_java_agent_tests_jul=no
+	]
+)
+
+AM_CONDITIONAL([BUILD_JAVA_AGENT_TESTS_JUL], [test "x${enable_java_agent_tests_jul}" = "xyes"])
+AM_CONDITIONAL([BUILD_JAVA_AGENT_TESTS_LOG4J], [test "x${enable_java_agent_tests_log4j}" = "xyes"])
+
+AS_IF([test "x${enable_java_agent_tests_jul}" = "xyes" || test "x${enable_java_agent_tests_log4j}" = "xyes"],[
+
+	AS_IF([test "x${CLASSPATH}" != "x"],[
+		AS_IF([test "x${JAVA_CLASSPATH}" != "x"],[
+			AC_MSG_WARN([Environment variable CLASSPATH overide option --with-java-classpath])
+			JAVA_CLASSPATH=$CLASSPATH
+		])
+	],[
+		AS_IF([test "x${JAVA_CLASSPATH}" = "x"],[
+			AC_MSG_ERROR([No classpath provided. Set classpath via --with-java-classpath or via exporting environment variable CLASSPATH])
+		])
+		CLASSPATH=$JAVA_CLASSPATH
+	])
+
+	AC_CHECK_CLASSPATH
+	# Export CLASSPATH to automake
+	AC_SUBST([JAVA_CLASSPATH])
+
 	AX_JAVA_OPTIONS
 	AX_PROG_JAR
 	AX_PROG_JAVA
 	AX_PROG_JAVAC
 
-	# By default, use a commonly used classpath on the system to ease things up
-	# for the Java testing in this directory.
-	LOG4J_CLASSPATH="$java_agent_jar_path:$CLASSPATH:.:/usr/share/java/*"
-	JAVAFLAGS="-cp $LOG4J_CLASSPATH"
-	JAVACFLAGS="$JAVAFLAGS"
-	AX_CHECK_CLASS(org.apache.log4j.Logger)
+	JAVAFLAGS="-cp ./:$JAVA_CLASSPATH"
+	JAVACFLAGS=$JAVAFLAGS
 
-	if test "x$ac_cv_class_org_apache_log4j_Logger" = "xno"; then
-		build_java_log4j_agent=no
-	else
-		build_java_log4j_agent=yes
-	fi
-fi
-AM_CONDITIONAL([BUILD_JAVA_LOG4J_AGENT], [test "x$build_java_log4j_agent" = "xyes"])
+	AS_IF([test "x${enable_java_agent_tests_jul}" = "xyes"],[
+		AX_CHECK_RQRD_CLASS(org.lttng.ust.agent.LTTngAgent)
+	])
+
+	AS_IF([test "x${enable_java_agent_tests_log4j}" = "xyes"],[
+		AX_CHECK_RQRD_CLASS(org.apache.log4j.Logger)
+	])
+],[
+	AC_MSG_NOTICE([You may configure with --enable-java-agent-tests-* if you want to run java agent jul/log4j tests.])
+])
 
 AC_SYS_LARGEFILE
 AC_PROG_CC
