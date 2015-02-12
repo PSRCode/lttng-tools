@@ -414,15 +414,14 @@ AS_IF([test "x${enable_java_agent_tests_jul}" = "xyes" || test "x${enable_java_a
 	])
 
 	AC_CHECK_CLASSPATH
-	# Export CLASSPATH to automake
-	AC_SUBST([JAVA_CLASSPATH])
-
 	AX_JAVA_OPTIONS
 	AX_PROG_JAR
 	AX_PROG_JAVA
 	AX_PROG_JAVAC
 
-	JAVAFLAGS="-cp ./:$JAVA_CLASSPATH"
+	# This is reused in tests/regression/ust/java-jul & log4j for building java
+	# test application
+	JAVAFLAGS="-classpath ./:$JAVA_CLASSPATH"
 	JAVACFLAGS=$JAVAFLAGS
 
 	AS_IF([test "x${enable_java_agent_tests_jul}" = "xyes"],[

@@ -1,21 +1,13 @@
-
 noinst_SCRIPTS = test_java_jul JTestLTTng.java
 EXTRA_DIST = test_java_jul JTestLTTng.java
 
-if HAVE_JAVA_JDK
-JCC=$(JAVA_JDK)/bin/javac
-else
-JCC=javac
-endif
+JAVAROOT=.
 
-AGENT_JAR_FILE=$(java_agent_jar_path)
+# Note: JAVACFLAGS is generated on autoconf and reused implicitly here to
+# compile JTestLTTng with the good -classpath compiler option.
+dist_noinst_JAVA = JTestLTTng.java
 
-
-# Still need to copy test files in case of out of tree build
-all-local: static_file
-
-
-static_file:
+all-local:
 	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
 		for script in $(EXTRA_DIST); do \
 			cp -f $(srcdir)/$$script $(builddir); \
