@@ -393,9 +393,6 @@ AC_ARG_ENABLE([java-agent-tests-all],
 	)],[
 		enable_java_agent_tests_log4j=yes
 		enable_java_agent_tests_jul=yes
-	],[
-		enable_java_agent_tests_log4j=no
-		enable_java_agent_tests_jul=no
 	]
 )
 
