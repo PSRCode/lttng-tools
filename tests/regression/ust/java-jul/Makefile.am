@@ -1,5 +1,5 @@
-noinst_SCRIPTS = test_java_jul JTestLTTng.java
-EXTRA_DIST = test_java_jul JTestLTTng.java
+dist_noinst_SCRIPTS = test_java_jul
+EXTRA_DIST = test_java_jul
 
 JAVAROOT=.
 
