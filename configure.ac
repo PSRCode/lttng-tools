@@ -227,13 +227,20 @@ AS_IF([test "x$kmod_support" = "xyes"], [
 AM_CONDITIONAL([HAVE_KMOD], [test "x$kmod_found" = xyes])
 
 AC_ARG_WITH(lttng-ust-prefix,
-  AS_HELP_STRING([--with-lttng-ust-prefix=PATH],
-                 [Specify the installation prefix of the lttng-ust library.
-	          Headers must be in PATH/include; libraries in PATH/lib.]),
-		  [
-		    CPPFLAGS="$CPPFLAGS -I${withval}/include"
-		    LDFLAGS="$LDFLAGS -L${withval}/lib64 -L${withval}/lib"
-		  ])
+	AS_HELP_STRING([--with-lttng-ust-prefix=PATH],
+		[Specify the installation prefix of the lttng-ust library. Headers must be in PATH/include; libraries in PATH/lib.]
+	),
+	[
+		AC_SUBST([UST_PREFIX],${withval})
+		CPPFLAGS="$CPPFLAGS -I${withval}/include"
+		LDFLAGS="$LDFLAGS -L${withval}/lib64 -L${withval}/lib"
+		user_defined_lttng_ust_prefix=yes
+	]
+)
+
+AM_CONDITIONAL([USER_DEFINED_LTTNG_UST_PREFIX], [test "x$user_defined_lttng_ust_prefix" = xyes])
+
+
 
 # Check liblttng-ust-ctl library
 AC_ARG_ENABLE(lttng-ust,
@@ -414,6 +421,10 @@ AS_IF([test "x${enable_java_agent_tests_jul}" = "xyes" || test "x${enable_java_a
 	])
 
 	AC_CHECK_CLASSPATH
+	# Export JAVA_CLASSPTH for use in tests script
+	# See: tests/utils/java_env.sh.tmpl and corresponding Makefile.am
+	AC_SUBST([JAVA_CLASSPATH],[${JAVA_CLASSPATH}])
+
 	AX_JAVA_OPTIONS
 	AX_PROG_JAR
 	AX_PROG_JAVA
