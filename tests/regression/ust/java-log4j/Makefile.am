@@ -1,5 +1,5 @@
-noinst_SCRIPTS = test_java_log4j JTestLTTng.java
-EXTRA_DIST = test_java_log4j JTestLTTng.java
+dist_noinst_SCRIPTS = test_java_log4j
+EXTRA_DIST = test_java_log4j
 
 JAVAROOT=.
 
