@@ -31,4 +31,4 @@ clean-local:
 			rm -f $(builddir)/$$script; \
 		done; \
 	fi
-	@rm $(builddir)/java_env.sh
+	@rm -f $(builddir)/java_env.sh
