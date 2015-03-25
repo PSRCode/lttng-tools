@@ -1145,10 +1145,12 @@ int mi_lttng_pid(struct mi_writer *writer, pid_t pid , const char *cmdline,
 	}
 
 	/* Writing name of the process */
-	ret = mi_lttng_writer_write_element_string(writer, config_element_name,
-			cmdline);
-	if (ret) {
-		goto end;
+	if (cmdline) {
+		ret = mi_lttng_writer_write_element_string(writer, config_element_name,
+				cmdline);
+		if (ret) {
+			goto end;
+		}
 	}
 
 	if (!is_open) {

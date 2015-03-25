@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
-	elementFormDefault="qualified" version="2.5">
+	elementFormDefault="qualified" version="2.7">
 
 	<!-- Maps to the uint32_t type -->
 	<xs:simpleType name="uint32_type">
@@ -267,8 +267,9 @@ THE SOFTWARE.
 	<xs:complexType name="pid_type">
 		<xs:all>
 			<xs:element name="id" type="xs:int" />
-			<xs:element name="name" type="name_type" />
+			<xs:element name="name" type="name_type" minOccurs="0" />
 			<xs:element name="events" type="event_list_type" minOccurs="0" />
+			<xs:element name="success" type="xs:boolean" default="false" minOccurs="0" />
 		</xs:all>
 	</xs:complexType>
 
@@ -465,6 +466,7 @@ THE SOFTWARE.
 			<xs:element name="channels" type="channels_type" minOccurs="0" />
 			<xs:element name="events" type="event_list_type" minOccurs="0" />
 			<xs:element name="channel" type="channel_type" minOccurs="0" />
+			<xs:element name="pids" type="pids_type" minOccurs="0" />
 		</xs:choice>
 	</xs:complexType>
 
@@ -487,6 +489,8 @@ THE SOFTWARE.
 			<xs:enumeration value="set-session" />
 			<xs:enumeration value="disable-event" />
 			<xs:enumeration value="disable-channel" />
+			<xs:enumeration value="track" />
+			<xs:enumeration value="untrack" />
 		</xs:restriction>
 	</xs:simpleType>
 
