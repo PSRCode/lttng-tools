@@ -101,6 +101,7 @@ const char * const mi_lttng_context_type_perf_thread_counter;
 const char * const mi_lttng_element_perf_counter_context;
 
 /* Strings related to pid */
+const char * const mi_lttng_element_pid_tracker;
 const char * const mi_lttng_element_pids;
 const char * const mi_lttng_element_pid;
 const char * const mi_lttng_element_pid_id;
@@ -554,6 +555,18 @@ int mi_lttng_event_field(struct mi_writer *writer,
  * Negative values indicate an error.
  */
 int mi_lttng_event_fields_open(struct mi_writer *writer);
+
+/*
+ * Machine interface: open a pid_tracker element.
+ * Note: A PIDs element is also open per definition of the tracker
+ *
+ * writer An instance of a machine interface writer.
+ * enabled Tell if the pid tracker is enabled (enabled > 0)
+ *
+ * Returns zero if the element's value could be written.
+ * Negative values indicate an error.
+ */
+int mi_lttng_pid_tracker_open(struct mi_writer *writer, uint32_t enabled);
 
 /*
  * Machine interface: open a PIDs element.

@@ -78,6 +78,7 @@ const char * const mi_lttng_context_type_perf_thread_counter = "PERF_THREAD_COUN
 const char * const mi_lttng_element_perf_counter_context = "perf_counter_context";
 
 /* Strings related to pid */
+const char * const mi_lttng_element_pid_tracker = "pid_tracker";
 const char * const mi_lttng_element_pids = "pids";
 const char * const mi_lttng_element_pid = "pid";
 const char * const mi_lttng_element_pid_id = "id";
@@ -1120,6 +1121,29 @@ end:
 }
 
 LTTNG_HIDDEN
+int mi_lttng_pid_tracker_open(struct mi_writer *writer, uint32_t enabled)
+{
+	int ret;
+
+	/* Open element pid_tracker */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_pid_tracker);
+	if (ret) {
+		goto end;
+	}
+
+	ret = mi_lttng_writer_write_element_bool(writer, config_element_enabled,
+			enabled);
+	if (ret) {
+		goto end;
+	}
+
+	/* Open pids element */
+	ret = mi_lttng_pids_open(writer);
+end:
+	return ret;
+}
+
+LTTNG_HIDDEN
 int mi_lttng_pids_open(struct mi_writer *writer)
 {
 	return mi_lttng_writer_open_element(writer, mi_lttng_element_pids);
@@ -1242,8 +1266,6 @@ int mi_lttng_calibrate(struct mi_writer *writer,
 end:
 	return ret;
 }
-
-/* TODO: mi tracker */
 
 LTTNG_HIDDEN
 int mi_lttng_context(struct mi_writer *writer,

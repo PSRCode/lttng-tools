@@ -1251,7 +1251,8 @@ error_channels:
  */
 static int list_tracker_pids(void)
 {
-	int enabled, ret;
+	int ret = 0;
+	uint32_t enabled;
 	int *pids = NULL;
 	size_t nr_pids, i;
 
@@ -1261,20 +1262,47 @@ static int list_tracker_pids(void)
 		return ret;
 	}
 	_MSG("PID tracker: [%s]", enabled ? "enabled" : "disabled");
-	if (enabled) {
+	if (enabled || writer) {
 		_MSG(", pids: [");
+
+		/* Mi tracker_pid element*/
+		if (writer) {
+			/* Open tracker_pid and pids elements */
+			ret = mi_lttng_pid_tracker_open(writer, enabled);
+			if (ret) {
+				goto end;
+			}
+		}
 
 		for (i = 0; i < nr_pids; i++) {
 			if (i) {
 				_MSG(",");
 			}
 			_MSG(" %d", pids[i]);
+
+			/* Mi */
+			if (writer) {
+				ret = mi_lttng_pid(writer,pids[i],NULL,0);
+				if (ret) {
+					goto end;
+				}
+			}
 		}
 		_MSG(" ]");
+
+		/* Mi close tracker_pid and pids */
+		if (writer) {
+			ret = mi_lttng_close_multi_element(writer,2);
+			if (ret) {
+				goto end;
+			}
+		}
 	}
 	_MSG("\n\n");
+end:
 	free(pids);
-	return 0;
+	return ret;
+
 }
 
 /*
