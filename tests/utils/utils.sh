@@ -739,6 +739,18 @@ function lttng_load()
 	ok $? "Load command successful"
 }
 
+function lttng_track()
+{
+	local opts=$1
+	$TESTDIR/../src/bin/lttng/$LTTNG_BIN track $opts >$OUTPUT_DEST
+}
+
+function lttng_untrack()
+{
+	local opts=$1
+	$TESTDIR/../src/bin/lttng/$LTTNG_BIN untrack $opts >$OUTPUT_DEST
+}
+
 function trace_matches ()
 {
 	local event_name=$1
