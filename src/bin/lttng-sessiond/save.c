@@ -30,6 +30,7 @@
 #include <common/runas.h>
 #include <lttng/save-internal.h>
 
+#include "kernel.h"
 #include "save.h"
 #include "session.h"
 #include "syscall.h"
@@ -716,8 +717,6 @@ end:
 	return ret;
 }
 
-/* TODO: save/restore tracker pid */
-
 static
 int save_kernel_context(struct config_writer *writer,
 	struct lttng_kernel_context *ctx)
@@ -1187,6 +1186,77 @@ end:
 }
 
 static
+int save_pid_tracker(struct config_writer *writer, struct ltt_session *sess, int domain)
+{
+	int ret;
+	ssize_t nr_pids = 0, i;
+	int32_t *pids = NULL;
+
+	switch (domain) {
+	case LTTNG_DOMAIN_KERNEL:
+	{
+		nr_pids = kernel_list_tracker_pids(sess->kernel_session, &pids);
+		if (nr_pids < 0) {
+			ret = LTTNG_ERR_KERN_LIST_FAIL;
+			goto end;
+		}
+		break;
+	}
+	case LTTNG_DOMAIN_UST:
+	{
+		nr_pids = trace_ust_list_tracker_pids(sess->ust_session, &pids);
+		if (nr_pids < 0) {
+			ret = LTTNG_ERR_UST_LIST_FAIL;
+			goto end;
+		}
+		break;
+	}
+	case LTTNG_DOMAIN_JUL:
+	case LTTNG_DOMAIN_LOG4J:
+	case LTTNG_DOMAIN_PYTHON:
+	default:
+		ret = LTTNG_ERR_UNKNOWN_DOMAIN;
+		goto end;
+	}
+
+
+	ret = config_writer_open_element(writer, config_element_pid_tracker);
+	if (ret) {
+		ret = LTTNG_ERR_SAVE_IO_FAIL;
+		goto end;
+	}
+	ret = config_writer_open_element(writer, config_element_pids);
+	if (ret) {
+		ret = LTTNG_ERR_SAVE_IO_FAIL;
+		goto end;
+	}
+
+	for (i = 0; i < nr_pids; i++) {
+		ret = config_writer_write_element_signed_int(writer,config_element_pid,
+				pids[i]);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
+	}
+
+	ret = config_writer_close_element(writer);
+	if (ret) {
+		ret = LTTNG_ERR_SAVE_IO_FAIL;
+		goto end;
+	}
+
+	ret = config_writer_close_element(writer);
+	if (ret) {
+		ret = LTTNG_ERR_SAVE_IO_FAIL;
+		goto end;
+	}
+end:
+	free(pids);
+	return ret;
+}
+
+static
 int save_domains(struct config_writer *writer, struct ltt_session *session)
 {
 	int ret = 0;
@@ -1218,6 +1288,12 @@ int save_domains(struct config_writer *writer, struct ltt_session *session)
 			goto end;
 		}
 
+		ret = save_pid_tracker(writer,session,LTTNG_DOMAIN_KERNEL);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
+
 		/* /domain */
 		ret = config_writer_close_element(writer);
 		if (ret) {
@@ -1238,6 +1314,12 @@ int save_domains(struct config_writer *writer, struct ltt_session *session)
 
 		ret = save_ust_session(writer, session, 0);
 		if (ret) {
+			goto end;
+		}
+
+		ret = save_pid_tracker(writer,session,LTTNG_DOMAIN_UST);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
 			goto end;
 		}
 
