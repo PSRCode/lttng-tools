@@ -2089,12 +2089,82 @@ end:
 }
 
 static
+int process_pid_tracker_node(xmlNodePtr pid_tracker_node, struct lttng_handle *handle)
+{
+	int ret;
+	xmlNodePtr pids_node = NULL;
+	xmlNodePtr node;
+
+	assert(handle);
+	assert(pid_tracker_node);
+	/* get the pids node */
+	for (node = xmlFirstElementChild(pid_tracker_node); node;
+		node = xmlNextElementSibling(node)) {
+		if (!strcmp((const char *) node->name,
+			config_element_pids)) {
+			pids_node = node;
+			break;
+		}
+	}
+
+	if (!pids_node) {
+		ret = LTTNG_ERR_INVALID;
+		goto end;
+	}
+
+	/* Special case when pids node is empty
+	 * Untrack all. All is represented by -1 as
+	 * defined by pid_tracker API.
+	 */
+	if (xmlChildElementCount(pids_node) == 0) {
+		ret = lttng_untrack_pid(handle, -1);
+		if (ret) {
+			goto end;
+		}
+	}
+
+	/* Track all listed pid */
+	for (node = xmlFirstElementChild(pids_node); node;
+			node = xmlNextElementSibling(node)) {
+		int64_t pid;
+		xmlChar *content = NULL;
+
+		content = xmlNodeGetContent(node);
+		if (!content) {
+			ret = LTTNG_ERR_LOAD_INVALID_CONFIG;
+			free(content);
+			goto end;
+		}
+
+		ret = parse_int(content, &pid);
+		if (ret) {
+			ret = LTTNG_ERR_LOAD_INVALID_CONFIG;
+			free(content);
+			goto end;
+		}
+
+		ret = lttng_track_pid(handle, (int)pid);
+		if (ret) {
+			free(content);
+			goto end;
+		}
+
+		free(content);
+	}
+
+end:
+	return ret;
+}
+
+
+static
 int process_domain_node(xmlNodePtr domain_node, const char *session_name)
 {
 	int ret;
 	struct lttng_domain domain = { 0 };
 	struct lttng_handle *handle = NULL;
 	xmlNodePtr channels_node = NULL;
+	xmlNodePtr pid_tracker_node = NULL;
 	xmlNodePtr node;
 
 	assert(session_name);
@@ -2161,6 +2231,26 @@ int process_domain_node(xmlNodePtr domain_node, const char *session_name)
 			goto end;
 		}
 	}
+
+	/* get the pid_tracker node */
+	for (node = xmlFirstElementChild(domain_node); node;
+			node = xmlNextElementSibling(node)) {
+		if (!strcmp((const char *) node->name,
+					config_element_pid_tracker)) {
+			pid_tracker_node = node;
+			break;
+		}
+	}
+
+	if (!pid_tracker_node) {
+		goto end;
+	}
+
+	ret = process_pid_tracker_node(pid_tracker_node, handle);
+	if (ret) {
+		goto end;
+	}
+
 end:
 	lttng_destroy_handle(handle);
 	return ret;
