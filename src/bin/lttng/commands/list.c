@@ -352,8 +352,8 @@ static int mi_list_agent_ust_events(struct lttng_event *events, int count,
 		goto end;
 	}
 
-	/* Open pids element */
-	ret = mi_lttng_pids_open(writer);
+	/* Open processes element */
+	ret = mi_lttng_processes_open(writer);
 	if (ret) {
 		goto end;
 	}
@@ -378,7 +378,7 @@ static int mi_list_agent_ust_events(struct lttng_event *events, int count,
 
 			if (!pid_element_open) {
 				/* Open and write a pid element */
-				ret = mi_lttng_pid(writer, cur_pid, cmdline, 1);
+				ret = mi_lttng_process(writer, cur_pid, cmdline, 1);
 				if (ret) {
 					goto error;
 				}
@@ -401,7 +401,7 @@ static int mi_list_agent_ust_events(struct lttng_event *events, int count,
 		}
 	}
 
-	/* Close pids */
+	/* Close processes */
 	ret = mi_lttng_writer_close_element(writer);
 	if (ret) {
 		goto end;
@@ -585,8 +585,8 @@ static int mi_list_ust_event_fields(struct lttng_event_field *fields, int count,
 		goto end;
 	}
 
-	/* Open pids element */
-	ret = mi_lttng_pids_open(writer);
+	/* Open processes element */
+	ret = mi_lttng_processes_open(writer);
 	if (ret) {
 		goto end;
 	}
@@ -614,8 +614,8 @@ static int mi_list_ust_event_fields(struct lttng_event_field *fields, int count,
 			cur_pid = fields[i].event.pid;
 			cmdline = get_cmdline_by_pid(cur_pid);
 			if (!pid_element_open) {
-				/* Open and write a pid element */
-				ret = mi_lttng_pid(writer, cur_pid, cmdline, 1);
+				/* Open and write a process element */
+				ret = mi_lttng_process(writer, cur_pid, cmdline, 1);
 				if (ret) {
 					goto error;
 				}
@@ -669,7 +669,7 @@ static int mi_list_ust_event_fields(struct lttng_event_field *fields, int count,
 		}
 	}
 
-	/* Close pids, domain, domains */
+	/* Close processes, domain, domains */
 	ret = mi_lttng_close_multi_element(writer, 3);
 end:
 	return ret;
@@ -1282,7 +1282,8 @@ static int list_tracker_pids(void)
 
 			/* Mi */
 			if (writer) {
-				ret = mi_lttng_pid(writer,pids[i],NULL,0);
+				ret = mi_lttng_writer_write_element_signed_int(writer,
+						config_element_pid,pids[i]);
 				if (ret) {
 					goto end;
 				}

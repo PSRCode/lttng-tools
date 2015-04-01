@@ -101,9 +101,8 @@ const char * const mi_lttng_context_type_perf_thread_counter;
 const char * const mi_lttng_element_perf_counter_context;
 
 /* Strings related to pid */
-const char * const mi_lttng_element_pid_tracker;
-const char * const mi_lttng_element_pids;
-const char * const mi_lttng_element_pid;
+const char * const mi_lttng_element_processes;
+const char * const mi_lttng_element_process;
 const char * const mi_lttng_element_pid_id;
 
 /* Strings related to save command */
@@ -579,7 +578,17 @@ int mi_lttng_pid_tracker_open(struct mi_writer *writer, uint32_t enabled);
 int mi_lttng_pids_open(struct mi_writer *writer);
 
 /*
- * Machine interface of a PID.
+ * Machine interface: open a processes element.
+ *
+ * writer An instance of a machine interface writer.
+ *
+ * Returns zero if the element's value could be written.
+ * Negative values indicate an error.
+ */
+int mi_lttng_processes_open(struct mi_writer *writer);
+
+/*
+ * Machine interface of a Process.
  *
  * writer An instance of a machine interface writer.
  * pid A PID.
@@ -593,9 +602,8 @@ int mi_lttng_pids_open(struct mi_writer *writer);
  * Returns zero if the element's value could be written.
  * Negative values indicate an error.
  */
-int mi_lttng_pid(struct mi_writer *writer, pid_t pid , const char *cmdline,
+int mi_lttng_process(struct mi_writer *writer, pid_t pid , const char *name,
 		int is_open);
-
 /*
  * Machine interface for struct lttng_calibrate.
  *
