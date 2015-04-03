@@ -164,6 +164,12 @@ const char * const mi_lttng_element_snapshot_n_ptr = "n_ptr";
 const char * const mi_lttng_element_snapshot_session_name = "session_name";
 const char * const mi_lttng_element_snapshots = "snapshots";
 
+/* String related to track/untrack command */
+const char * const mi_lttng_element_track_untrack_targets = "targets";
+const char * const mi_lttng_element_track_untrack_pid_target = "pid_target";
+const char * const mi_lttng_element_track_untrack_all_wildcard = "*";
+
+
 /* This is a merge of jul loglevel and regular loglevel
  * Those should never overlap by definition
  * (see struct lttng_event loglevel)
@@ -1120,7 +1126,13 @@ end:
 }
 
 LTTNG_HIDDEN
-int mi_lttng_pid_tracker_open(struct mi_writer *writer, uint32_t enabled)
+int mi_lttng_trackers_open(struct mi_writer *writer)
+{
+	return mi_lttng_writer_open_element(writer, config_element_trackers);
+}
+
+LTTNG_HIDDEN
+int mi_lttng_pid_tracker_open(struct mi_writer *writer)
 {
 	int ret;
 
@@ -1130,14 +1142,8 @@ int mi_lttng_pid_tracker_open(struct mi_writer *writer, uint32_t enabled)
 		goto end;
 	}
 
-	ret = mi_lttng_writer_write_element_bool(writer, config_element_enabled,
-			enabled);
-	if (ret) {
-		goto end;
-	}
-
-	/* Open pids element */
-	ret = mi_lttng_pids_open(writer);
+	/* Open targets element */
+	ret = mi_lttng_targets_open(writer);
 end:
 	return ret;
 }
@@ -1185,6 +1191,51 @@ int mi_lttng_process(struct mi_writer *writer, pid_t pid , const char *name,
 	if (!is_open) {
 		/* Closing Pid */
 		ret = mi_lttng_writer_close_element(writer);
+	}
+
+end:
+	return ret;
+}
+
+LTTNG_HIDDEN
+int mi_lttng_targets_open(struct mi_writer *writer)
+{
+	return mi_lttng_writer_open_element(writer,
+			mi_lttng_element_track_untrack_targets);
+}
+
+LTTNG_HIDDEN
+int mi_lttng_pid_target(struct mi_writer *writer, pid_t pid, int is_open)
+{
+	int ret;
+
+	ret = mi_lttng_writer_open_element(writer,
+			mi_lttng_element_track_untrack_pid_target);
+	if (ret) {
+		goto end;
+	}
+
+	/* Writing pid number
+	 * Special case for element all on track untrack command
+	 * All pid is represented as wildcard *
+	 */
+	if ((int)pid == -1) {
+		ret = mi_lttng_writer_write_element_string(writer,
+				config_element_pid,
+				mi_lttng_element_track_untrack_all_wildcard);
+	} else {
+		ret = mi_lttng_writer_write_element_signed_int(writer,
+				config_element_pid, (int)pid);
+	}
+	if (ret) {
+		goto end;
+	}
+
+	if (!is_open) {
+		ret = mi_lttng_writer_close_element(writer);
+		if (ret) {
+			goto end;
+		}
 	}
 
 end:

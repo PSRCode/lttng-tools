@@ -245,9 +245,9 @@ int track_untrack_pid(enum cmd_type cmd_type, const char *cmd_str,
 
 	if (writer) {
 		/* Open process element */
-		ret = mi_lttng_processes_open(writer);
+		ret = mi_lttng_targets_open(writer);
 		if (ret) {
-			retval = CMD_ERROR;
+			retval = ret;
 			goto end;
 		}
 	}
@@ -264,37 +264,36 @@ int track_untrack_pid(enum cmd_type cmd_type, const char *cmd_str,
 
 		/* Mi */
 		if (writer) {
-			/* Keep process element open */
-			ret = mi_lttng_process(writer, pid_list[i], NULL, 1);
+			ret = mi_lttng_pid_target(writer, pid_list[i], 1);
 			if (ret) {
-				retval = CMD_ERROR;
+				retval = ret;
 				goto end;
 			}
+
 			ret = mi_lttng_writer_write_element_bool(writer,
-					mi_lttng_element_success,success);
+					mi_lttng_element_success, success);
 			if (ret) {
-				retval = CMD_ERROR;
+				retval = ret;
 				goto end;
 			}
-			/* Close process element */
+
 			ret = mi_lttng_writer_close_element(writer);
 			if (ret) {
-				retval = CMD_ERROR;
+				retval = ret;
 				goto end;
 			}
 		}
 	}
 
 	if (writer) {
-		/* Close processes element */
+		/* Close targets element */
 		ret = mi_lttng_writer_close_element(writer);
 		if (ret) {
-			retval = CMD_ERROR;
+			retval = ret;
 			goto end;
 		}
 	}
 
-	/* SUCCESS */
 end:
 	if (handle) {
 		lttng_destroy_handle(handle);
