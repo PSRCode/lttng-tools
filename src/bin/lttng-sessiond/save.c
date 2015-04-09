@@ -1188,7 +1188,7 @@ end:
 static
 int save_pid_tracker(struct config_writer *writer, struct ltt_session *sess, int domain)
 {
-	int ret;
+	int ret = 0;
 	ssize_t nr_pids = 0, i;
 	int32_t *pids = NULL;
 
@@ -1219,37 +1219,55 @@ int save_pid_tracker(struct config_writer *writer, struct ltt_session *sess, int
 		goto end;
 	}
 
-
-	ret = config_writer_open_element(writer, config_element_pid_tracker);
-	if (ret) {
-		ret = LTTNG_ERR_SAVE_IO_FAIL;
-		goto end;
-	}
-	ret = config_writer_open_element(writer, config_element_pids);
-	if (ret) {
-		ret = LTTNG_ERR_SAVE_IO_FAIL;
-		goto end;
-	}
-
-	for (i = 0; i < nr_pids; i++) {
-		ret = config_writer_write_element_signed_int(writer,config_element_pid,
-				pids[i]);
+	/* Only create a pid_tracker if enabled or untrack all */
+	if (nr_pids != 1 || (nr_pids == 1 && pids[0] != -1)) {
+		ret = config_writer_open_element(writer, config_element_pid_tracker);
 		if (ret) {
 			ret = LTTNG_ERR_SAVE_IO_FAIL;
 			goto end;
 		}
-	}
 
-	ret = config_writer_close_element(writer);
-	if (ret) {
-		ret = LTTNG_ERR_SAVE_IO_FAIL;
-		goto end;
-	}
+		ret = config_writer_open_element(writer, config_element_targets);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
 
-	ret = config_writer_close_element(writer);
-	if (ret) {
-		ret = LTTNG_ERR_SAVE_IO_FAIL;
-		goto end;
+		for (i = 0; i < nr_pids; i++) {
+			ret = config_writer_open_element(writer,config_element_target_pid);
+			if (ret) {
+				ret = LTTNG_ERR_SAVE_IO_FAIL;
+				goto end;
+			}
+
+			ret = config_writer_write_element_unsigned_int(writer,
+					config_element_pid, pids[i]);
+			if (ret) {
+				ret = LTTNG_ERR_SAVE_IO_FAIL;
+				goto end;
+			}
+
+			/* /pid_target */
+			ret = config_writer_close_element(writer);
+			if (ret) {
+				ret = LTTNG_ERR_SAVE_IO_FAIL;
+				goto end;
+			}
+		}
+
+		/* /targets */
+		ret = config_writer_close_element(writer);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
+
+		/* /pid_tracker */
+		ret = config_writer_close_element(writer);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
 	}
 end:
 	free(pids);
@@ -1288,12 +1306,25 @@ int save_domains(struct config_writer *writer, struct ltt_session *session)
 			goto end;
 		}
 
+		ret = config_writer_open_element(writer,
+			config_element_trackers);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
+
 		ret = save_pid_tracker(writer,session,LTTNG_DOMAIN_KERNEL);
 		if (ret) {
 			ret = LTTNG_ERR_SAVE_IO_FAIL;
 			goto end;
 		}
 
+		/* /trackers */
+		ret = config_writer_close_element(writer);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
 		/* /domain */
 		ret = config_writer_close_element(writer);
 		if (ret) {
@@ -1317,12 +1348,25 @@ int save_domains(struct config_writer *writer, struct ltt_session *session)
 			goto end;
 		}
 
+		ret = config_writer_open_element(writer,
+			config_element_trackers);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
+
 		ret = save_pid_tracker(writer,session,LTTNG_DOMAIN_UST);
 		if (ret) {
 			ret = LTTNG_ERR_SAVE_IO_FAIL;
 			goto end;
 		}
 
+		/* /trackers */
+		ret = config_writer_close_element(writer);
+		if (ret) {
+			ret = LTTNG_ERR_SAVE_IO_FAIL;
+			goto end;
+		}
 		/* /domain */
 		ret = config_writer_close_element(writer);
 		if (ret) {
