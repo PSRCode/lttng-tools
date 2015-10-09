@@ -8,6 +8,9 @@ AM_INIT_AUTOMAKE([foreign dist-bzip2 no-dist-gzip])
 AM_MAINTAINER_MODE([enable])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
+# Extra recursive
+AM_EXTRA_RECURSIVE_TARGETS([check-remote])
+
 # Compute minor/major/patchlevel version numbers
 AC_PROG_SED
 major_version=$(echo AC_PACKAGE_VERSION | sed 's/^\([[0-9]]\)*\.[[0-9]]*\.[[0-9]]*.*$/\1/')
