@@ -722,7 +722,9 @@ static int create_session_from_template(struct config_document *template,
 			ret = CMD_ERROR;
 			goto error;
 		}
+
 		config_element_free(temp_element);
+		temp_element = NULL;
 
 		temp_element = config_element_create("data_uri", tmp_data_uri);
 
@@ -739,6 +741,7 @@ static int create_session_from_template(struct config_document *template,
 			goto error;
 		}
 		config_element_free(temp_element);
+		temp_element = NULL;
 		break;
 	default:
 		ret = CMD_ERROR;
@@ -758,6 +761,10 @@ static int create_session_from_template(struct config_document *template,
 		ret = CMD_ERROR;
 		goto error;
 	}
+
+	config_element_free(temp_element_child);
+	temp_element_child = NULL;
+
 
 	/*
 	 * validate and replace the destination node for each session type
@@ -790,6 +797,8 @@ static int create_session_from_template(struct config_document *template,
 		goto error;
 	}
 
+	config_element_free(temp_element);
+	temp_element = NULL;
 
 	if (ret) {
 		ERR("%s", lttng_strerror(ret));
@@ -816,6 +825,9 @@ static int create_session_from_template(struct config_document *template,
 			ret = CMD_ERROR;
 			goto error;
 		}
+
+		config_element_free(temp_element);
+		temp_element = NULL;
 	}
 
 	ret = config_load_configuration_sessions(template, session_name, 0);
@@ -1172,8 +1184,10 @@ static int create_session(void)
 
 error:
 	/* Session temp stuff */
+	config_document_free(template);
 	free(session_name_date);
 	free(uris);
+	free(traces_path);
 
 	if (ret < 0) {
 		ERR("%s", lttng_strerror(ret));
