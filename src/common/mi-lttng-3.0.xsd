@@ -25,7 +25,7 @@ THE SOFTWARE.
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
 	targetNamespace="http://lttng.org/xml/ns/lttng-mi"
 	xmlns:tns="http://lttng.org/xml/ns/lttng-mi"
-	elementFormDefault="qualified" version="3.0">
+	elementFormDefault="qualified" version="4.0">
 
 	<!-- Maps to the uint32_t type -->
 	<xs:simpleType name="uint32_type">
@@ -329,7 +329,7 @@ THE SOFTWARE.
 	<xs:complexType name="domain_type">
 		<xs:all>
 			<xs:element name="type" type="tns:domain_type_type" />
-			<xs:element name="buffer_type" type="tns:domain_buffer_type" />
+			<xs:element name="buffer_type" type="tns:domain_buffer_type" minOccurs="0" />
 			<xs:element name="pids" type="tns:pids_type" minOccurs="0" />
 			<xs:element name="channels" type="tns:channels_type" minOccurs="0" />
 			<xs:element name="events" type="tns:event_list_type" minOccurs="0" />
