@@ -44,10 +44,7 @@ static const char *opt_loglevel;
 static int opt_loglevel_type;
 static int opt_kernel;
 static char *opt_session_name;
-static int opt_userspace;
-static int opt_jul;
-static int opt_log4j;
-static int opt_python;
+static int opt_domain;
 static int opt_enable_all;
 static char *opt_probe;
 static char *opt_function;
@@ -61,7 +58,6 @@ enum {
 	OPT_PROBE,
 	OPT_FUNCTION,
 	OPT_SYSCALL,
-	OPT_USERSPACE,
 	OPT_LOGLEVEL,
 	OPT_LOGLEVEL_ONLY,
 	OPT_LIST_OPTIONS,
@@ -74,27 +70,32 @@ static struct mi_writer *writer;
 
 static struct poptOption long_options[] = {
 	/* longName, shortName, argInfo, argPtr, value, descrip, argDesc */
-	{"help",           'h', POPT_ARG_NONE, 0, OPT_HELP, 0, 0},
-	{"session",        's', POPT_ARG_STRING, &opt_session_name, 0, 0, 0},
 	{"all",            'a', POPT_ARG_VAL, &opt_enable_all, 1, 0, 0},
 	{"channel",        'c', POPT_ARG_STRING, &opt_channel_name, 0, 0, 0},
-	{"kernel",         'k', POPT_ARG_VAL, &opt_kernel, 1, 0, 0},
-	{"userspace",      'u', POPT_ARG_NONE, 0, OPT_USERSPACE, 0, 0},
-	{"jul",            'j', POPT_ARG_VAL, &opt_jul, 1, 0, 0},
-	{"log4j",          'l', POPT_ARG_VAL, &opt_log4j, 1, 0, 0},
-	{"python",         'p', POPT_ARG_VAL, &opt_python, 1, 0, 0},
+	{"kernel",         'k', POPT_ARG_VAL, &opt_domain, LTTNG_DOMAIN_KERNEL, 0, 0},
+	{"userspace",      'u', POPT_ARG_VAL, &opt_domain, LTTNG_DOMAIN_UST, 0, 0},
+	{"jul",            'j', POPT_ARG_VAL, &opt_domain, LTTNG_DOMAIN_JUL, 0, 0},
+	{"log4j",          'l', POPT_ARG_VAL, &opt_domain, LTTNG_DOMAIN_LOG4J, 0, 0},
+	{"python",         'p', POPT_ARG_VAL, &opt_domain, LTTNG_DOMAIN_PYTHON, 0, 0},
 	{"tracepoint",     0,   POPT_ARG_NONE, 0, OPT_TRACEPOINT, 0, 0},
 	{"probe",          0,   POPT_ARG_STRING, &opt_probe, OPT_PROBE, 0, 0},
 	{"function",       0,   POPT_ARG_STRING, &opt_function, OPT_FUNCTION, 0, 0},
 	{"syscall",        0,   POPT_ARG_NONE, 0, OPT_SYSCALL, 0, 0},
 	{"loglevel",       0,     POPT_ARG_STRING, 0, OPT_LOGLEVEL, 0, 0},
 	{"loglevel-only",  0,     POPT_ARG_STRING, 0, OPT_LOGLEVEL_ONLY, 0, 0},
-	{"list-options", 0, POPT_ARG_NONE, NULL, OPT_LIST_OPTIONS, NULL, NULL},
 	{"filter",         'f', POPT_ARG_STRING, &opt_filter, OPT_FILTER, 0, 0},
 	{"exclude",        'x', POPT_ARG_STRING, &opt_exclude, OPT_EXCLUDE, 0, 0},
+	{"session",        's', POPT_ARG_NONE, 0, 0, 0, 0},
 	{0, 0, 0, 0, 0, 0, 0}
 };
 
+static struct poptOption global_long_options[] = {
+	/* longName, shortName, argInfo, argPtr, value, descrip, argDesc */
+	{"help",           'h', POPT_ARG_NONE, 0, OPT_HELP, 0, 0},
+	{"session",        's', POPT_ARG_STRING, &opt_session_name, 0, 0, 0},
+	{"list-options", 0, POPT_ARG_NONE, NULL, OPT_LIST_OPTIONS, NULL, NULL},
+	{0, 0, 0, 0, 0, 0, 0}
+};
 /*
  * Parse probe options.
  */
@@ -704,16 +705,18 @@ static int enable_events(char *session_name)
 				case LTTNG_ERR_TRACE_ALREADY_STARTED:
 				{
 					const char *msg = "The command tried to enable an event in a new domain for a session that has already been started once.";
-					ERR("Events: %s (channel %s, session %s)",
+					ERR("Events: %s (domain %s, channel %s, session %s)",
 							msg,
+							get_domain_str(dom.type),
 							print_channel_name(channel_name),
 							session_name);
 					error = 1;
 					break;
 				}
 				default:
-					ERR("Events: %s (channel %s, session %s)",
+					ERR("Events: %s (domain %s, channel %s, session %s)",
 							lttng_strerror(ret),
+							get_domain_str(dom.type),
 							ret == -LTTNG_ERR_NEED_CHANNEL_NAME
 								? print_raw_channel_name(channel_name)
 								: print_channel_name(channel_name),
@@ -808,23 +811,26 @@ static int enable_events(char *session_name)
 				switch (-command_ret) {
 				case LTTNG_ERR_FILTER_EXIST:
 					WARN("Filter on all events is already enabled"
-							" (channel %s, session %s)",
+							" (domain %s, channel %s, session %s)",
+						get_domain_str(dom.type),
 						print_channel_name(channel_name), session_name);
 					warn = 1;
 					break;
 				case LTTNG_ERR_TRACE_ALREADY_STARTED:
 				{
 					const char *msg = "The command tried to enable an event in a new domain for a session that has already been started once.";
-					ERR("All events: %s (channel %s, session %s, filter \'%s\')",
+					ERR("All events: %s (domain %s, channel %s, session %s, filter \'%s\')",
 							msg,
+							get_domain_str(dom.type),
 							print_channel_name(channel_name),
 							session_name, opt_filter);
 					error = 1;
 					break;
 				}
 				default:
-					ERR("All events: %s (channel %s, session %s, filter \'%s\')",
+					ERR("All events: %s (domain %s, channel %s, session %s, filter \'%s\')",
 							lttng_strerror(command_ret),
+							get_domain_str(dom.type),
 							command_ret == -LTTNG_ERR_NEED_CHANNEL_NAME
 								? print_raw_channel_name(channel_name)
 								: print_channel_name(channel_name),
@@ -1059,18 +1065,20 @@ static int enable_events(char *session_name)
 				case LTTNG_ERR_TRACE_ALREADY_STARTED:
 				{
 					const char *msg = "The command tried to enable an event in a new domain for a session that has already been started once.";
-					ERR("Event %s%s: %s (channel %s, session %s)", event_name,
+					ERR("Event %s%s: %s (domain %s,channel %s, session %s)", event_name,
 							exclusion_string,
 							msg,
+							get_domain_str(dom.type),
 							print_channel_name(channel_name),
 							session_name);
 					error = 1;
 					break;
 				}
 				default:
-					ERR("Event %s%s: %s (channel %s, session %s)", event_name,
+					ERR("Event %s%s: %s (domain %s, channel %s, session %s)", event_name,
 							exclusion_string,
 							lttng_strerror(command_ret),
+							get_domain_str(dom.type),
 							command_ret == -LTTNG_ERR_NEED_CHANNEL_NAME
 								? print_raw_channel_name(channel_name)
 								: print_channel_name(channel_name),
@@ -1126,27 +1134,30 @@ static int enable_events(char *session_name)
 				switch (-command_ret) {
 				case LTTNG_ERR_FILTER_EXIST:
 					WARN("Filter on event %s%s is already enabled"
-							" (channel %s, session %s)",
+							" (domain %s, channel %s, session %s)",
 						event_name,
 						exclusion_string,
+						get_domain_str(dom.type),
 						print_channel_name(channel_name), session_name);
 					warn = 1;
 					break;
 				case LTTNG_ERR_TRACE_ALREADY_STARTED:
 				{
 					const char *msg = "The command tried to enable an event in a new domain for a session that has already been started once.";
-					ERR("Event %s%s: %s (channel %s, session %s, filter \'%s\')", ev.name,
+					ERR("Event %s%s: %s (domain %s, channel %s, session %s, filter \'%s\')", ev.name,
 							exclusion_string,
 							msg,
+							get_domain_str(dom.type),
 							print_channel_name(channel_name),
 							session_name, opt_filter);
 					error = 1;
 					break;
 				}
 				default:
-					ERR("Event %s%s: %s (channel %s, session %s, filter \'%s\')", ev.name,
+					ERR("Event %s%s: %s (domain %s, channel %s, session %s, filter \'%s\')", ev.name,
 							exclusion_string,
 							lttng_strerror(command_ret),
+							get_domain_str(dom.type),
 							command_ret == -LTTNG_ERR_NEED_CHANNEL_NAME
 								? print_raw_channel_name(channel_name)
 								: print_channel_name(channel_name),
@@ -1157,9 +1168,10 @@ static int enable_events(char *session_name)
 				error_holder = command_ret;
 
 			} else {
-				MSG("Event %s%s: Filter '%s' successfully set",
+				MSG("Event %s%s: Filter '%s' for domain %s successfully set",
 						event_name, exclusion_string,
-						opt_filter);
+						opt_filter,
+						get_domain_str(dom.type));
 			}
 			free(exclusion_string);
 		}
@@ -1244,6 +1256,72 @@ error:
 /*
  * Add event to trace session
  */
+
+struct args_tuple {
+	int argv_index_start;
+	int argv_index_end;
+};
+
+struct domain_configuration {
+	int enable_all;
+	int event_type;
+	char *event_list;
+	char *loglevel;
+	int loglevel_type;
+	enum lttng_domain_type domain_type;
+	char *probe;
+	char *function;
+	char *channel_name;
+	char *filter;
+	char *exclude;
+};
+
+static struct domain_configuration *initialize_domain_configuration(enum lttng_domain_type type)
+{
+
+	struct domain_configuration *config = malloc(sizeof(struct domain_configuration));
+
+	if (!config) {
+		goto end;
+	}
+
+	switch(type) {
+		case LTTNG_DOMAIN_KERNEL:
+			config->domain_type = LTTNG_DOMAIN_KERNEL;
+			break;
+		case LTTNG_DOMAIN_UST:
+			config->domain_type = LTTNG_DOMAIN_UST;
+			break;
+		case LTTNG_DOMAIN_JUL:
+			config->domain_type = LTTNG_DOMAIN_JUL;
+			break;
+		case LTTNG_DOMAIN_LOG4J:
+			config->domain_type = LTTNG_DOMAIN_LOG4J;
+			break;
+		case LTTNG_DOMAIN_PYTHON:
+			config->domain_type = LTTNG_DOMAIN_PYTHON;
+			break;
+		case LTTNG_DOMAIN_NONE:
+		default:
+			free(config);
+			config=NULL;
+			goto end;
+	};
+
+	config->event_type = LTTNG_EVENT_ALL ;
+	config->enable_all = 0;
+	config->loglevel_type = LTTNG_EVENT_LOGLEVEL_ALL;
+	config->loglevel = NULL;
+	config->probe = NULL;
+	config->function = NULL;
+	config->channel_name = NULL;
+	config->filter = NULL;
+	config->exclude = NULL;
+	config->event_list = NULL;
+end:
+	return config;
+}
+
 int cmd_enable_events(int argc, const char **argv)
 {
 	int opt, ret = CMD_SUCCESS, command_ret = CMD_SUCCESS, success = 1;
@@ -1251,70 +1329,12 @@ int cmd_enable_events(int argc, const char **argv)
 	char *session_name = NULL;
 	int event_type = -1;
 
-	pc = poptGetContext(NULL, argc, argv, long_options, 0);
-	poptReadDefaultConfig(pc, 0);
-
-	/* Default event type */
-	opt_event_type = LTTNG_EVENT_ALL;
-
-	while ((opt = poptGetNextOpt(pc)) != -1) {
-		switch (opt) {
-		case OPT_HELP:
-			SHOW_HELP();
-			goto end;
-		case OPT_TRACEPOINT:
-			opt_event_type = LTTNG_EVENT_TRACEPOINT;
-			break;
-		case OPT_PROBE:
-			opt_event_type = LTTNG_EVENT_PROBE;
-			break;
-		case OPT_FUNCTION:
-			opt_event_type = LTTNG_EVENT_FUNCTION;
-			break;
-		case OPT_SYSCALL:
-			opt_event_type = LTTNG_EVENT_SYSCALL;
-			break;
-		case OPT_USERSPACE:
-			opt_userspace = 1;
-			break;
-		case OPT_LOGLEVEL:
-			opt_loglevel_type = LTTNG_EVENT_LOGLEVEL_RANGE;
-			opt_loglevel = poptGetOptArg(pc);
-			break;
-		case OPT_LOGLEVEL_ONLY:
-			opt_loglevel_type = LTTNG_EVENT_LOGLEVEL_SINGLE;
-			opt_loglevel = poptGetOptArg(pc);
-			break;
-		case OPT_LIST_OPTIONS:
-			list_cmd_options(stdout, long_options);
-			goto end;
-		case OPT_FILTER:
-			break;
-		case OPT_EXCLUDE:
-			break;
-		default:
-			ret = CMD_UNDEFINED;
-			goto end;
-		}
-
-		/* Validate event type. Multiple event type are not supported. */
-		if (event_type == -1) {
-			event_type = opt_event_type;
-		} else {
-			if (event_type != opt_event_type) {
-				ERR("Multiple event type not supported.");
-				ret = CMD_ERROR;
-				goto end;
-			}
-		}
-	}
-
-	ret = print_missing_or_multiple_domains(
-		opt_kernel + opt_userspace + opt_jul + opt_log4j + opt_python);
-	if (ret) {
-		ret = CMD_ERROR;
-		goto end;
-	}
+	struct domain_configuration *userspace_config = NULL;
+	struct domain_configuration *kernel_config = NULL;
+	struct domain_configuration *jul_config = NULL;
+	struct domain_configuration *log4j_config = NULL;
+	struct domain_configuration *python_config = NULL;
+	struct domain_configuration *domain_configuration[5] = { userspace_config, kernel_config, jul_config, log4j_config, python_config}
 
 	/* Mi check */
 	if (lttng_opt_mi) {
@@ -1341,29 +1361,257 @@ int cmd_enable_events(int argc, const char **argv)
 		}
 	}
 
-	opt_event_list = (char*) poptGetArg(pc);
-	if (opt_event_list == NULL && opt_enable_all == 0) {
-		ERR("Missing event name(s).\n");
-		ret = CMD_ERROR;
+	/* Parse global arguments */
+	pc = poptGetContext(NULL, argc, argv, global_long_options, 0);
+	poptReadDefaultConfig(pc, 0);
+
+
+	while ((opt = poptGetNextOpt(pc)) != -1) {
+		switch (opt) {
+		case OPT_HELP:
+			SHOW_HELP();
+			goto end;
+		case OPT_LIST_OPTIONS:
+			list_cmd_options(stdout, long_options);
+			goto end;
+		default:
+			break;
+		}
+	}
+
+	/* Dispose the global arguments context */
+	poptFreeContext(pc);
+	pc = NULL;
+
+	/* Find the number of domain based on the passed arguments */
+	int i;
+	int args_tuple_count = 0;
+	int arg_state_looking_for_end = 0;
+	struct args_tuple *args_tuple_list = NULL;
+	for (i = 1; i < argc ; i++) {
+
+		if (strcmp("-u", argv[i]) && strcmp("--userspace", argv[i]) &&
+			strcmp("-j", argv[i]) && strcmp("--jul", argv[i]) &&
+			strcmp("-l", argv[i]) && strcmp("--log4j", argv[i]) &&
+			strcmp("-p", argv[i]) && strcmp("--python", argv[i]) &&
+			strcmp("-k", argv[i]) && strcmp("--kernel", argv[i])) {
+			continue;
+		}
+
+
+		struct args_tuple *tmp_pointer =  NULL;
+		args_tuple_count++;
+		tmp_pointer = realloc(args_tuple_list, sizeof(struct args_tuple) * args_tuple_count);
+		if (!tmp_pointer) {
+			ERR("Realoc of args tuple failed");
+			ret = CMD_ERROR;
+			goto end;
+		}
+		args_tuple_list = tmp_pointer;
+
+		if (!arg_state_looking_for_end) {
+			if (args_tuple_count -1 < 0) {
+				ERR("Args parsing illegal state");
+				ret = CMD_ERROR;
+				goto end;
+			}
+			args_tuple_list[args_tuple_count-1].argv_index_start = i;
+			arg_state_looking_for_end = 1;
+		} else {
+			if (args_tuple_count - 2 < 0 || args_tuple_count -1 < 0) {
+				ERR("Args parsing illegal state");
+				ret = CMD_ERROR;
+				goto end;
+			}
+
+			/* Close the previous tuple */
+			args_tuple_list[args_tuple_count-2].argv_index_end = i - 1;
+
+			/* Start the new tuple */
+			args_tuple_list[args_tuple_count-1].argv_index_start = i;
+		}
+	}
+
+	if (args_tuple_count <= 0) {
+		ret = print_missing_or_multiple_domains(0);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto end;
+		}
 		goto end;
 	}
 
-	if (!opt_session_name) {
-		session_name = get_session_name();
-		if (session_name == NULL) {
-			command_ret = CMD_ERROR;
-			success = 0;
-			goto mi_closing;
-		}
-	} else {
-		session_name = opt_session_name;
+	/* Close the last tuple */
+	args_tuple_list[args_tuple_count-1].argv_index_end = i - 1;
+
+	if (args_tuple_count == 1) {
+		/* Preserve the old way with a domain flag that can be anywhere */
+		args_tuple_list[0].argv_index_start = 1;
 	}
 
-	command_ret = enable_events(session_name);
-	if (command_ret) {
-		success = 0;
-		goto mi_closing;
+	for (i = 0; i < args_tuple_count; i++) {
+		struct args_tuple *tuple = &args_tuple_list[i];
+		int cur_argc = tuple->argv_index_end - tuple-> argv_index_start + 1;
+		const char **cur_argv = &argv[tuple->argv_index_start];
+
+		/* Default options */
+
+		/* Domain */
+		opt_domain = LTTNG_DOMAIN_NONE;
+
+		/* Event options */
+		opt_enable_all = 0;
+		opt_event_type = LTTNG_EVENT_ALL;
+		opt_loglevel_type = LTTNG_EVENT_LOGLEVEL_ALL;
+		opt_event_list = NULL;
+		opt_loglevel = NULL;
+		opt_probe = NULL;
+		opt_function = NULL;
+		opt_channel_name = NULL;
+		opt_filter = NULL;
+		opt_exclude = NULL;
+
+		pc = poptGetContext(NULL, cur_argc, cur_argv, long_options, POPT_CONTEXT_KEEP_FIRST);
+		poptReadDefaultConfig(pc, 0);
+
+		/* Default event type */
+		opt_event_type = LTTNG_EVENT_ALL;
+
+		while ((opt = poptGetNextOpt(pc)) != -1) {
+			switch (opt) {
+			case OPT_HELP:
+				SHOW_HELP();
+				goto end;
+			case OPT_TRACEPOINT:
+				opt_event_type = LTTNG_EVENT_TRACEPOINT;
+				break;
+			case OPT_PROBE:
+				opt_event_type = LTTNG_EVENT_PROBE;
+				break;
+			case OPT_FUNCTION:
+				opt_event_type = LTTNG_EVENT_FUNCTION;
+				break;
+			case OPT_SYSCALL:
+				opt_event_type = LTTNG_EVENT_SYSCALL;
+				break;
+			case OPT_LOGLEVEL:
+				opt_loglevel_type = LTTNG_EVENT_LOGLEVEL_RANGE;
+				opt_loglevel = poptGetOptArg(pc);
+				break;
+			case OPT_LOGLEVEL_ONLY:
+				opt_loglevel_type = LTTNG_EVENT_LOGLEVEL_SINGLE;
+				opt_loglevel = poptGetOptArg(pc);
+				break;
+			case OPT_LIST_OPTIONS:
+				list_cmd_options(stdout, long_options);
+				goto end;
+			case OPT_FILTER:
+				break;
+			case OPT_EXCLUDE:
+				break;
+			default:
+				ret = CMD_UNDEFINED;
+				goto end;
+			}
+
+			/* Validate event type. Multiple event type are not supported. */
+			if (event_type == -1) {
+				event_type = opt_event_type;
+			} else {
+				if (event_type != opt_event_type) {
+					ERR("Multiple event type not supported.");
+					ret = CMD_ERROR;
+					goto end;
+				}
+			}
+		}
+
+		struct domain_configuration *tmp_config = initialize_domain_configuration(opt_domain);
+
+		opt_event_list = (char*) poptGetArg(pc);
+		if (opt_event_list == NULL && opt_enable_all == 0) {
+			ERR("Missing event name(s).\n");
+			ret = CMD_ERROR;
+			goto end;
+		}
+
+		if (!opt_session_name) {
+			session_name = get_session_name();
+			if (session_name == NULL) {
+				command_ret = CMD_ERROR;
+				success = 0;
+				goto mi_closing;
+			}
+		} else {
+			session_name = opt_session_name;
+		}
+
+		config->event_type = opt_event_type ;
+		config->enable_all = opt_enable_all;
+		config->loglevel_type = opt_loglevel_type;
+		config->loglevel = opt_loglevel;
+		config->probe = opt_probe;
+		config->function = opt_function;
+		config->channel_name = opt_channel_name;
+		config->filter = opt_filter;
+		config->exclude = opt_exclude;
+		config->event_list = opt_event_list;
+
+		switch(opt_domain) {
+		case LTTNG_DOMAIN_KERNEL:
+			if (kernel_config) {
+				ERR("Only one -k option is permitted per command");
+				ret = CMD_ERROR;
+				goto end;
+			}
+			kernel_config = tmp_config;
+			break;
+		case LTTNG_DOMAIN_UST:
+			if (ust_config) {
+				ERR("Only one -u option is permitted per command");
+				ret = CMD_ERROR;
+				goto end;
+			}
+			ust_config = tmp_config;
+			break;
+		case LTTNG_DOMAIN_JUL:
+			if (jul_config) {
+				ERR("Only one -j option is permitted per command");
+				ret = CMD_ERROR;
+				goto end;
+			}
+			jul_config = tmp_config;
+			break;
+		case LTTNG_DOMAIN_LOG4J:
+			if (log4j_config) {
+				ERR("Only one -l option is permitted per command");
+				ret = CMD_ERROR;
+				goto end;
+			}
+			log4j_config = tmp_config;
+			break;
+		case LTTNG_DOMAIN_PYTHON:
+			if (python_config) {
+				ERR("Only one -p option is permitted per command");
+				ret = CMD_ERROR;
+				goto end;
+			}
+			python_config = tmp_config;
+			break;
+		case LTTNG_DOMAIN_NONE:
+		default:
+			ret = CMD_ERROR;
+			goto end
+		};
+
+		tmp_config = NULL;
+
 	}
+
+		command_ret = enable_events_1(session_name, configurations, sizeof(configurations)/sizeof(struct *domain_configuration);
+		if (command_ret) {
+			success = 0;
+		}
 
 mi_closing:
 	/* Mi closing */
@@ -1404,6 +1652,11 @@ end:
 	/* Overwrite ret if an error occurred in enable_events */
 	ret = command_ret ? command_ret : ret;
 
+	free(userspace_config);
+	free(kernel_config);
+	free(jul_config);
+	free(log4j_config);
+	free(python_config);
 	poptFreeContext(pc);
 	return ret;
 }
