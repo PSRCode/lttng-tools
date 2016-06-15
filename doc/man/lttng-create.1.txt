@@ -237,6 +237,11 @@ option:--template-path='TEMPLATE'::
     the values present in the template when present.
 
 
+Name
+~~~~
+option:--default-name::
+    Generate a session name of the form `auto-YYYYmmdd-HHMMSS`.
+
 include::common-cmd-help-options.txt[]
 
 
