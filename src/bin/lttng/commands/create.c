@@ -53,12 +53,14 @@ static int opt_no_output;
 static int opt_snapshot;
 static unsigned int opt_live_timer;
 static bool opt_default_name;
+static bool opt_default_output;
 
 enum {
 	OPT_HELP = 1,
 	OPT_LIST_OPTIONS,
 	OPT_LIVE_TIMER,
 	OPT_DEFAULT_NAME,
+	OPT_DEFAULT_OUTPUT,
 };
 
 enum output_type {
@@ -92,6 +94,7 @@ static struct poptOption long_options[] = {
 	{"shm-path",        0, POPT_ARG_STRING, &opt_shm_path, 0, 0, 0},
 	{"template-path",        0, POPT_ARG_STRING, &opt_template_path, 0, 0, 0},
 	{"default-name",    0, POPT_ARG_NONE, NULL, OPT_DEFAULT_NAME, 0, 0},
+	{"default-output",  0, POPT_ARG_NONE, NULL, OPT_DEFAULT_OUTPUT, 0, 0},
 	{0, 0, 0, 0, 0, 0, 0}
 };
 
@@ -261,6 +264,13 @@ static int validate_command_options(enum session_type type)
 
 	if (opt_session_name && opt_default_name) {
 		ERR("A session name must not be provided if the --default-name option is used");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	if (opt_default_output && (opt_data_url || opt_ctrl_url || opt_url ||
+			opt_output_path)) {
+		ERR("The --default-output option may not be used with the --output/-o, --set-url/-U, --ctrl-url/-C, or --data-url/-D options");
 		ret = CMD_ERROR;
 		goto error;
 	}
@@ -1124,8 +1134,9 @@ static int create_session(void)
 		 */
 		base_ctrl_url = strdup(opt_ctrl_url);
 		base_data_url = strdup(opt_data_url);
-	} else if (!(opt_no_output || base_output_type == OUTPUT_NONE ||
-				base_url || base_ctrl_url || base_data_url)) {
+	} else if (opt_default_output || !(opt_no_output ||
+			base_output_type == OUTPUT_NONE || base_url ||
+			base_ctrl_url || base_data_url)) {
 		/* Generate default output depending on the session type */
 		switch (base_session_type) {
 		case SESSION_NORMAL:
@@ -1480,6 +1491,9 @@ int cmd_create(int argc, const char **argv)
 		}
 		case OPT_DEFAULT_NAME:
 			opt_default_name = true;
+			break;
+		case OPT_DEFAULT_OUTPUT:
+			opt_default_output = true;
 			break;
 		default:
 			ret = CMD_UNDEFINED;
