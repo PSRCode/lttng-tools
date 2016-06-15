@@ -113,7 +113,7 @@ elementFormDefault="qualified" version="3.0">
 	<xs:all>
 		<xs:element name="name" type="name_type" minOccurs="0"/>
 		<xs:element name="enabled" type="xs:boolean" default="true" minOccurs="0"/>
-		<xs:element name="type" type="event_type_type" default="TRACEPOINT" minOccurs="0"/>
+		<xs:element name="type" type="event_type_type" default="TRACEPOINT"/>
 		<xs:element name="loglevel_type" type="loglevel_type" default="ALL" minOccurs="0"/>
 		<xs:element name="loglevel" type="xs:int" default="-1" minOccurs="0"/>
 		<xs:element name="filter" type="xs:string" minOccurs="0"/>

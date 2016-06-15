@@ -65,7 +65,6 @@ enum {
 	OPT_EXCLUDE,
 };
 
-static struct lttng_handle *handle;
 static struct mi_writer *writer;
 
 static struct poptOption long_options[] = {
@@ -96,6 +95,42 @@ static struct poptOption global_long_options[] = {
 	{"list-options", 0, POPT_ARG_NONE, NULL, OPT_LIST_OPTIONS, NULL, NULL},
 	{0, 0, 0, 0, 0, 0, 0}
 };
+
+/* Represent an event to be enabled */
+struct internal_event {
+	char *session_name;
+	char *channel_name;
+	enum lttng_domain_type domain_type;
+	struct lttng_event *event;
+	int exclusion_list_size;
+	char **exclusion_list;
+	char *filter_expression;
+};
+
+/* Represent the a set of configuration for a given domain */
+struct domain_configuration {
+	enum lttng_domain_type domain_type;
+
+	enum lttng_event_type event_type;
+	int enable_all;
+	char *event_list;
+
+	char *loglevel;
+	int loglevel_type;
+
+	char *probe;
+	char *function;
+	char *channel_name;
+	char *filter;
+	char *exclude;
+};
+
+/* Represent a subset of the command line */
+struct args_tuple {
+	int argv_index_start;
+	int argv_index_end;
+};
+
 /*
  * Parse probe options.
  */
@@ -554,19 +589,174 @@ static void warn_on_truncated_exclusion_names(char **exclusion_list,
 	}
 }
 
-struct domain_configuration {
-	int enable_all;
-	int event_type;
-	char *event_list;
-	char *loglevel;
-	int loglevel_type;
-	enum lttng_domain_type domain_type;
-	char *probe;
-	char *function;
+static void free_internal_event_list(struct internal_event *event_list,
+		const unsigned int size)
+ {
+       if (size == 0 && event_list) {
+	       assert(0);
+       }
+
+       if (size == 0) {
+	       goto end;
+       }
+
+       for (int i = 0; i < size ; i++) {
+	       free(event_list[i].event);
+	       free(event_list[i].filter_expression);
+	       free(event_list[i].session_name);
+	       free(event_list[i].channel_name);
+
+               if (event_list[i].exclusion_list) {
+                       unsigned int count = event_list[i].exclusion_list_size;
+                       for (int j = 0; j < count; j++) {
+                               free(event_list->exclusion_list[j]);
+                       }
+               }
+               free(event_list[i].exclusion_list);
+       }
+end:
+       free(event_list);
+}
+
+
+/*
+ * Responsible for user output and mi output per event.
+ */
+static int generate_output_per_event(struct internal_event *internal_event,
+		int command_ret)
+{
+	int ret = CMD_SUCCESS;
+	char *exclusion_string = NULL;
+	char *session_name;
 	char *channel_name;
-	char *filter;
-	char *exclude;
-};
+	char *filter_expression;
+	enum lttng_domain_type domain_type;
+	struct lttng_event *ev;
+	int success;
+
+	char *empty_string = "";
+
+	assert(internal_event);
+	assert(internal_event->session_name);
+	assert(domain_type = internal_event->domain_type);
+	assert(internal_event->event);
+	assert(internal_event->event->name);
+
+	session_name =  internal_event->session_name;
+	channel_name = internal_event->channel_name;
+	domain_type = internal_event->domain_type;
+	ev = internal_event->event;
+
+	if (internal_event->filter_expression) {
+		filter_expression = internal_event->filter_expression;
+	} else {
+		filter_expression = empty_string;
+	}
+
+	if (command_ret < 0) {
+		success = 0;
+	} else {
+		success = 1;
+	}
+
+	exclusion_string = print_exclusions(internal_event->exclusion_list_size,
+			internal_event->exclusion_list);
+
+	if (!exclusion_string) {
+		PERROR("Cannot allocate exclusion_string");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	if (command_ret < 0) {
+		switch (-command_ret) {
+		case LTTNG_ERR_FILTER_EXIST:
+			WARN("Filter on event %s%s is already enabled"
+					" (domain %s, channel %s, session %s)",
+				ev->name,
+				exclusion_string,
+				get_domain_str(domain_type),
+				print_channel_name(channel_name), session_name);
+			break;
+		case LTTNG_ERR_TRACE_ALREADY_STARTED:
+		{
+			const char *msg = "The command tried to enable an event in a new domain for a session that has already been started once.";
+			ERR("Event %s%s: %s (domain %s, channel %s, session %s, filter \'%s\')", ev->name,
+					exclusion_string,
+					msg,
+					get_domain_str(domain_type),
+					print_channel_name(channel_name),
+					session_name, filter_expression);
+			break;
+		}
+		case LTTNG_ERR_KERN_EVENT_EXIST:
+			WARN("Kernel event %s%s already enabled (channel %s, session %s)",
+					ev->name,
+					exclusion_string,
+					print_channel_name(channel_name), session_name);
+			break;
+		default:
+			ERR("Event %s%s: %s (domain %s, channel %s, session %s, filter \'%s\')",
+					ev->name,
+					exclusion_string,
+					lttng_strerror(command_ret),
+					get_domain_str(domain_type),
+					command_ret == -LTTNG_ERR_NEED_CHANNEL_NAME
+						? print_raw_channel_name(channel_name)
+						: print_channel_name(channel_name),
+					session_name, filter_expression);
+			break;
+		}
+	} else {
+		if (internal_event->filter_expression) {
+			MSG("Event %s%s: Filter '%s' for domain %s successfully set",
+					ev->name, exclusion_string,
+					filter_expression,
+					get_domain_str(domain_type));
+		} else {
+			MSG("%s event %s%s created in channel %s",
+					get_domain_str(domain_type),
+					ev->name,
+					exclusion_string,
+					print_channel_name(channel_name));
+		}
+	}
+
+
+	if (lttng_opt_mi) {
+		ret = mi_lttng_event(writer, ev, 1, domain_type);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto error;
+		}
+
+		/* print exclusion */
+		ret = mi_print_exclusion(internal_event->exclusion_list_size,
+				internal_event->exclusion_list);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto error;
+		}
+
+		/* Success ? */
+		ret = mi_lttng_writer_write_element_bool(writer,
+				mi_lttng_element_command_success, success);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto error;
+		}
+
+		/* Close event element */
+		ret = mi_lttng_writer_close_element(writer);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto error;
+		}
+	}
+error:
+	free(exclusion_string);
+	return ret;
+}
 
 /*
  * Enabling event using the lttng API.
@@ -577,10 +767,13 @@ static int enable_events(char *session_name, struct domain_configuration *config
 	int ret = CMD_SUCCESS, command_ret = CMD_SUCCESS;
 	int error_holder = CMD_SUCCESS, warn = 0, error = 0, success = 1;
 	char *event_name, *channel_name = NULL;
-	struct lttng_event ev;
 	struct lttng_domain dom;
 	int exclusion_count = 0;
 	char **exclusion_list = NULL;
+	struct lttng_handle *handle;
+
+	struct internal_event *internal_event_list = NULL;
+	unsigned int internal_event_list_size = 0;
 
 	int config_enable_all;
 	int config_event_type;
@@ -596,7 +789,6 @@ static int enable_events(char *session_name, struct domain_configuration *config
 
 	assert(config);
 
-	memset(&ev, 0, sizeof(ev));
 	memset(&dom, 0, sizeof(dom));
 
 	config_enable_all = config->enable_all;
@@ -617,7 +809,7 @@ static int enable_events(char *session_name, struct domain_configuration *config
 		}
 	}
 
-	/* Create lttng domain */
+	/* Create lttng domain and handle */
 	dom.type = config_domain_type;
 	switch (config_domain_type) {
 	case LTTNG_DOMAIN_KERNEL:
@@ -634,6 +826,11 @@ static int enable_events(char *session_name, struct domain_configuration *config
 		assert(0);
 	}
 
+	handle = lttng_create_handle(session_name, &dom);
+	if (handle == NULL) {
+		ret = -1;
+		goto error;
+	}
 
 	if (config_exclude) {
 		switch (dom.type) {
@@ -653,13 +850,6 @@ static int enable_events(char *session_name, struct domain_configuration *config
 		}
 	}
 
-	channel_name = config_channel_name;
-
-	handle = lttng_create_handle(session_name, &dom);
-	if (handle == NULL) {
-		ret = -1;
-		goto error;
-	}
 
 	/* Prepare Mi */
 	if (lttng_opt_mi) {
@@ -687,7 +877,12 @@ static int enable_events(char *session_name, struct domain_configuration *config
 		}
 	}
 
+	channel_name = config_channel_name;
+
+	/* TODO: move enabling of all event to its own function */
 	if (config_enable_all) {
+		struct lttng_event ev;
+		memset(&ev, 0, sizeof(ev));
 		/* Default setup for enable all */
 		if (config_domain_type == LTTNG_DOMAIN_KERNEL) {
 			ev.type = config_event_type;
@@ -958,13 +1153,61 @@ static int enable_events(char *session_name, struct domain_configuration *config
 		goto end;
 	}
 
-	/* Strip event list */
-	event_name = strtok(config_event_list, ",");
-	while (event_name != NULL) {
+	/* Count the number of events */
+	if (!config_event_list) {
+		/* Nothing to do */
+		goto end;
+	}
+
+	char *tmp = config_event_list;
+
+	/* There will be at last 1 event */
+	internal_event_list_size = 1;
+	while ((tmp = strchr(tmp, ',')) != NULL) {
+		internal_event_list_size++;
+		tmp++;
+	}
+
+	/* Initialize array of event */
+	internal_event_list = calloc(internal_event_list_size, sizeof(struct internal_event));
+	for (int i = 0; i < internal_event_list_size; i++) {
+		        internal_event_list[i].event = zmalloc(sizeof(struct lttng_event));
+			if (!internal_event_list[i].event) {
+				ERR("Error initializing events array");
+				ret = CMD_ERROR;
+				goto error;
+			}
+
+			/* Set minimal internal event information */
+			internal_event_list[i].session_name = strdup(session_name);
+			if (!internal_event_list[i].session_name) {
+				ERR("Session name duplication failed");
+				ret = CMD_ERROR;
+				goto error;
+			}
+
+
+			if (config_channel_name) {
+				internal_event_list[i].channel_name = strdup(config_channel_name);
+			}
+			internal_event_list[i].domain_type = config_domain_type;
+			internal_event_list[i].filter_expression = NULL;
+	}
+
+	/* Strip command line event list */
+	for (int i = 0; i < internal_event_list_size; i++) {
 		/* Copy name and type of the event */
-		strncpy(ev.name, event_name, LTTNG_SYMBOL_NAME_LEN);
-		ev.name[LTTNG_SYMBOL_NAME_LEN - 1] = '\0';
-		ev.type = config_event_type;
+		struct lttng_event *ev = internal_event_list[i].event;
+		struct internal_event *int_event = &internal_event_list[i];
+
+		if (i == 0) {
+			event_name = strtok(config_event_list, ",");
+		} else {
+			event_name = strtok(NULL, ",");
+		}
+		strncpy(ev->name, event_name, LTTNG_SYMBOL_NAME_LEN);
+		ev->name[LTTNG_SYMBOL_NAME_LEN - 1] = '\0';
+		ev->type = config_event_type;
 
 		/* Kernel tracer action */
 		switch (config_domain_type) {
@@ -973,17 +1216,18 @@ static int enable_events(char *session_name, struct domain_configuration *config
 					event_name,
 					print_channel_name(channel_name));
 
+			/* Set the event type */
 			switch (config_event_type) {
 			case LTTNG_EVENT_ALL:	/* Enable tracepoints and syscalls */
 				/* If event name differs from *, select tracepoint. */
-				if (strcmp(ev.name, "*")) {
-					ev.type = LTTNG_EVENT_TRACEPOINT;
+				if (strcmp(ev->name, "*")) {
+					ev->type = LTTNG_EVENT_TRACEPOINT;
 				}
 				break;
 			case LTTNG_EVENT_TRACEPOINT:
 				break;
 			case LTTNG_EVENT_PROBE:
-				ret = parse_probe_opts(&ev, config_probe);
+				ret = parse_probe_opts(ev, config_probe);
 				if (ret) {
 					ERR("Unable to parse probe options");
 					ret = 0;
@@ -991,7 +1235,7 @@ static int enable_events(char *session_name, struct domain_configuration *config
 				}
 				break;
 			case LTTNG_EVENT_FUNCTION:
-				ret = parse_probe_opts(&ev, config_function);
+				ret = parse_probe_opts(ev, config_function);
 				if (ret) {
 					ERR("Unable to parse function probe options");
 					ret = 0;
@@ -999,7 +1243,7 @@ static int enable_events(char *session_name, struct domain_configuration *config
 				}
 				break;
 			case LTTNG_EVENT_SYSCALL:
-				ev.type = LTTNG_EVENT_SYSCALL;
+				ev->type = LTTNG_EVENT_SYSCALL;
 				break;
 			default:
 				ret = CMD_UNDEFINED;
@@ -1007,21 +1251,20 @@ static int enable_events(char *session_name, struct domain_configuration *config
 			}
 
 			/* kernel loglevels not implemented */
-			ev.loglevel_type = LTTNG_EVENT_LOGLEVEL_ALL;
+			ev->loglevel_type = LTTNG_EVENT_LOGLEVEL_ALL;
 			break;
 		case LTTNG_DOMAIN_UST:
 			/* User-space tracer action */
-			DBG("Enabling UST event %s for channel %s, loglevel %s", event_name,
-					print_channel_name(channel_name), config_loglevel ? : "<all>");
+			DBG("Enabling UST event %s for channel %s, loglevel %s", ev->name,
+					print_channel_name(int_event->channel_name), config_loglevel ? : "<all>");
 
+
+			/* Set the event type */
 			switch (config_event_type) {
 			case LTTNG_EVENT_ALL:	/* Default behavior is tracepoint */
 				/* Fall-through */
 			case LTTNG_EVENT_TRACEPOINT:
-				/* Copy name and type of the event */
-				ev.type = LTTNG_EVENT_TRACEPOINT;
-				strncpy(ev.name, event_name, LTTNG_SYMBOL_NAME_LEN);
-				ev.name[LTTNG_SYMBOL_NAME_LEN - 1] = '\0';
+				ev->type = LTTNG_EVENT_TRACEPOINT;
 				break;
 			case LTTNG_EVENT_PROBE:
 			case LTTNG_EVENT_FUNCTION:
@@ -1032,42 +1275,40 @@ static int enable_events(char *session_name, struct domain_configuration *config
 				goto error;
 			}
 
+			/* Set the exclusion */
 			if (config_exclude) {
-				ev.exclusion = 1;
-				if (config_event_type != LTTNG_EVENT_ALL && opt_event_type != LTTNG_EVENT_TRACEPOINT) {
+				ev->exclusion = 1;
+				if (ev->type != LTTNG_EVENT_ALL && ev->type != LTTNG_EVENT_TRACEPOINT) {
 					ERR("Exclusion option can only be used with tracepoint events");
 					ret = CMD_ERROR;
 					goto error;
 				}
-				/* Free previously allocated items */
-				if (exclusion_list != NULL) {
-					while (exclusion_count--) {
-						free(exclusion_list[exclusion_count]);
-					}
-					free(exclusion_list);
-					exclusion_list = NULL;
-				}
 				/* Check for proper subsets */
-				ret = check_exclusion_subsets(event_name, config_exclude,
-						&exclusion_count, &exclusion_list);
+				ret = check_exclusion_subsets(ev->name, config_exclude,
+						&int_event->exclusion_list_size, &int_event->exclusion_list);
 				if (ret == CMD_ERROR) {
 					goto error;
 				}
 
 				warn_on_truncated_exclusion_names(
-					exclusion_list, exclusion_count, &warn);
+					int_event->exclusion_list,
+					int_event->exclusion_list_size, &warn);
+
 			}
 
-			ev.loglevel_type = config_loglevel_type;
+			/* Set the log level type */
+			ev->loglevel_type = config_loglevel_type;
+
+			/* Set the loglevel */
 			if (config_loglevel) {
-				ev.loglevel = loglevel_str_to_value(config_loglevel);
-				if (ev.loglevel == -1) {
+				ev->loglevel = loglevel_str_to_value(config_loglevel);
+				if (ev->loglevel == -1) {
 					ERR("Unknown loglevel %s", config_loglevel);
 					ret = -LTTNG_ERR_INVALID;
 					goto error;
 				}
 			} else {
-				ev.loglevel = -1;
+				ev->loglevel = -1;
 			}
 			break;
 		case LTTNG_DOMAIN_JUL:
@@ -1079,25 +1320,30 @@ static int enable_events(char *session_name, struct domain_configuration *config
 				ret = CMD_UNSUPPORTED;
 				goto error;
 			}
+			/* Defaut the type */
+			ev->type = LTTNG_EVENT_TRACEPOINT;
 
-			ev.loglevel_type = config_loglevel_type;
+			/* Set the loglevel type */
+			ev->loglevel_type = config_loglevel_type;
+
+			/* Set the loglevel */
 			if (config_loglevel) {
 				switch (config_domain_type) {
 				case LTTNG_DOMAIN_JUL:
-					ev.loglevel = loglevel_jul_str_to_value(config_loglevel);
+					ev->loglevel = loglevel_jul_str_to_value(config_loglevel);
 					break;
 				case LTTNG_DOMAIN_LOG4J:
-					ev.loglevel = loglevel_log4j_str_to_value(config_loglevel);
+					ev->loglevel = loglevel_log4j_str_to_value(config_loglevel);
 					break;
 				case LTTNG_DOMAIN_PYTHON:
-					ev.loglevel = loglevel_python_str_to_value(config_loglevel);
+					ev->loglevel = loglevel_python_str_to_value(config_loglevel);
 					break;
 				default:
 					assert(0);
 					break;
 				}
 
-				if (ev.loglevel == -1) {
+				if (ev->loglevel == -1) {
 					ERR("Unknown loglevel %s", config_loglevel);
 					ret = -LTTNG_ERR_INVALID;
 					goto error;
@@ -1105,204 +1351,71 @@ static int enable_events(char *session_name, struct domain_configuration *config
 			} else {
 				switch (config_domain_type) {
 				case LTTNG_DOMAIN_JUL:
-					ev.loglevel = LTTNG_LOGLEVEL_JUL_ALL;
+					ev->loglevel = LTTNG_LOGLEVEL_JUL_ALL;
 					break;
 				case LTTNG_DOMAIN_LOG4J:
-					ev.loglevel = LTTNG_LOGLEVEL_LOG4J_ALL;
+					ev->loglevel = LTTNG_LOGLEVEL_LOG4J_ALL;
 					break;
 				case LTTNG_DOMAIN_PYTHON:
-					ev.loglevel = LTTNG_LOGLEVEL_PYTHON_DEBUG;
+					ev->loglevel = LTTNG_LOGLEVEL_PYTHON_DEBUG;
 					break;
 				default:
 					assert(0);
 					break;
 				}
 			}
-			ev.type = LTTNG_EVENT_TRACEPOINT;
-			strncpy(ev.name, event_name, LTTNG_SYMBOL_NAME_LEN);
-			ev.name[LTTNG_SYMBOL_NAME_LEN - 1] = '\0';
 			break;
 		default:
 			assert(0);
 		}
 
-		if (!config_filter) {
-			char *exclusion_string;
-
-			command_ret = lttng_enable_event_with_exclusions(handle,
-					&ev, channel_name,
-					NULL, exclusion_count, exclusion_list);
-			exclusion_string = print_exclusions(exclusion_count, exclusion_list);
-			if (!exclusion_string) {
-				PERROR("Cannot allocate exclusion_string");
-				error = 1;
-				goto end;
-			}
-			if (command_ret < 0) {
-				/* Turn ret to positive value to handle the positive error code */
-				switch (-command_ret) {
-				case LTTNG_ERR_KERN_EVENT_EXIST:
-					WARN("Kernel event %s%s already enabled (channel %s, session %s)",
-							event_name,
-							exclusion_string,
-							print_channel_name(channel_name), session_name);
-					warn = 1;
-					break;
-				case LTTNG_ERR_TRACE_ALREADY_STARTED:
-				{
-					const char *msg = "The command tried to enable an event in a new domain for a session that has already been started once.";
-					ERR("Event %s%s: %s (domain %s,channel %s, session %s)", event_name,
-							exclusion_string,
-							msg,
-							get_domain_str(dom.type),
-							print_channel_name(channel_name),
-							session_name);
-					error = 1;
-					break;
-				}
-				default:
-					ERR("Event %s%s: %s (domain %s, channel %s, session %s)", event_name,
-							exclusion_string,
-							lttng_strerror(command_ret),
-							get_domain_str(dom.type),
-							command_ret == -LTTNG_ERR_NEED_CHANNEL_NAME
-								? print_raw_channel_name(channel_name)
-								: print_channel_name(channel_name),
-							session_name);
-					error = 1;
-					break;
-				}
-				error_holder = command_ret;
-			} else {
-				switch (dom.type) {
-				case LTTNG_DOMAIN_KERNEL:
-				case LTTNG_DOMAIN_UST:
-					MSG("%s event %s%s created in channel %s",
-						get_domain_str(dom.type),
-						event_name,
-						exclusion_string,
-						print_channel_name(channel_name));
-					break;
-				case LTTNG_DOMAIN_JUL:
-				case LTTNG_DOMAIN_LOG4J:
-				case LTTNG_DOMAIN_PYTHON:
-					/*
-					 * Don't print the default channel
-					 * name for agent domains.
-					 */
-					MSG("%s event %s%s enabled",
-						get_domain_str(dom.type),
-						event_name,
-						exclusion_string);
-					break;
-				default:
-					assert(0);
-				}
-			}
-			free(exclusion_string);
-		}
-
+		/* Set the filter */
 		if (config_filter) {
-			char *exclusion_string;
+			ev->filter = 1;
+			int_event->filter_expression = config_filter;
+			if (!int_event->filter_expression) {
+				ERR("Duplication of filter string");
+				ret = CMD_ERROR;
+				goto error;
+			}
+		}
 
-			/* Filter present */
-			ev.filter = 1;
+	}
 
-			command_ret = lttng_enable_event_with_exclusions(handle, &ev, channel_name,
-					config_filter, exclusion_count, exclusion_list);
-			exclusion_string = print_exclusions(exclusion_count, exclusion_list);
-			if (!exclusion_string) {
-				PERROR("Cannot allocate exclusion_string");
+	/* Enable the vents */
+	for (int i = 0; i < internal_event_list_size; i++) {
+		command_ret = lttng_enable_event_with_exclusions(handle,
+				internal_event_list[i].event,
+				internal_event_list[i].channel_name,
+				internal_event_list[i].filter_expression,
+				internal_event_list[i].exclusion_list_size,
+				internal_event_list[i].exclusion_list);
+
+		if (command_ret < 0 ) {
+			error_holder = command_ret;
+			switch (-command_ret){
+			case LTTNG_ERR_FILTER_EXIST:
+				warn = 1;
+				break;
+			case LTTNG_ERR_TRACE_ALREADY_STARTED:
 				error = 1;
-				goto end;
+				break;
+			case LTTNG_ERR_KERN_EVENT_EXIST:
+				warn = 1;
+				break;
+			default:
+				error = 1;
+				break;
 			}
-			if (command_ret < 0) {
-				switch (-command_ret) {
-				case LTTNG_ERR_FILTER_EXIST:
-					WARN("Filter on event %s%s is already enabled"
-							" (domain %s, channel %s, session %s)",
-						event_name,
-						exclusion_string,
-						get_domain_str(dom.type),
-						print_channel_name(channel_name), session_name);
-					warn = 1;
-					break;
-				case LTTNG_ERR_TRACE_ALREADY_STARTED:
-				{
-					const char *msg = "The command tried to enable an event in a new domain for a session that has already been started once.";
-					ERR("Event %s%s: %s (domain %s, channel %s, session %s, filter \'%s\')", ev.name,
-							exclusion_string,
-							msg,
-							get_domain_str(dom.type),
-							print_channel_name(channel_name),
-							session_name, config_filter);
-					error = 1;
-					break;
-				}
-				default:
-					ERR("Event %s%s: %s (domain %s, channel %s, session %s, filter \'%s\')", ev.name,
-							exclusion_string,
-							lttng_strerror(command_ret),
-							get_domain_str(dom.type),
-							command_ret == -LTTNG_ERR_NEED_CHANNEL_NAME
-								? print_raw_channel_name(channel_name)
-								: print_channel_name(channel_name),
-							session_name, config_filter);
-					error = 1;
-					break;
-				}
-				error_holder = command_ret;
-
-			} else {
-				MSG("Event %s%s: Filter '%s' for domain %s successfully set",
-						event_name, exclusion_string,
-						config_filter,
-						get_domain_str(dom.type));
-			}
-			free(exclusion_string);
+			internal_event_list[i].event->enabled = 0;
+		} else {
+			internal_event_list[i].event->enabled = 1;
 		}
 
-		if (lttng_opt_mi) {
-			if (command_ret) {
-				success = 0;
-				ev.enabled = 0;
-			} else {
-				ev.enabled = 1;
-			}
-
-			ret = mi_lttng_event(writer, &ev, 1, handle->domain.type);
-			if (ret) {
-				ret = CMD_ERROR;
-				goto error;
-			}
-
-			/* print exclusion */
-			ret = mi_print_exclusion(exclusion_count, exclusion_list);
-			if (ret) {
-				ret = CMD_ERROR;
-				goto error;
-			}
-
-			/* Success ? */
-			ret = mi_lttng_writer_write_element_bool(writer,
-					mi_lttng_element_command_success, success);
-			if (ret) {
-				ret = CMD_ERROR;
-				goto end;
-			}
-
-			/* Close event element */
-			ret = mi_lttng_writer_close_element(writer);
-			if (ret) {
-				ret = CMD_ERROR;
-				goto end;
-			}
+		ret = generate_output_per_event(&internal_event_list[i], command_ret);
+		if (ret != CMD_SUCCESS) {
+			goto error;
 		}
-
-		/* Next event */
-		event_name = strtok(NULL, ",");
-		/* Reset warn, error and success */
-		success = 1;
 	}
 
 end:
@@ -1331,6 +1444,8 @@ error:
 		free(exclusion_list);
 	}
 
+	free_internal_event_list(internal_event_list, internal_event_list_size);
+
 	/* Overwrite ret with error_holder if there was an actual error with
 	 * enabling an event.
 	 */
@@ -1343,10 +1458,6 @@ error:
  * Add event to trace session
  */
 
-struct args_tuple {
-	int argv_index_start;
-	int argv_index_end;
-};
 
 
 static struct domain_configuration *initialize_domain_configuration(enum lttng_domain_type type)
@@ -1759,7 +1870,6 @@ end:
 	}
 
 	if (opt_session_name == NULL) {
-		printf("Here\n");
 		free(session_name);
 	}
 
