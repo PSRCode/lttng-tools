@@ -200,6 +200,9 @@ option:-o, option:--output='PATH'::
 option:--shm-path='PATH'::
     Create shared memory holding buffers at 'PATH'.
 
+option:--default-output::
+    Use the default output associated to the session's mode.
+
 
 URL
 ~~~
@@ -223,6 +226,11 @@ option:-U, option:--set-url='URL'::
 In <<local-mode,local>> mode, 'URL' must start with `file://` followed
 by the destination path on the local file system.
 
+
+Name
+~~~~
+option:--default-name::
+    Generate a session name of the form `auto-YYYYmmdd-HHMMSS`.
 
 include::common-cmd-help-options.txt[]
 
