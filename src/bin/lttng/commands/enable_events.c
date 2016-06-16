@@ -1034,7 +1034,7 @@ static int enable_events(char *session_name, struct domain_configuration *config
 
 			if (config_exclude) {
 				ev.exclusion = 1;
-				if (config_event_type != LTTNG_EVENT_ALL && opt_event_type != LTTNG_EVENT_TRACEPOINT) {
+				if (config_event_type != LTTNG_EVENT_ALL && config_event_type != LTTNG_EVENT_TRACEPOINT) {
 					ERR("Exclusion option can only be used with tracepoint events");
 					ret = CMD_ERROR;
 					goto error;
