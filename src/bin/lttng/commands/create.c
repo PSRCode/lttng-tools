@@ -782,6 +782,9 @@ static int create_session_from_template(struct config_document *template,
 		}
 
 		ret = config_document_replace_element(template, "/sessions/session/output/snapshot_outputs/output/consumer_output/destination", temp_element);
+		if (ret) {
+			ERR("Destination node replacement failed");
+		}
 		break;
 	default:
 		ERR("Invalid session type");

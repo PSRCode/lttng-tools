@@ -3500,7 +3500,7 @@ LTTNG_HIDDEN
 struct config_element *config_element_create(const char *name,
 		const char* value)
 {
-	struct config_element *element;
+	struct config_element *element = NULL;
 
 	assert(name);
 
@@ -3508,11 +3508,15 @@ struct config_element *config_element_create(const char *name,
 	xmlChar *internal_value = NULL;
 
 	internal_name = encode_string(name);
-
-	/* TODO check error*/
+	if (!internal_name) {
+		goto end;
+	}
 
 	if (value) {
 		internal_value = encode_string(value);
+		if (!internal_value) {
+			goto end;
+		}
 	}
 
 	element = zmalloc(sizeof(struct config_element));
@@ -3524,6 +3528,7 @@ struct config_element *config_element_create(const char *name,
 	if (!element->element) {
 		free(element);
 		element = NULL;
+		goto end;
 	}
 
 	if (internal_value) {
