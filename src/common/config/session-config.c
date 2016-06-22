@@ -221,6 +221,34 @@ end:
 }
 
 LTTNG_HIDDEN
+const char *config_get_domain_str(enum lttng_domain_type domain)
+{
+	const char *str_dom;
+
+	switch (domain) {
+	case LTTNG_DOMAIN_KERNEL:
+		str_dom = config_domain_type_kernel;
+		break;
+	case LTTNG_DOMAIN_UST:
+		str_dom = config_domain_type_ust;
+		break;
+	case LTTNG_DOMAIN_JUL:
+		str_dom = config_domain_type_jul;
+		break;
+	case LTTNG_DOMAIN_LOG4J:
+		str_dom = config_domain_type_log4j;
+		break;
+	case LTTNG_DOMAIN_PYTHON:
+		str_dom = config_domain_type_python;
+		break;
+	default:
+		assert(0);
+	}
+
+	return str_dom;
+}
+
+LTTNG_HIDDEN
 int config_get_section_entries(const char *override_path, const char *section,
 		config_entry_handler_cb handler, void *user_data)
 {

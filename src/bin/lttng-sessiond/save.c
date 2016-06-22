@@ -1284,34 +1284,6 @@ end:
 }
 
 static
-const char *get_config_domain_str(enum lttng_domain_type domain)
-{
-	const char *str_dom;
-
-	switch (domain) {
-	case LTTNG_DOMAIN_KERNEL:
-		str_dom = config_domain_type_kernel;
-		break;
-	case LTTNG_DOMAIN_UST:
-		str_dom = config_domain_type_ust;
-		break;
-	case LTTNG_DOMAIN_JUL:
-		str_dom = config_domain_type_jul;
-		break;
-	case LTTNG_DOMAIN_LOG4J:
-		str_dom = config_domain_type_log4j;
-		break;
-	case LTTNG_DOMAIN_PYTHON:
-		str_dom = config_domain_type_python;
-		break;
-	default:
-		assert(0);
-	}
-
-	return str_dom;
-}
-
-static
 int save_pid_tracker(struct config_writer *writer,
 	struct ltt_session *sess, int domain)
 {
@@ -1425,7 +1397,7 @@ int save_ust_domain(struct config_writer *writer,
 		goto end;
 	}
 
-	config_domain_name = get_config_domain_str(domain);
+	config_domain_name = config_get_domain_str(domain);
 	if (!config_domain_name) {
 		ret = LTTNG_ERR_INVALID;
 		goto end;
