@@ -22,6 +22,7 @@
 #include <common/config/config-session-abi.h>
 #include <common/macros.h>
 #include <lttng/domain.h>
+#include <lttng/event.h>
 #include <stdint.h>
 
 struct config_entry {
@@ -44,6 +45,13 @@ struct config_element;
  */
 LTTNG_HIDDEN
 const char *config_get_domain_str(enum lttng_domain_type domain);
+
+/*
+ * Return the event_type int value of lttng_event_type enumeration based on the
+ * passed string.
+ */
+LTTNG_HIDDEN
+int config_get_event_type(const char *event_type);
 
 /*
  * A config_entry_handler_cb receives config_entry structures belonging to the
