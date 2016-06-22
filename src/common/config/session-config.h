@@ -21,6 +21,7 @@
 #include <common/config/ini.h>
 #include <common/config/config-session-abi.h>
 #include <common/macros.h>
+#include <lttng/domain.h>
 #include <stdint.h>
 
 struct config_entry {
@@ -37,6 +38,12 @@ struct config_writer;
 struct config_document;
 
 struct config_element;
+
+/*
+ * Return the config string representation of a kernel type.
+ */
+LTTNG_HIDDEN
+const char *config_get_domain_str(enum lttng_domain_type domain);
 
 /*
  * A config_entry_handler_cb receives config_entry structures belonging to the
