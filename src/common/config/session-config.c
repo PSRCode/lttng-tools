@@ -978,8 +978,8 @@ error:
 	return -1;
 }
 
-static
-int get_event_type(xmlChar *event_type)
+LTTNG_HIDDEN
+int config_get_event_type(const char *event_type)
 {
 	int ret;
 
@@ -987,20 +987,20 @@ int get_event_type(xmlChar *event_type)
 		goto error;
 	}
 
-	if (!strcmp((char *) event_type, config_event_type_all)) {
+	if (!strcmp(event_type, config_event_type_all)) {
 		ret = LTTNG_EVENT_ALL;
-	} else if (!strcmp((char *) event_type, config_event_type_tracepoint)) {
+	} else if (!strcmp(event_type, config_event_type_tracepoint)) {
 		ret = LTTNG_EVENT_TRACEPOINT;
-	} else if (!strcmp((char *) event_type, config_event_type_probe)) {
+	} else if (!strcmp(event_type, config_event_type_probe)) {
 		ret = LTTNG_EVENT_PROBE;
-	} else if (!strcmp((char *) event_type, config_event_type_function)) {
+	} else if (!strcmp(event_type, config_event_type_function)) {
 		ret = LTTNG_EVENT_FUNCTION;
-	} else if (!strcmp((char *) event_type,
+	} else if (!strcmp(event_type,
 		config_event_type_function_entry)) {
 		ret = LTTNG_EVENT_FUNCTION_ENTRY;
-	} else if (!strcmp((char *) event_type, config_event_type_noop)) {
+	} else if (!strcmp(event_type, config_event_type_noop)) {
 		ret = LTTNG_EVENT_NOOP;
-	} else if (!strcmp((char *) event_type, config_event_type_syscall)) {
+	} else if (!strcmp(event_type, config_event_type_syscall)) {
 		ret = LTTNG_EVENT_SYSCALL;
 	} else {
 		goto error;
@@ -1633,7 +1633,7 @@ int process_event_node(xmlNodePtr event_node, struct lttng_handle *handle,
 				goto end;
 			}
 
-			ret = get_event_type(content);
+			ret = config_get_event_type((char *) content);
 			free(content);
 			if (ret < 0) {
 				ret = -LTTNG_ERR_LOAD_INVALID_CONFIG;
