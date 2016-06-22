@@ -47,6 +47,13 @@ LTTNG_HIDDEN
 const char *config_get_domain_str(enum lttng_domain_type domain);
 
 /*
+ * Return the config string representation of a loglevel type.
+ */
+LTTNG_HIDDEN
+const char *config_get_loglevel_type_string(
+		enum lttng_loglevel_type loglevel_type);
+
+/*
  * Return the event_type int value of lttng_event_type enumeration based on the
  * passed string.
  */

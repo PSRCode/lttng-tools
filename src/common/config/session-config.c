@@ -249,6 +249,29 @@ const char *config_get_domain_str(enum lttng_domain_type domain)
 }
 
 LTTNG_HIDDEN
+const char *config_get_loglevel_type_string(
+		enum lttng_loglevel_type loglevel_type)
+{
+	const char *loglevel_type_string;
+
+	switch (loglevel_type) {
+		case LTTNG_EVENT_LOGLEVEL_ALL:
+			loglevel_type_string = config_loglevel_type_all;
+			break;
+		case LTTNG_EVENT_LOGLEVEL_RANGE:
+			loglevel_type_string = config_loglevel_type_range;
+			break;
+		case LTTNG_EVENT_LOGLEVEL_SINGLE:
+			loglevel_type_string = config_loglevel_type_single;
+			break;
+		default:
+			loglevel_type_string = NULL;
+	}
+
+	return loglevel_type_string;
+}
+
+LTTNG_HIDDEN
 int config_get_section_entries(const char *override_path, const char *section,
 		config_entry_handler_cb handler, void *user_data)
 {
