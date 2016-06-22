@@ -321,6 +321,17 @@ int mi_lttng_writer_write_element_bool(struct mi_writer *writer,
  */
 int mi_lttng_writer_write_element_string(struct mi_writer *writer,
 		const char *element_name, const char *value);
+/*
+* Write a config_element element.
+*
+* writer An instance of a machine interface writer.
+* element A instance of a config_element.
+*
+* Returns zero if the element could be written.
+* Negative values indicate an error.
+*/
+int mi_lttng_writer_write_config_element(struct mi_writer *writer,
+		const struct config_element *element);
 
 /*
  * Machine interface of struct version.

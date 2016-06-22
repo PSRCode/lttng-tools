@@ -216,6 +216,19 @@ int config_writer_write_element_string(struct config_writer *writer,
 		const char *element_name, const char *value);
 
 /*
+ * Write an element of type config_element.
+ *
+ * writer An instance of a configuration writer.
+ *
+ * element The config_element instance.
+ *
+ * Returns zero if the element could be written.
+ * Negative values indicate an error.
+ */
+LTTNG_HIDDEN
+int config_writer_write_config_element(struct config_writer *writer,
+		const struct config_element *element);
+/*
  * Load session configurations from a file.
  *
  * path Path to an LTTng session configuration file. All *.lttng files
