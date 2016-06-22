@@ -643,6 +643,60 @@ end:
 	return ret >= 0 ? 0 : ret;
 }
 
+LTTNG_HIDDEN
+int config_writer_write_config_element(struct config_writer *writer,
+		const struct config_element *element)
+{
+	int ret = 0;
+
+	xmlNodePtr local_copy = NULL;
+	xmlNodePtr place_holder = NULL;
+	xmlDocPtr document = NULL;
+	xmlBufferPtr buffer = NULL;
+
+	assert(element);
+	assert(element->element);
+	assert(writer);
+
+	/* Create a new doc and set root node as passed element */
+	document = xmlNewDoc(BAD_CAST "1.0");
+	document->parseFlags |= XML_PARSE_NOBLANKS;
+	if (!document) {
+		ERR("Unable to create xml document");
+		ret = -1;
+		goto end;
+	}
+
+	local_copy = xmlCopyNode(element->element, 1);
+	if (!local_copy) {
+		ERR("Unable to copy an xml node");
+		ret = -1;
+		goto end;
+	}
+
+	/* Hand off the local_copy to the xmlDoc */
+	place_holder = xmlDocSetRootElement(document, local_copy);
+	if (place_holder) {
+		ERR("The document root was already set");
+		xmlFreeNode(local_copy);
+		ret = -1;
+		goto end;
+	}
+
+	buffer = xmlBufferCreate();
+	if (!buffer) {
+		ret = -1;
+		goto end;
+	}
+
+	ret = xmlNodeDump(buffer, document, local_copy, 0, 0);
+	xmlTextWriterWriteRaw(writer->writer, xmlBufferContent(buffer));
+end:
+	xmlBufferFree(buffer);
+	xmlFreeDoc(document);
+	return ret;
+}
+
 static
 void xml_error_handler(void *ctx, const char *format, ...)
 {
