@@ -3182,14 +3182,13 @@ struct config_document *config_document_get(const char *path)
 		PERROR("access");
 		switch (errno) {
 		case ENOENT:
-			ret = -LTTNG_ERR_INVALID;
-			WARN("Session configuration path does not exist.");
+			WARN("Configuration document path does not exist.");
 			break;
 		case EACCES:
-			ret = -LTTNG_ERR_EPERM;
+			WARN("Configuration document permission denied.");
 			break;
 		default:
-			ret = -LTTNG_ERR_UNK;
+			ERR("Configuration document unknow error.");
 			break;
 		}
 		goto end;
@@ -3203,9 +3202,9 @@ struct config_document *config_document_get(const char *path)
 	ret = validate_file_read_creds(path);
 	if (ret != 1) {
 		if (ret == -1) {
-			ret = -LTTNG_ERR_EPERM;
+			ERR("Configuration document permission denied.");
 		} else {
-			ret = -LTTNG_ERR_LOAD_SESSION_NOENT;
+			ERR("Configuration document does not exist.");
 		}
 		goto end;
 	}
@@ -3213,13 +3212,12 @@ struct config_document *config_document_get(const char *path)
 	document = zmalloc(sizeof(struct config_document));
 	if (!document) {
 		PERROR("zmalloc");
-		ret = -errno;
 		goto end;
 	}
 
 	document->document = xmlParseFile(path);
 	if (!document->document) {
-		ret = -LTTNG_ERR_LOAD_IO_FAIL;
+		ERR("Configuration document parsing failed.");
 		goto error;
 	}
 
@@ -3227,7 +3225,6 @@ struct config_document *config_document_get(const char *path)
 			document->document);
 	if (ret) {
 		ERR("Session configuration file validation failed");
-		ret = -LTTNG_ERR_LOAD_INVALID_CONFIG;
 		goto error;
 	}
 
