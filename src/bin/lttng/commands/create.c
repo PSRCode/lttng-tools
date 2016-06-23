@@ -909,7 +909,7 @@ static int create_session(void)
 		/* Restriction on flags exist when using template */
 		/* Session type flags are not permitted */
 		/* --live & --snapshot */
-		template = config_document_get(opt_template_path);
+		template = config_document_get(opt_template_path, 1);
 		if (!template) {
 			ERR("Template could not be parsed");
 			ret = CMD_ERROR;

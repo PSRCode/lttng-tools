@@ -294,7 +294,7 @@ int config_load_configuration_sessions(struct config_document *document,
  * The caller is responsible of freeing the document via config_document_free.
  */
 LTTNG_HIDDEN
-struct config_document *config_document_get(const char *path);
+struct config_document *config_document_get(const char *path, int xsd_validation);
 
 /*
  * Free an allocated document.
