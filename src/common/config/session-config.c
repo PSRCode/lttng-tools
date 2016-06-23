@@ -113,7 +113,7 @@ const char * const config_element_snapshot_mode = "snapshot_mode";
 const char * const config_element_loglevel = "loglevel";
 const char * const config_element_loglevel_type = "loglevel_type";
 const char * const config_element_filter = "filter";
-LTTNG_HIDDEN const char * const config_element_filter_expression = "filter_expression";
+LTTNG_HIDDEN const char * const config_element_filter_expression = "filter";
 const char * const config_element_snapshot_outputs = "snapshot_outputs";
 const char * const config_element_consumer_output = "consumer_output";
 const char * const config_element_destination = "destination";
@@ -1590,7 +1590,6 @@ int process_event_node(xmlNodePtr event_node, struct lttng_handle *handle,
 
 	assert(event_node);
 	assert(handle);
-	assert(channel_name);
 
 	memset(&event, 0, sizeof(event));
 
@@ -1837,8 +1836,6 @@ int process_event_node(xmlNodePtr event_node, struct lttng_handle *handle,
 		ret = lttng_enable_event_with_exclusions(handle, &event, channel_name,
 				filter_expression, exclusion_count, exclusions);
 		if (ret < 0) {
-			WARN("Enabling event (name:%s) on load failed.", event.name);
-			ret = -LTTNG_ERR_LOAD_INVALID_CONFIG;
 			goto end;
 		}
 	}
