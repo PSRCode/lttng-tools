@@ -3169,7 +3169,7 @@ void __attribute__((destructor)) session_config_exit(void)
 }
 
 LTTNG_HIDDEN
-struct config_document *config_document_get(const char *path)
+struct config_document *config_document_get(const char *path, int xsd_validation)
 {
 	int ret;
 	struct config_document *document = NULL;
@@ -3226,8 +3226,12 @@ struct config_document *config_document_get(const char *path)
 		goto error;
 	}
 
-	ret = xmlSchemaValidateDoc(validation_ctx.schema_validation_ctx,
-			document->document);
+	/* TODO: REMOVE */
+	ret = 0;
+	if (xsd_validation) {
+		ret = xmlSchemaValidateDoc(validation_ctx.schema_validation_ctx,
+				document->document);
+	}
 	if (ret) {
 		ERR("Session configuration file validation failed");
 		goto error;
