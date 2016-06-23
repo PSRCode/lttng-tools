@@ -38,6 +38,7 @@ struct config_writer;
 /* Instance of a configuration document */
 struct config_document;
 
+/* Instance of a configuration element */
 struct config_element;
 
 /*
@@ -353,13 +354,26 @@ LTTNG_HIDDEN
 int config_document_element_exist(struct config_document *document, const char *xpath);
 
 /*
+ * Create a configuration element.
  *
+ * name The name of the element
+ * value The value to be assigned to the element. The value can be NULL.
+ *
+ * Returns a new configuration element.
+ *
+ * The caller is responsible of freeing the allocated element with
+ * config_element_free.
+ */
+LTTNG_HIDDEN
+struct config_element *config_element_create(const char *name, const char *value);
+
+/*
+ * Free a config_element
+ *
+ * element The element to free.
  */
 LTTNG_HIDDEN
 void config_element_free(struct config_element *element);
-
-LTTNG_HIDDEN
-struct config_element *config_element_create(const char *name, const char *value);
 
 /*
  * Add a child element to an element.
@@ -386,5 +400,86 @@ int config_element_add_child(struct config_element *parent, const struct config_
 LTTNG_HIDDEN
 int config_document_insert_element(struct config_document *document, const char *xpath, const struct config_element *element);
 
+/*
+ * Get an array of elements from a document.
+ *
+ * document The source document.
+ * xpath The xpath string matching the elements path.
+ * element_array The resulting array
+ * array_size The resulting array size
+ *
+ * element_array is NULL on error.
+ *
+ * The caller is responsible of freeing the array with
+ * config_element_free_array.
+ */
+LTTNG_HIDDEN
+void config_document_get_element_array(const struct config_document *document, const char *xpath, struct config_element ***element_array, int *array_size);
+
+/*
+ * Get an array of elements from an element.
+ *
+ * element The source element.
+ * xpath The xpath string matching the elements path.
+ * element_array The resulting array
+ * array_size The resulting array size
+ *
+ * element_array is NULL on error.
+ *
+ * The caller is responsible of freeing the array with
+ * config_element_free_array.
+ */
+LTTNG_HIDDEN
+void config_element_get_element_array(const struct config_element *element, const char *xpath, struct config_element ***element_array, int *array_size);
+
+/*
+ * Free an array of element.
+ *
+ * array The array to free
+ * size The size of the array
+ */
+LTTNG_HIDDEN
+void config_element_free_array(struct config_element **array, int size);
+
+/*
+ * Add an element as a child if a equivalent element is present replace it with
+ * the passed element.
+ *
+ * parent The parent element.
+ * child The child to add.
+ *
+ * Returns zero if the session could be loaded successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ */
+LTTNG_HIDDEN
+int config_element_add_or_replace_child(struct config_element *parent, struct config_element *child);
+
+/*
+ * Get the value of an element under an element.
+ *
+ * element The base element.
+ * xpath The xpath string to the element.
+ *
+ * Return null if multiple values exists or there is no
+ * value for the passed path.
+ */
+LTTNG_HIDDEN
+char *config_element_get_element_value(const struct config_element *element, const char *xpath);
+
+/*
+ * Process an element matching an event configuration and try to enable it.
+ *
+ * element The element to process
+ * session_name The session name to use for event enabling.
+ * domain_type The domain type to use for event enabling
+ * channel_name The channel name to use for event enabling
+ *              A NULL channel name will default to the default domain
+ *              channel.
+ *
+ * Returns zero if the session could be loaded successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ */
+LTTNG_HIDDEN
+int config_process_event_element(const struct config_element *element, const char* session_name, int domain_type, const char *channel_name);
 
 #endif /* _CONFIG_H */
