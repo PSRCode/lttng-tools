@@ -51,6 +51,7 @@ static char *opt_function;
 static char *opt_channel_name;
 static char *opt_filter;
 static char *opt_exclude;
+static char *opt_template_path;
 
 enum {
 	OPT_HELP = 1,
@@ -85,7 +86,9 @@ static struct poptOption long_options[] = {
 	{"loglevel-only",  0,     POPT_ARG_STRING, 0, OPT_LOGLEVEL_ONLY, 0, 0},
 	{"filter",         'f', POPT_ARG_STRING, &opt_filter, OPT_FILTER, 0, 0},
 	{"exclude",        'x', POPT_ARG_STRING, &opt_exclude, OPT_EXCLUDE, 0, 0},
+	/* No op */
 	{"session",        's', POPT_ARG_NONE, 0, 0, 0, 0},
+	{"template-path",  't', POPT_ARG_NONE, 0, 0, 0, 0},
 	{0, 0, 0, 0, 0, 0, 0}
 };
 
@@ -93,6 +96,7 @@ static struct poptOption global_long_options[] = {
 	/* longName, shortName, argInfo, argPtr, value, descrip, argDesc */
 	{"help",           'h', POPT_ARG_NONE, 0, OPT_HELP, 0, 0},
 	{"session",        's', POPT_ARG_STRING, &opt_session_name, 0, 0, 0},
+	{"template-path",  't', POPT_ARG_STRING, &opt_template_path, 0, 0, 0},
 	{"list-options", 0, POPT_ARG_NONE, NULL, OPT_LIST_OPTIONS, NULL, NULL},
 	{0, 0, 0, 0, 0, 0, 0}
 };
@@ -466,6 +470,75 @@ char *print_exclusions(int count, char **names)
 }
 
 /*
+ * Return an allocated string for pretty printing of exclusion of an event from
+ * a config_element.
+ *
+ * e.g: test,test1,test2
+ */
+static
+char *print_exclusions_config(const struct config_element *event)
+{
+	const char *path = "/event/exclusions/exclusion";
+	struct config_element **element_array = NULL;
+	int element_array_size = 0;
+	char **exclusion_str_array = NULL;
+	char *return_string = NULL;
+	int length = 0;
+
+	config_element_get_element_array(event, path, &element_array, &element_array_size);
+	if (element_array_size == 0) {
+		return_string = strdup("");
+		goto end;
+	}
+
+	exclusion_str_array = calloc(element_array_size, sizeof(char *));
+	if (!exclusion_str_array) {
+		ERR("calloc exclusion string array");
+		return_string = NULL;
+		goto end;
+	}
+
+	/* Fetch data and get full length */
+	for (int i = 0; i < element_array_size; i++) {
+		exclusion_str_array[i] = config_element_get_element_value(element_array[i], "/exclusion");
+		if (!exclusion_str_array[i]) {
+			ERR("Fecthing exlusion %d of event config element", i);
+			continue;
+		}
+		length += strlen(exclusion_str_array[i]) + 1;
+	}
+
+	return_string = zmalloc(length);
+	if (!return_string) {
+		return_string = NULL;
+		goto end;
+	}
+
+	/* Construct string */
+	for (int i = 0; i < element_array_size; i++) {
+		if (!exclusion_str_array[i]) {
+			continue;
+		}
+
+		strcat(return_string, exclusion_str_array[i]);
+		if (i != element_array_size - 1) {
+			strcat(return_string, ",");
+		}
+	}
+
+end:
+	config_element_free_array(element_array, element_array_size);
+	if (exclusion_str_array) {
+		for (int i = 0; i < element_array_size; i++) {
+			free(exclusion_str_array[i]);
+		}
+	}
+	free(exclusion_str_array);
+
+	return return_string;
+}
+
+/*
  * Compare list of exclusions against an event name.
  * Return a list of legal exclusion names.
  * Produce an error or a warning about others (depending on the situation)
@@ -642,11 +715,6 @@ static int enable_events(char *session_name, struct domain_configuration *config
 	config_filter = config->filter;
 	config_exclude = config->exclude;
 
-	if (config_domain_type == LTTNG_DOMAIN_KERNEL) {
-		if (config_loglevel) {
-			WARN("Kernel loglevels are not supported.");
-		}
-	}
 
 	/* Create lttng domain */
 	dom.type = config_domain_type;
@@ -666,23 +734,6 @@ static int enable_events(char *session_name, struct domain_configuration *config
 	}
 
 
-	if (config_exclude) {
-		switch (dom.type) {
-		case LTTNG_DOMAIN_KERNEL:
-		case LTTNG_DOMAIN_JUL:
-		case LTTNG_DOMAIN_LOG4J:
-		case LTTNG_DOMAIN_PYTHON:
-			ERR("Event name exclusions are not yet implemented for %s events",
-					get_domain_str(dom.type));
-			ret = CMD_ERROR;
-			goto error;
-		case LTTNG_DOMAIN_UST:
-			/* Exclusions supported */
-			break;
-		default:
-			assert(0);
-		}
-	}
 
 	channel_name = config_channel_name;
 
@@ -1339,6 +1390,418 @@ error:
 	return ret;
 }
 
+struct exclusions_tuple {
+	char **exclusion_list;
+	int exclusion_count;
+};
+
+static int enable_event_template_per_domain(const struct config_document *document,
+		const char* session_name,
+		const struct domain_configuration *config)
+{
+	int ret = 0;
+	int warn = 0;
+	int error = 0;
+	int printed_bytes = 0;
+	char *query = NULL;
+	struct config_element **element_array = NULL;
+	int element_array_size = 0;
+	struct config_element *config_loglevel_type = NULL;
+	struct config_element *config_loglevel = NULL;
+	struct config_element *config_filter = NULL;
+	struct exclusions_tuple *event_exclusion_array = NULL;
+
+	assert(document);
+	assert(config);
+
+
+	printed_bytes = asprintf(&query, "//sessions/session/domains/domain[./type = '%s']/channels/channel/events/event[./enabled = 'true']", config_get_domain_str(config->domain_type));
+	if (printed_bytes <= 0) {
+		ERR("Asprintf template events query");
+		ret = -1;
+		goto end;
+	}
+
+	config_document_get_element_array(document, query, &element_array, &element_array_size);
+	if (!element_array) {
+		/* No event */
+		goto end;
+	}
+
+	/*
+	 * Handle log_level
+	 * Only userspace domain accept loglevel.
+	 *
+	 * config-> loglevel is only set when the user pass --logleve/
+	 * --loglevel-only on the command line so use it as a way to
+	 *  know if a loglevel override is necessary
+	 */
+	if (config->domain_type != LTTNG_DOMAIN_KERNEL && config->loglevel) {
+		char *loglevel_value_str = NULL;
+		int loglevel_value = -1;
+
+		loglevel_value = loglevel_str_to_value(config->loglevel, config->domain_type);
+		if (loglevel_value == -1) {
+			ERR("Unknown loglevel %s", config->loglevel);
+			ret = 1;
+			goto end;
+		}
+
+		printed_bytes = asprintf(&loglevel_value_str, "%d", loglevel_value);
+		if (printed_bytes <= 0 ) {
+			ERR("Asprintf loglevel");
+			ret = 1;
+			goto end;
+		}
+
+		config_loglevel = config_element_create(config_element_loglevel, loglevel_value_str);
+		free(loglevel_value_str);
+		if (!config_loglevel) {
+			ERR("Loglevel config creation failed");
+			ret = 1;
+			goto end;
+		}
+
+		config_loglevel_type = config_element_create(config_element_loglevel_type, config_get_loglevel_type_string(config->loglevel_type));
+		if (!config_loglevel_type) {
+			ERR("Loglevel type config creattion failed");
+			ret = 1;
+			goto end;
+		}
+	}
+
+	/* Handle the filter */
+	if (config->filter) {
+		config_filter = config_element_create(config_element_filter, config->filter);
+		if (!config_filter) {
+			ERR("Filter config creattion failed");
+			ret = 1;
+			goto end;
+		}
+	}
+
+	/*
+	 * Handle exclusion on a per event base
+	 * For now only userspace domains can have exclusions.
+	 */
+	event_exclusion_array = calloc(element_array_size, sizeof(struct exclusions_tuple));
+	if (!event_exclusion_array) {
+		ERR("Calloc exclusion list array");
+		ret = 1;
+		goto end;
+	}
+
+
+	if (config->domain_type != LTTNG_DOMAIN_KERNEL && config->exclude) {
+		for (int i = 0; i < element_array_size; i++) {
+			struct config_element *cur_event = element_array[i];
+			char ***exclusion_list = &(event_exclusion_array[i].exclusion_list);
+			int *exclusion_count = &(event_exclusion_array[i].exclusion_count);
+			char *event_type_str = NULL;
+			int event_type;
+			char *event_name = NULL;
+
+			*exclusion_list = NULL;
+			*exclusion_count = 0;
+
+			/* Get event name */
+			event_name = config_element_get_element_value(cur_event, "/event/name");
+			if (!event_name) {
+				ERR("Reading event name from config element");
+				continue;
+			}
+			event_type_str = config_element_get_element_value(cur_event, "/event/type");
+			if (!event_type_str) {
+				ERR("Reading event type from config element");
+				free(event_name);
+				continue;
+			}
+
+			event_type = config_get_event_type(event_type_str);
+			if (event_type != LTTNG_EVENT_ALL && event_type != LTTNG_EVENT_TRACEPOINT) {
+				const char *msg = "Exclusions do not apply to this event";
+				WARN("Event %s: %s exclusions: %s (domain %s, channel %s, session %s)",
+						event_name, msg, config->exclude,
+						get_domain_str(config->domain_type),
+						print_channel_name(config->channel_name),
+						session_name);
+				free(event_type_str);
+				free(event_name);
+				goto end;
+			}
+
+			/* Check for proper subsets */
+			ret = check_exclusion_subsets(event_name, config->exclude,
+					exclusion_count, exclusion_list);
+
+			warn_on_truncated_exclusion_names(
+					*exclusion_list, *exclusion_count, &warn);
+			free(event_type_str);
+			free(event_name);
+		}
+	}
+
+	/*
+	 * Create valid events config_element and try to enable them one by one
+	 */
+	for (int i = 0; i < element_array_size; i++) {
+		const char *sub_msg = NULL;
+		bool success = false;
+		bool warn = false;
+
+		struct config_element *cur_event = element_array[i];
+		struct config_element *success_element = NULL;
+		char *msg = NULL;
+		char *exclusions_string = NULL;
+		char *filter_string = NULL;
+		char *event_name = NULL;
+
+		event_name = config_element_get_element_value(cur_event, "/event/name");
+		if (!event_name) {
+			sub_msg = "event name not present abort event creation ";
+			event_name = strdup("<Error fetching event name>");
+			goto enable_event_continue;
+		}
+
+		/* Add the loglevel */
+		if (config_loglevel && config_loglevel_type) {
+			config_element_add_or_replace_child(cur_event, config_loglevel);
+			config_element_add_or_replace_child(cur_event, config_loglevel_type);
+		}
+		if (config_filter) {
+			config_element_add_or_replace_child(cur_event, config_filter);
+		}
+
+		if (event_exclusion_array[i].exclusion_list) {
+			char **exclusion_list = event_exclusion_array[i].exclusion_list;
+			const int exclusion_count = event_exclusion_array[i].exclusion_count;
+			struct config_element *config_exclusions = NULL;
+			struct config_element *exclusion = NULL;
+
+			config_exclusions = config_element_create(config_element_exclusions, NULL);
+			if (!config_exclusions) {
+				sub_msg = "Exclusions config element ration failed abort event creation";
+				goto enable_event_continue;
+			}
+
+			for (int j = 0; j < exclusion_count; j++) {
+				exclusion = config_element_create(config_element_exclusion, exclusion_list[j]);
+				if (!exclusion) {
+					sub_msg = "Exclusion config element creation failed abort event creation";
+					config_element_free(config_exclusions);
+					goto enable_event_continue;
+				}
+				ret = config_element_add_child(config_exclusions, exclusion);
+				if (ret) {
+					sub_msg = "Exclusion config element child addition failed abort event creation";
+					config_element_free(config_exclusions);
+					config_element_free(exclusion);
+					goto enable_event_continue;
+				}
+
+				config_element_free(exclusion);
+			}
+
+			ret = config_element_add_or_replace_child(cur_event, config_exclusions);
+			if (ret) {
+				sub_msg = "Exclusions config element child addition failed abort event creation";
+				config_element_free(config_exclusions);
+				goto enable_event_continue;
+			}
+			config_element_free(config_exclusions);
+		}
+
+
+		ret = config_process_event_element(cur_event, session_name, config->domain_type, config->channel_name);
+		if (!ret) {
+			success = true;
+			sub_msg = "created";
+
+			/* Mi element insertion */
+			success_element = config_element_create(mi_lttng_element_command_success, "true");
+			if (success_element) {
+				ret = config_element_add_or_replace_child(cur_event, success_element);
+				if (ret) {
+					error = 1;
+				}
+			} else {
+				error = 1;
+			}
+
+		} else {
+			success = false;
+			if (ret < 0) {
+				sub_msg = lttng_strerror(ret);
+				if (-ret == LTTNG_ERR_UST_EVENT_ENABLED || -ret == LTTNG_ERR_KERN_EVENT_EXIST) {
+					/*This is not an error */
+					warn = true;
+				}
+			} else {
+				sub_msg = "creation failed";
+			}
+
+			/* Mi related insertion */
+			success_element = config_element_create(mi_lttng_element_command_success, "false");
+			if (success_element) {
+				ret = config_element_add_or_replace_child(cur_event, success_element);
+				if (ret) {
+					error = 1;
+				}
+			} else {
+				error = 1;
+			}
+		}
+
+enable_event_continue:
+
+		/* Get exclusions string for printing */
+		exclusions_string = print_exclusions_config(cur_event);
+		filter_string = config_element_get_element_value(cur_event, "/event/filter");
+
+
+		/* Domain is already present inside the error or msg */
+		printed_bytes = asprintf(&msg,"%s%sEvent %s: %s (exclusions: [%s] filter: [%s] session %s, channel %s)",
+				success ? get_domain_str(config->domain_type): "",
+				success ? " " : "",
+				event_name,
+				sub_msg,
+				/*
+				 * TODO: print actual exclusion of loaded event
+				 */
+				exclusions_string ? : "",
+				/*
+				 * TODO: print actual exclusion of loaded event
+				 */
+				filter_string ? : "",
+				session_name,
+				print_channel_name(config->channel_name));
+
+		if (printed_bytes > 0 && success) {
+			MSG("%s", msg);
+		} else if (printed_bytes > 0 && warn) {
+			WARN("%s", msg);
+			/* At least one event failed */
+			error = 1;
+		} else if (printed_bytes > 0) {
+			ERR("%s", msg);
+		} else {
+			ERR("Asprintf enable event message");
+			/* At least one event failed */
+			error = 1;
+		}
+		config_element_free(success_element);
+		free(exclusions_string);
+		free(event_name);
+		free(filter_string);
+		free(msg);
+		continue;
+	}
+
+	/* Prepare Mi */
+	if (lttng_opt_mi) {
+		/* Open a domain element */
+		ret = mi_lttng_writer_open_element(writer, config_element_domain);
+		if (ret) {
+			ret = 1;
+			goto end;
+		}
+
+		/* Specify the domain type */
+		ret = mi_lttng_writer_write_element_string(writer,
+				config_element_type,
+				mi_lttng_domaintype_string(config->domain_type));
+		if (ret) {
+			ret = 1;
+			goto end;
+		}
+
+		/* Open a events element */
+		ret = mi_lttng_writer_open_element(writer, config_element_events);
+		if (ret) {
+			ret = 1;
+			goto end;
+		}
+
+		for (int i = 0; i < element_array_size; i++) {
+			ret = mi_lttng_writer_write_config_element(writer,
+					element_array[i]);
+			if (ret) {
+				ret = 1;
+				goto end;
+			}
+		}
+
+		ret = mi_lttng_close_multi_element(writer, 2);
+		if (ret) {
+			ret = 1;
+			goto end;
+		}
+	}
+
+
+end:
+	/* Free exclusion allocated items */
+	if (event_exclusion_array != NULL) {
+		for (int i = 0; i < element_array_size; i++) {
+			char **exclusion_list = event_exclusion_array[i].exclusion_list;
+			int exclusion_count = event_exclusion_array[i].exclusion_count;
+			if (exclusion_list != NULL) {
+				while (exclusion_count--) {
+					free(exclusion_list[exclusion_count]);
+				}
+			}
+			free(exclusion_list);
+			exclusion_list = NULL;
+		}
+		free(event_exclusion_array);
+	}
+	config_element_free_array(element_array, element_array_size);
+	config_element_free(config_loglevel);
+	config_element_free(config_loglevel_type);
+	config_element_free(config_filter);
+	free(query);
+	if (error) {
+		ret = 1;
+	}
+	return ret;
+}
+
+
+static int enable_event_from_template(const struct config_document *document,
+		const char* session_name,
+		const struct domain_configuration *kernel_config,
+		const struct domain_configuration *ust_config,
+		const struct domain_configuration *jul_config,
+		const struct domain_configuration *log4j_config,
+		const struct domain_configuration *python_config)
+{
+	int ret = 0;
+	int error = 0;
+
+	ret = enable_event_template_per_domain(document, session_name, kernel_config);
+	if (ret) {
+		error = ret;
+	}
+	ret = enable_event_template_per_domain(document, session_name, ust_config);
+	if (ret) {
+		error = ret;
+	}
+	ret = enable_event_template_per_domain(document, session_name, jul_config);
+	if (ret) {
+		error = ret;
+	}
+	ret = enable_event_template_per_domain(document, session_name, log4j_config);
+	if (ret) {
+		error = ret;
+	}
+	ret = enable_event_template_per_domain(document, session_name, python_config);
+	if (ret) {
+		error = ret;
+	}
+
+	return error;
+}
+
 /*
  * Add event to trace session
  */
@@ -1401,6 +1864,13 @@ int cmd_enable_events(int argc, const char **argv)
 	static poptContext pc;
 	char *session_name = NULL;
 	int event_type = -1;
+	int i;
+	int args_tuple_count = 0;
+	int arg_state_looking_for_end = 0;
+	struct args_tuple *args_tuple_list = NULL;
+	struct domain_configuration *tmp_config = NULL;
+
+	struct config_document *template = NULL;
 
 	struct domain_configuration *jul_config = NULL;
 	struct domain_configuration *kernel_config = NULL;
@@ -1475,10 +1945,6 @@ int cmd_enable_events(int argc, const char **argv)
 	}
 
 	/* Find the number of domain based on the passed arguments */
-	int i;
-	int args_tuple_count = 0;
-	int arg_state_looking_for_end = 0;
-	struct args_tuple *args_tuple_list = NULL;
 	for (i = 1; i < argc ; i++) {
 
 		if (strcmp("-u", argv[i]) && strcmp("--userspace", argv[i]) &&
@@ -1523,21 +1989,21 @@ int cmd_enable_events(int argc, const char **argv)
 		}
 	}
 
-	if (args_tuple_count <= 0) {
+	if (args_tuple_count == 0 && !opt_template_path) {
 		ret = print_missing_or_multiple_domains(0);
 		if (ret) {
 			ret = CMD_ERROR;
 			goto end;
 		}
 		goto end;
-	}
+	} else if (args_tuple_count > 0) {
+		/* Close the last tuple */
+		args_tuple_list[args_tuple_count-1].argv_index_end = i - 1;
 
-	/* Close the last tuple */
-	args_tuple_list[args_tuple_count-1].argv_index_end = i - 1;
-
-	if (args_tuple_count == 1) {
-		/* Preserve the old way with a domain flag that can be anywhere */
-		args_tuple_list[0].argv_index_start = 1;
+		if (args_tuple_count == 1) {
+			/* Preserve the old way with a domain flag that can be anywhere */
+			args_tuple_list[0].argv_index_start = 1;
+		}
 	}
 
 	for (i = 0; i < args_tuple_count; i++) {
@@ -1617,17 +2083,50 @@ int cmd_enable_events(int argc, const char **argv)
 			}
 		}
 
-		struct domain_configuration *tmp_config = initialize_domain_configuration(opt_domain);
+		tmp_config = initialize_domain_configuration(opt_domain);
 
 		opt_event_list = (char*) poptGetArg(pc);
-		if (opt_event_list == NULL && opt_enable_all == 0) {
+		if (opt_event_list == NULL && opt_enable_all == 0 && !opt_template_path) {
 			ERR("Missing event name(s).\n");
 			ret = CMD_ERROR;
 			goto end;
 		}
 
+		/* Option check */
+		if (opt_domain == LTTNG_DOMAIN_KERNEL) {
+			if (opt_loglevel) {
+				WARN("Kernel loglevels are not supported.");
+			}
+		}
 
-		tmp_config->event_type = opt_event_type ;
+		if (opt_exclude) {
+			switch (opt_domain) {
+			case LTTNG_DOMAIN_KERNEL:
+			case LTTNG_DOMAIN_JUL:
+			case LTTNG_DOMAIN_LOG4J:
+			case LTTNG_DOMAIN_PYTHON:
+				ERR("Event name exclusions are not yet implemented for %s events",
+					get_domain_str(opt_domain));
+				ret = CMD_ERROR;
+				goto end;
+			case LTTNG_DOMAIN_UST:
+				/* Exclusions supported */
+				break;
+			default:
+				assert(0);
+			}
+		}
+
+		if (opt_template_path) {
+			if (event_type != LTTNG_EVENT_ALL) {
+				WARN("Type options for events while using a template have no effect (--function,--probe,--syscall,--tracepoint).");
+			}
+			if (opt_enable_all) {
+				WARN("The all (-a) shortcut for enabling all events while using a template have no effect.");
+			}
+		}
+
+		tmp_config->event_type = event_type ;
 		tmp_config->enable_all = opt_enable_all;
 		tmp_config->loglevel_type = opt_loglevel_type;
 		tmp_config->loglevel = opt_loglevel;
@@ -1637,6 +2136,7 @@ int cmd_enable_events(int argc, const char **argv)
 		tmp_config->filter = opt_filter;
 		tmp_config->exclude = opt_exclude;
 		tmp_config->event_list = opt_event_list;
+
 
 		switch(opt_domain) {
 		case LTTNG_DOMAIN_KERNEL:
@@ -1689,6 +2189,68 @@ int cmd_enable_events(int argc, const char **argv)
 
 		poptFreeContext(pc);
 		pc = NULL;
+	}
+
+
+	if (opt_template_path) {
+		/* validate template */
+		template = config_document_get(opt_template_path, 0);
+		if (!template) {
+			ERR("Could not load the template");
+			ret = CMD_ERROR;
+			goto end;
+		}
+		/* TODO: validate the xml */
+		/* Only one session, only one channel per domain */
+		if (!kernel_config) {
+			kernel_config = initialize_domain_configuration(LTTNG_DOMAIN_KERNEL);
+			if (!kernel_config) {
+				ERR("Default initialization for kernel domain configuration");
+				ret = CMD_ERROR;
+				goto end;
+			}
+		}
+
+		if (!ust_config) {
+			ust_config = initialize_domain_configuration(LTTNG_DOMAIN_UST);
+			if (!ust_config) {
+				ERR("Default initialization for ust domain configuration");
+				ret = CMD_ERROR;
+				goto end;
+			}
+		}
+
+		if (!jul_config) {
+			jul_config = initialize_domain_configuration(LTTNG_DOMAIN_JUL);
+			if (!jul_config) {
+				ERR("Default initialization for jul domain configuration");
+				ret = CMD_ERROR;
+				goto end;
+			}
+		}
+
+		if (!log4j_config) {
+			log4j_config = initialize_domain_configuration(LTTNG_DOMAIN_LOG4J);
+			if (!log4j_config) {
+				ERR("Default initialization for log4j domain configuration");
+				ret = CMD_ERROR;
+				goto end;
+			}
+		}
+
+		if (!python_config) {
+			python_config = initialize_domain_configuration(LTTNG_DOMAIN_PYTHON);
+			if (!python_config) {
+				ERR("Default initialization for python domain configuration");
+				ret = CMD_ERROR;
+				goto end;
+			}
+		}
+
+		command_ret = enable_event_from_template(template, session_name, kernel_config, ust_config,
+				jul_config, log4j_config, python_config);
+
+		goto end;
 	}
 
 	if (kernel_config) {
@@ -1759,14 +2321,15 @@ end:
 	}
 
 	if (opt_session_name == NULL) {
-		printf("Here\n");
 		free(session_name);
 	}
 
 	/* Overwrite ret if an error occurred in enable_events */
 	ret = command_ret ? command_ret : ret;
 
+	config_document_free(template);
 	free(args_tuple_list);
+	free(tmp_config);
 	free(jul_config);
 	free(kernel_config);
 	free(log4j_config);
