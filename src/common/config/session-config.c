@@ -3775,3 +3775,446 @@ void config_element_free(struct config_element *element) {
 
 	free(element);
 }
+
+LTTNG_HIDDEN
+void config_element_free_array(struct config_element **array, int size) {
+
+	if (array) {
+		for (int i = 0; i < size; i++) {
+			if (!array[i]) {
+				continue;
+			}
+			if (array[i]->element) {
+				xmlFreeNode(array[i]->element);
+			}
+			free(array[i]);
+		}
+	}
+	free(array);
+}
+
+LTTNG_HIDDEN
+void config_document_get_element_array(const struct config_document *document, const char *xpath, struct config_element ***element_array, int *array_size)
+{
+	int xpath_result_size;
+
+	xmlXPathContextPtr xpath_context = NULL;
+	xmlXPathObjectPtr xpath_object = NULL;
+	xmlNodeSetPtr xpath_result_set = NULL;
+	xmlChar *internal_xpath = NULL;
+	xmlChar *internal_value = NULL;
+
+	assert(document);
+	assert(xpath);
+
+	*element_array=NULL;
+	*array_size=0;
+
+
+	internal_xpath = encode_string(xpath);
+	if (!internal_xpath) {
+		ERR("Unable to encode xpath string");
+		goto end;
+	}
+
+	/* Initialize xpath context */
+	xpath_context = xmlXPathNewContext(document->document);
+	if (!xpath_context) {
+		ERR("Unable to create xpath context");
+		goto end;
+	}
+
+	/* Evaluate the xpath expression */
+	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
+	if (!xpath_object) {
+		ERR("Unable to evaluate xpath query (invalid query format)");
+		goto end;
+	}
+
+	xpath_result_set = xpath_object->nodesetval;
+	if (!xpath_result_set) {
+		goto end;
+	}
+
+	xpath_result_size = xpath_result_set->nodeNr;
+
+	if (xpath_result_size == 0) {
+		goto end;
+	}
+
+	/* alloc the array */
+	*element_array = calloc(xpath_result_size, sizeof(struct config_element *));
+	*array_size = xpath_result_size;
+	if (!element_array) {
+		ERR("Calloc config element array");
+		goto end;
+	}
+
+	for (int i = 0; i < xpath_result_size; i++) {
+		xmlNodePtr node_copy = NULL;
+		node_copy = xmlCopyNode(xpath_result_set->nodeTab[i], 1);
+		if (!node_copy) {
+			ERR("Xml copy of event node");
+			goto error;
+		}
+		/* Hand off ownership */
+		(*element_array)[i] = malloc(sizeof(struct config_element));
+		if (!((*element_array)[i])){
+			ERR("Malloc config_element array");
+			xmlFreeNode(node_copy);
+			goto error;
+		};
+		(*element_array)[i]->element = node_copy;
+	}
+end:
+	xmlXPathFreeContext(xpath_context);
+	xmlXPathFreeObject(xpath_object);
+	xmlFree(internal_xpath);
+	xmlFree(internal_value);
+	return;
+error:
+
+	if (element_array) {
+		config_element_free_array(*element_array, *array_size);
+	}
+
+	*array_size = 0;
+
+	xmlXPathFreeContext(xpath_context);
+	xmlXPathFreeObject(xpath_object);
+	xmlFree(internal_xpath);
+	xmlFree(internal_value);
+	return;
+}
+
+LTTNG_HIDDEN
+void config_element_get_element_array(const struct config_element *element, const char *xpath, struct config_element ***element_array, int *array_size)
+{
+	int xpath_result_size;
+
+	xmlXPathContextPtr xpath_context = NULL;
+	xmlXPathObjectPtr xpath_object = NULL;
+	xmlNodeSetPtr xpath_result_set = NULL;
+	xmlChar *internal_xpath = NULL;
+	xmlChar *internal_value = NULL;
+	xmlNodePtr local_copy = NULL;
+	xmlNodePtr place_holder = NULL;
+	xmlDocPtr document = NULL;
+
+	assert(element);
+	assert(element->element);
+	assert(xpath);
+
+	*element_array=NULL;
+	*array_size=0;
+
+	/* Create a new doc and set root node as passed element */
+	document = xmlNewDoc(BAD_CAST "1.0");
+	if (!document) {
+		ERR("Unable to create xml document");
+		goto end;
+	}
+
+	local_copy = xmlCopyNode(element->element, 1);
+	if (!local_copy) {
+		ERR("Unable to copy an xml node");
+		goto end;
+	}
+
+	/* Hand off the local_copy to the xmlDoc */
+	place_holder = xmlDocSetRootElement(document, local_copy);
+	if (place_holder) {
+		ERR("The document root was already set");
+		xmlFreeNode(local_copy);
+		goto end;
+	}
+
+	internal_xpath = encode_string(xpath);
+	if (!internal_xpath) {
+		ERR("Unable to encode xpath string");
+		goto end;
+	}
+
+	/* Initialize xpath context */
+	xpath_context = xmlXPathNewContext(document);
+	if (!xpath_context) {
+		ERR("Unable to create xpath context");
+		goto end;
+	}
+
+	/* Evaluate the xpath expression */
+	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
+	if (!xpath_object) {
+		ERR("Unable to evaluate xpath query (invalid query format)");
+		goto end;
+	}
+
+	xpath_result_set = xpath_object->nodesetval;
+	if (!xpath_result_set) {
+		goto end;
+	}
+
+	xpath_result_size = xpath_result_set->nodeNr;
+
+	if (xpath_result_size == 0) {
+		goto end;
+	}
+
+	/* alloc the array */
+	*element_array = calloc(xpath_result_size, sizeof(struct config_element *));
+	*array_size = xpath_result_size;
+	if (!element_array) {
+		ERR("Calloc config element array");
+		goto end;
+	}
+
+	for (int i = 0; i < xpath_result_size; i++) {
+		xmlNodePtr node_copy = NULL;
+		node_copy = xmlCopyNode(xpath_result_set->nodeTab[i], 1);
+		if (!node_copy) {
+			ERR("Xml copy of event node");
+			goto error;
+		}
+		/* Hand off ownership */
+		(*element_array)[i] = malloc(sizeof(struct config_element));
+		if (!((*element_array)[i])){
+			ERR("Malloc config_element array");
+			xmlFreeNode(node_copy);
+			goto error;
+		};
+		(*element_array)[i]->element = node_copy;
+	}
+end:
+	xmlXPathFreeContext(xpath_context);
+	xmlXPathFreeObject(xpath_object);
+	xmlFree(internal_xpath);
+	xmlFree(internal_value);
+	xmlFreeDoc(document);
+	return;
+error:
+
+	if (element_array) {
+		config_element_free_array(*element_array, *array_size);
+	}
+
+	*array_size = 0;
+
+	xmlXPathFreeContext(xpath_context);
+	xmlXPathFreeObject(xpath_object);
+	xmlFree(internal_xpath);
+	xmlFree(internal_value);
+	return;
+}
+/* Create an internal copy of the config_element.
+ * The users is responsible for the freeing of the passed child.
+ */
+LTTNG_HIDDEN
+int config_element_add_or_replace_child(struct config_element *parent, struct config_element *child)
+{
+	assert(parent);
+	assert(child);
+	assert(parent->element);
+	assert(child->element);
+
+	int ret = 0;
+	xmlNodePtr local_copy;
+	xmlNodePtr x_ret = NULL;
+	xmlNodePtr iterator = NULL;
+
+	xmlNodePtr x_parent = parent->element;
+	xmlNodePtr x_child = child->element;
+
+	/* Find and delete the node with the same name if present */
+	iterator = x_parent->children;
+	while (iterator != NULL) {
+		if ((!xmlStrcmp(iterator->name, x_child->name))){
+			xmlNodePtr del = iterator;
+			iterator = iterator->next;
+			xmlUnlinkNode(del);
+			xmlFreeNode(del);
+		} else {
+			iterator = iterator->next;
+		}
+	}
+
+	/* Add the child */
+	local_copy = xmlCopyNode(x_child, 1);
+	if (!local_copy) {
+		ret = -1;
+		ERR("Duplication of node to be insert failed");
+		goto end;
+	}
+	x_ret = xmlAddChild(x_parent, local_copy);
+	if (!x_ret) {
+		xmlFreeNode(local_copy);
+	}
+end:
+	return ret;
+}
+
+LTTNG_HIDDEN
+char *config_element_get_element_value(const struct config_element *element, const char *xpath)
+{
+	char *value = NULL;
+	int xpath_result_size;
+	int value_result_size;
+
+	xmlXPathContextPtr xpath_context = NULL;
+	xmlXPathObjectPtr xpath_object = NULL;
+	xmlNodeSetPtr xpath_result_set = NULL;
+	xmlChar *internal_xpath = NULL;
+	xmlChar *internal_value = NULL;
+	xmlDocPtr document = NULL;
+	xmlNodePtr local_copy = NULL;
+	xmlNodePtr place_holder = NULL;
+
+	assert(element);
+	assert(element->element);
+	assert(xpath);
+
+	/* Create a new doc and set root node as passed element */
+	document = xmlNewDoc(BAD_CAST "1.0");
+	if (!document) {
+		value = NULL;
+		ERR("Unable to create xml document");
+		goto end;
+	}
+
+	local_copy = xmlCopyNode(element->element, 1);
+	if (!local_copy) {
+		value = NULL;
+		ERR("Unable to copy an xml node");
+		goto end;
+	}
+
+	/* Hand off the local_copy to the xmlDoc */
+	place_holder = xmlDocSetRootElement(document, local_copy);
+	if (place_holder) {
+		value = NULL;
+		ERR("The document root was already set");
+		xmlFreeNode(local_copy);
+		goto end;
+	}
+
+	internal_xpath = encode_string(xpath);
+	if (!internal_xpath) {
+		/*TODO set valid error */
+		value = NULL;
+		ERR("Unable to encode xpath string");
+		goto end;
+	}
+
+	/* Initialize xpath context */
+	xpath_context = xmlXPathNewContext(document);
+	if (!xpath_context) {
+		/*TODO set valid error */
+		value = NULL;
+		ERR("Unable to create xpath context");
+		goto end;
+	}
+
+	/* Evaluate the xpath expression */
+	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
+	if (!xpath_object) {
+		/*TODO set valid error */
+		value = NULL;
+		ERR("Unable to evaluate xpath query (invalid query format)");
+		goto end;
+	}
+
+	xpath_result_set = xpath_object->nodesetval;
+	if (!xpath_result_set) {
+		/*TODO set valid error */
+		value = NULL;
+		goto end;
+	}
+
+	xpath_result_size = xpath_result_set->nodeNr;
+
+	if (xpath_result_size > 1) {
+		/*TODO set valid error */
+		ERR("To many result while fetching config element value");
+		value = NULL;
+		goto end;
+	}
+
+	if (xpath_result_size == 0) {
+		value = NULL;
+		goto end;
+	}
+
+	assert(xpath_result_set->nodeTab[0]);
+	internal_value = xmlNodeGetContent(xpath_result_set->nodeTab[0]);
+	if (!internal_value) {
+		value = NULL;
+		goto end;
+	}
+
+	value_result_size  = xmlStrlen(internal_value);
+	value = calloc(value_result_size + 1, sizeof(char));
+	strncpy(value, (char *) internal_value, value_result_size);
+
+end:
+	xmlXPathFreeContext(xpath_context);
+	xmlXPathFreeObject(xpath_object);
+	xmlFree(internal_xpath);
+	xmlFree(internal_value);
+	xmlFreeDoc(document);
+	return value;
+
+}
+
+LTTNG_HIDDEN
+int config_process_event_element(const struct config_element *element, const char *session_name, int domain_type, const char *channel_name) {
+
+	int ret = 0;
+	xmlNodePtr node;
+	struct lttng_domain domain;
+	struct lttng_handle *handle;
+
+	assert(element);
+	assert(element->element);
+
+	memset(&domain, 0, sizeof(struct lttng_domain));
+
+	/* Create handle */
+	domain.type = domain_type;
+	switch (domain.type) {
+	case LTTNG_DOMAIN_KERNEL:
+		domain.buf_type = LTTNG_BUFFER_GLOBAL;
+		break;
+	case LTTNG_DOMAIN_UST:
+	case LTTNG_DOMAIN_JUL:
+	case LTTNG_DOMAIN_LOG4J:
+	case LTTNG_DOMAIN_PYTHON:
+		domain.buf_type = LTTNG_BUFFER_PER_UID;
+		break;
+	case LTTNG_DOMAIN_NONE:
+	default:
+		assert(0);
+	}
+
+	handle = lttng_create_handle(session_name, &domain);
+	if (!handle) {
+		ERR("Handle creation");
+		ret = 1;
+		goto error;
+	}
+
+
+	node = element->element;
+	/* Check if element is really and event */
+	if (xmlStrcmp(BAD_CAST config_element_event, node->name)) {
+		ERR("Passed element is not an event");
+		ret = 1;
+		goto error;
+	}
+
+	ret = process_event_node(node, handle, channel_name, ENABLE);
+	if (ret) {
+		goto error;
+	}
+error:
+	free(handle);
+	return ret;
+}
