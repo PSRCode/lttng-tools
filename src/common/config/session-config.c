@@ -3231,6 +3231,11 @@ struct config_document *config_document_get(const char *path)
 		goto end;
 	}
 
+	/*
+	 * Do not care of blanks and also make sure that direct dump have no
+	 * indentations in them
+	 */
+	xmlKeepBlanksDefault(0);
 	document->document = xmlParseFile(path);
 	if (!document->document) {
 		ERR("Configuration document parsing failed.");
