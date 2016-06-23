@@ -298,7 +298,7 @@ static int loglevel_python_str_to_value(const char *inputstr)
  * Maps loglevel from string to value
  */
 static
-int loglevel_str_to_value(const char *inputstr)
+int loglevel_ust_str_to_value(const char *inputstr)
 {
 	int i = 0;
 	char str[LTTNG_SYMBOL_NAME_LEN];
@@ -349,6 +349,37 @@ int loglevel_str_to_value(const char *inputstr)
 	} else {
 		return -1;
 	}
+}
+
+/*
+ * Map a userspace agent loglevel to it's value based on the domain type.
+ *
+ * Assert when loglevel is NULL and domain type is LTTNG_DOMAIN_NONE ||
+ * LTTNG_DOMAIN_KERNEL.
+ *
+ * return -1 on invalid loglevel.
+ */
+static int loglevel_str_to_value(const char* loglevel, enum lttng_domain_type type)
+{
+	int ret = -1;
+	switch (type) {
+		case LTTNG_DOMAIN_UST:
+			ret = loglevel_ust_str_to_value(loglevel);
+			break;
+		case LTTNG_DOMAIN_JUL:
+			ret = loglevel_jul_str_to_value(loglevel);
+			break;
+		case LTTNG_DOMAIN_LOG4J:
+			ret = loglevel_log4j_str_to_value(loglevel);
+			break;
+		case LTTNG_DOMAIN_PYTHON:
+			ret = loglevel_python_str_to_value(loglevel);
+			break;
+		default:
+			assert(0);
+	}
+
+	return ret;
 }
 
 static
@@ -699,24 +730,7 @@ static int enable_events(char *session_name, struct domain_configuration *config
 			strcpy(ev.name, "*");
 			ev.loglevel_type = config_loglevel_type;
 			if (config_loglevel) {
-				assert(config_domain_type != LTTNG_DOMAIN_NONE || config_domain_type != LTTNG_DOMAIN_KERNEL);
-				switch (config_domain_type) {
-				case LTTNG_DOMAIN_UST:
-					ev.loglevel = loglevel_str_to_value(config_loglevel);
-					break;
-				case LTTNG_DOMAIN_JUL:
-					ev.loglevel = loglevel_jul_str_to_value(config_loglevel);
-					break;
-				case LTTNG_DOMAIN_LOG4J:
-					ev.loglevel = loglevel_log4j_str_to_value(config_loglevel);
-					break;
-				case LTTNG_DOMAIN_PYTHON:
-					ev.loglevel = loglevel_python_str_to_value(config_loglevel);
-					break;
-				default:
-					assert(0);
-				}
-
+				ev.loglevel = loglevel_str_to_value(config_loglevel, config_domain_type);
 				if (ev.loglevel == -1) {
 					ERR("Unknown loglevel %s", config_loglevel);
 					ret = -LTTNG_ERR_INVALID;
@@ -1060,7 +1074,7 @@ static int enable_events(char *session_name, struct domain_configuration *config
 
 			ev.loglevel_type = config_loglevel_type;
 			if (config_loglevel) {
-				ev.loglevel = loglevel_str_to_value(config_loglevel);
+				ev.loglevel = loglevel_ust_str_to_value(config_loglevel);
 				if (ev.loglevel == -1) {
 					ERR("Unknown loglevel %s", config_loglevel);
 					ret = -LTTNG_ERR_INVALID;
@@ -1082,21 +1096,7 @@ static int enable_events(char *session_name, struct domain_configuration *config
 
 			ev.loglevel_type = config_loglevel_type;
 			if (config_loglevel) {
-				switch (config_domain_type) {
-				case LTTNG_DOMAIN_JUL:
-					ev.loglevel = loglevel_jul_str_to_value(config_loglevel);
-					break;
-				case LTTNG_DOMAIN_LOG4J:
-					ev.loglevel = loglevel_log4j_str_to_value(config_loglevel);
-					break;
-				case LTTNG_DOMAIN_PYTHON:
-					ev.loglevel = loglevel_python_str_to_value(config_loglevel);
-					break;
-				default:
-					assert(0);
-					break;
-				}
-
+				ev.loglevel = loglevel_str_to_value(config_loglevel, config_domain_type);
 				if (ev.loglevel == -1) {
 					ERR("Unknown loglevel %s", config_loglevel);
 					ret = -LTTNG_ERR_INVALID;
