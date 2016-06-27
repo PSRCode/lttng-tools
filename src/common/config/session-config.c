@@ -3420,7 +3420,7 @@ int config_document_replace_element(struct config_document *document,
 	}
 
 	if (xpath_result_size == 0) {
-		ret = -LTTNG_ERR_CONFIG_REPLACEMENT;
+		ret = -LTTNG_ERR_CONFIG_INVALID_COUNT;
 		goto end;
 	}
 
@@ -3430,7 +3430,6 @@ int config_document_replace_element(struct config_document *document,
 	copy = xmlCopyNode(element->element, 1);
 	if (!copy) {
 		ret = -LTTNG_ERR_NOMEM;
-		ERR("Copy failed for node replacement");
 		goto end;
 	}
 
@@ -3728,7 +3727,6 @@ int config_document_insert_element(struct config_document *document,
 	local_copy = xmlCopyNode(element->element, 1);
 	if (!local_copy) {
 		ret = -LTTNG_ERR_NOMEM;
-		ERR("Duplication of node to be insert failed");
 		goto end;
 	}
 
@@ -4018,13 +4016,14 @@ int config_element_add_or_replace_child(struct config_element *parent, struct co
 	/* Add the child */
 	local_copy = xmlCopyNode(x_child, 1);
 	if (!local_copy) {
-		ret = -1;
 		ERR("Duplication of node to be insert failed");
+		ret = -LTTNG_ERR_CONFIG_ADD_CHILD;
 		goto end;
 	}
 	x_ret = xmlAddChild(x_parent, local_copy);
 	if (!x_ret) {
 		xmlFreeNode(local_copy);
+		ret = -LTTNG_ERR_CONFIG_ADD_CHILD;
 	}
 end:
 	return ret;
@@ -4174,8 +4173,7 @@ int config_process_event_element(const struct config_element *element, const cha
 
 	handle = lttng_create_handle(session_name, &domain);
 	if (!handle) {
-		ERR("Handle creation");
-		ret = 1;
+		ret = -LTTNG_ERR_HANDLE_CREATION;
 		goto error;
 	}
 
@@ -4183,8 +4181,7 @@ int config_process_event_element(const struct config_element *element, const cha
 	node = element->element;
 	/* Check if element is really and event */
 	if (xmlStrcmp(BAD_CAST config_element_event, node->name)) {
-		ERR("Passed element is not an event");
-		ret = 1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_ELEMENT;
 		goto error;
 	}
 
