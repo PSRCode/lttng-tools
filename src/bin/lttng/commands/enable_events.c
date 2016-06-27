@@ -1415,6 +1415,32 @@ static int enable_event_template_per_domain(const struct config_document *docume
 	assert(config);
 
 
+	/* Fetch contexts element */
+	printed_bytes = asprintf(&query, "//sessions/session/domains/domain[./type = '%s']/channels/channel/contexts", config_get_domain_str(config->domain_type));
+	if (printed_bytes <= 0) {
+		ERR("Asprintf template events query");
+		ret = -1;
+		goto end;
+	}
+
+	config_document_get_element_array(document, query, &element_array, &element_array_size);
+	if (element_array) {
+		if (element_array_size != 1) {
+			ERR("Invalid document");
+			goto end;
+		}
+		ret = config_process_contexts_element(element_array[0], session_name, config->domain_type, config->channel_name);
+		if (ret) {
+			ERR("Contexts processing for domain %s channel %s : %s", config_get_domain_str(config->domain_type), config->channel_name, lttng_strerror(ret));
+			goto end;
+		}
+		config_element_free_array(element_array, element_array_size);
+		element_array = NULL;
+		element_array_size = 0;
+	}
+
+
+	/* Fetch event element */
 	printed_bytes = asprintf(&query, "//sessions/session/domains/domain[./type = '%s']/channels/channel/events/event[./enabled = 'true']", config_get_domain_str(config->domain_type));
 	if (printed_bytes <= 0) {
 		ERR("Asprintf template events query");

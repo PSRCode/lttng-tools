@@ -2157,7 +2157,6 @@ int process_context_node(xmlNodePtr context_node,
 	xmlNodePtr context_child_node = xmlFirstElementChild(context_node);
 
 	assert(handle);
-	assert(channel_name);
 
 	if (!context_child_node) {
 		ret = -LTTNG_ERR_LOAD_INVALID_CONFIG;
@@ -4192,6 +4191,58 @@ int config_process_event_element(const struct config_element *element, const cha
 	}
 
 	ret = process_event_node(node, handle, channel_name, ENABLE);
+	if (ret) {
+		goto error;
+	}
+error:
+	free(handle);
+	return ret;
+}
+
+LTTNG_HIDDEN
+int config_process_contexts_element(const struct config_element *element, const char *session_name, int domain_type, const char *channel_name) {
+	int ret = 0;
+	xmlNodePtr node;
+	struct lttng_domain domain;
+	struct lttng_handle *handle;
+
+	assert(element);
+	assert(element->element);
+
+	memset(&domain, 0, sizeof(struct lttng_domain));
+
+	/* Create handle */
+	domain.type = domain_type;
+	switch (domain.type) {
+		case LTTNG_DOMAIN_KERNEL:
+			domain.buf_type = LTTNG_BUFFER_GLOBAL;
+			break;
+		case LTTNG_DOMAIN_UST:
+		case LTTNG_DOMAIN_JUL:
+		case LTTNG_DOMAIN_LOG4J:
+		case LTTNG_DOMAIN_PYTHON:
+			domain.buf_type = LTTNG_BUFFER_PER_UID;
+			break;
+		case LTTNG_DOMAIN_NONE:
+		default:
+			assert(0);
+	}
+
+	handle = lttng_create_handle(session_name, &domain);
+	if (!handle) {
+		ret = -LTTNG_ERR_HANDLE_CREATION;
+		goto error;
+	}
+
+
+	node = element->element;
+	/* Check if element is really a context list node (contexts) */
+	if (xmlStrcmp(BAD_CAST config_element_contexts, node->name)) {
+		ret = -LTTNG_ERR_CONFIG_INVALID_ELEMENT;
+		goto error;
+	}
+
+	ret = process_contexts_node(node, handle, channel_name);
 	if (ret) {
 		goto error;
 	}
