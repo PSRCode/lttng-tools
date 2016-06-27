@@ -183,6 +183,13 @@ static const char *error_string_array[] = {
 	[ ERROR_INDEX(LTTNG_ERR_LIVE_SESSION) ] = "Live sessions are not supported",
 	[ ERROR_INDEX(LTTNG_ERR_PER_PID_SESSION) ] = "Per-PID tracing sessions are not supported",
 	[ ERROR_INDEX(LTTNG_ERR_KERN_CONTEXT_UNAVAILABLE) ] = "Context unavailable on this kernel",
+	[ ERROR_INDEX(LTTNG_ERR_HANDLE_CREATION) ] = "Handle creation failed",
+	[ ERROR_INDEX(LTTNG_ERR_CONFIG_INVALID_ELEMENT) ] = "The element is invalid",
+	[ ERROR_INDEX(LTTNG_ERR_CONFIG_ADD_CHILD) ] = "The child could not be added",
+	[ ERROR_INDEX(LTTNG_ERR_CONFIG_INVALID_QUERY) ] = "Invalid query",
+	[ ERROR_INDEX(LTTNG_ERR_CONFIG_EMPTY_SET) ] = "Empty configuration set",
+	[ ERROR_INDEX(LTTNG_ERR_CONFIG_INVALID_COUNT) ] = "Invalid number of results",
+	[ ERROR_INDEX(LTTNG_ERR_CONFIG_REPLACEMENT) ] = "Element replacement failed",
 
 	/* Last element */
 	[ ERROR_INDEX(LTTNG_ERR_NR) ] = "Unknown error code"

@@ -142,6 +142,13 @@ enum lttng_error_code {
 	LTTNG_ERR_LIVE_SESSION           = 119, /* Live session unsupported */
 	LTTNG_ERR_PER_PID_SESSION        = 120, /* Per-PID sessions unsupported */
 	LTTNG_ERR_KERN_CONTEXT_UNAVAILABLE = 121, /* Context unavailable on this kernel */
+	LTTNG_ERR_HANDLE_CREATION        = 122, /* Handle creation failed */
+	LTTNG_ERR_CONFIG_INVALID_ELEMENT = 123, /* The element is invalid */
+	LTTNG_ERR_CONFIG_ADD_CHILD       = 124, /* The child could not be added */
+	LTTNG_ERR_CONFIG_INVALID_QUERY   = 125, /* Invalid query */
+	LTTNG_ERR_CONFIG_EMPTY_SET       = 126, /* Empty configuration set */
+	LTTNG_ERR_CONFIG_INVALID_COUNT   = 127, /* Invalid number of results */
+	LTTNG_ERR_CONFIG_REPLACEMENT     = 128, /* Element replacement failed */
 
 	/* MUST be last element */
 	LTTNG_ERR_NR,                           /* Last element */
