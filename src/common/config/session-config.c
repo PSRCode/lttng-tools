@@ -1798,8 +1798,6 @@ int process_channel_attr_node(xmlNodePtr attr_node, bool snapshot_mode,
 		xmlNodePtr *contexts_node, xmlNodePtr *events_node)
 {
 	int ret;
-	bool name_set = false;
-	bool output_type_set = false;
 
 	assert(attr_node);
 	assert(channel);
@@ -1827,7 +1825,6 @@ int process_channel_attr_node(xmlNodePtr attr_node, bool snapshot_mode,
 
 		strncpy(channel->name, (const char *) content, name_len);
 		free(content);
-		name_set = true;
 	} else if (!strcmp((const char *) attr_node->name,
 			config_element_enabled)) {
 		xmlChar *content;
@@ -1974,7 +1971,6 @@ int process_channel_attr_node(xmlNodePtr attr_node, bool snapshot_mode,
 		}
 
 		channel->attr.output = ret;
-		output_type_set = true;
 	} else if (!strcmp((const char *) attr_node->name,
 			config_element_tracefile_size)) {
 		xmlChar *content;
@@ -2045,18 +2041,6 @@ int process_channel_attr_node(xmlNodePtr attr_node, bool snapshot_mode,
 		*contexts_node = attr_node;
 	}
 
-	if (!name_set) {
-		ERR("Encountered a channel with no name attribute.");
-		ret = -LTTNG_ERR_LOAD_INVALID_CONFIG;
-		goto end;
-	}
-
-	if (!output_type_set) {
-		/* Set default output type associated with the domain. */
-		channel->attr.output =
-				(domain == LTTNG_DOMAIN_KERNEL && !snapshot_mode) ?
-				LTTNG_EVENT_SPLICE : LTTNG_EVENT_MMAP;
-	}
 	ret = 0;
 end:
 	return ret;
@@ -2369,6 +2353,12 @@ int process_domain_node(xmlNodePtr domain_node, const char *session_name,
 			if (ret) {
 				goto end;
 			}
+		}
+
+		if (!channel.name) {
+			ERR("Encountered a channel with no name attribute.");
+			ret = -LTTNG_ERR_LOAD_INVALID_CONFIG;
+			goto end;
 		}
 
 		ret = lttng_enable_channel(handle, &channel);
