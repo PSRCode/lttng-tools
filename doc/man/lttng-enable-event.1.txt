@@ -32,6 +32,17 @@ Create or enable application event rules:
       [option:--loglevel='LOGLEVEL' | option:--loglevel-only='LOGLEVEL']
       [option:--session='SESSION'] [option:--channel='CHANNEL'] (option:--all | 'EVENT'[,'EVENT']...)
 
+Enable a template of events:
+
+[verse]
+*lttng* ['linkgenoptions:(GENERAL OPTIONS)'] *enable-event* *--template-path*='TEMPLATE'
+      [option:--session='SESSION']
+      [
+          (option:--userspace | option:--jul | option:--log4j | option:--python)
+          [option:--channel='CHANNEL']
+          [option:--filter='EXPR'] [option:--exclude='EVENT'[,'EVENT']...]
+          [option:--loglevel='LOGLEVEL' | option:--loglevel-only='LOGLEVEL']
+      ]...
 
 DESCRIPTION
 -----------
@@ -58,6 +69,12 @@ from the current tracing session.
 Events can be enabled while tracing is active
 (use man:lttng-start(1) to make a tracing session active).
 
+Template can be used to ease the enabling of multiple events across multiple
+domains. Information can be passed via the usual domains options tuples.
+
+e.g:
+lttng enable-event --session SESSION --template-path='TEMPLATE' -k -c kchan -u
+-c uchan --filter='FILTER' --exclude='EVENT'
 
 Event source types
 ~~~~~~~~~~~~~~~~~~
