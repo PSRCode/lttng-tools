@@ -1,1 +1,1 @@
-SUBDIRS = bindings core-handler
+SUBDIRS = bindings core-handler templates
