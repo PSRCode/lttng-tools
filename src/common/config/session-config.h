@@ -482,4 +482,19 @@ char *config_element_get_element_value(const struct config_element *element, con
 LTTNG_HIDDEN
 int config_process_event_element(const struct config_element *element, const char* session_name, int domain_type, const char *channel_name);
 
+/*
+ * Process an element matching a contexts configuration and try to apply it.
+ *
+ * element The element to process
+ * session_name The session name.
+ * domain_type The domain type.
+ * channel_name The channel name.
+ *              A NULL channel name will default to the default domain
+ *              channel.
+ *
+ * Returns zero if the contexts could be applied successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ */
+int config_process_contexts_element(const struct config_element *element, const char *session_name, int domain_type, const char *channel_name);
+
 #endif /* _CONFIG_H */
