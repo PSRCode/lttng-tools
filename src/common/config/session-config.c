@@ -3267,16 +3267,13 @@ int config_document_replace_element_value(struct config_document *document,
 
 	internal_xpath = encode_string(xpath);
 	if (!internal_xpath) {
-		/*TODO set valid error */
-		ret = -1;
-		ERR("Unable to encode xpath string");
+		ret = -LTTNG_ERR_NOMEM;
 		goto end;
 	}
 
 	internal_value = encode_string(value);
 	if (!internal_value) {
-		/*TODO set valid error */
-		ret = -1;
+		ret = -LTTNG_ERR_NOMEM;
 		ERR("Unable to encode xpath replace value string");
 		goto end;
 	}
@@ -3284,8 +3281,7 @@ int config_document_replace_element_value(struct config_document *document,
 	/* Initialize xpath context */
 	xpath_context = xmlXPathNewContext(document->document);
 	if (!xpath_context) {
-		/*TODO set valid error */
-		ret = -1;
+		ret = -LTTNG_ERR_NOMEM;
 		ERR("Unable to create xpath context");
 		goto end;
 	}
@@ -3293,8 +3289,7 @@ int config_document_replace_element_value(struct config_document *document,
 	/* Evaluate de xpath expression */
 	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
 	if (!xpath_object) {
-		/*TODO set valid error */
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_QUERY;
 		ERR("Unable to evaluate xpath query (invalid query format)");
 		goto end;
 	}
@@ -3304,9 +3299,7 @@ int config_document_replace_element_value(struct config_document *document,
 	 */
 	xpath_result_set = xpath_object->nodesetval;
 	if (!xpath_result_set) {
-		/*TODO set valid error */
-		ret = -1;
-		ERR("Unset xpath result set or empty set ?");
+		ret = -LTTNG_ERR_CONFIG_EMPTY_SET;
 		goto end;
 	}
 
@@ -3377,8 +3370,7 @@ int config_document_replace_element(struct config_document *document,
 
 	internal_xpath = encode_string(xpath);
 	if (!internal_xpath) {
-		/*TODO set valid error */
-		ret = -1;
+		ret = -LTTNG_ERR_NOMEM;
 		ERR("Unable to encode xpath string");
 		goto end;
 	}
@@ -3386,8 +3378,7 @@ int config_document_replace_element(struct config_document *document,
 	/* Initialize xpath context */
 	xpath_context = xmlXPathNewContext(document->document);
 	if (!xpath_context) {
-		/*TODO set valid error */
-		ret = -1;
+		ret = -LTTNG_ERR_NOMEM;
 		ERR("Unable to create xpath context");
 		goto end;
 	}
@@ -3395,31 +3386,26 @@ int config_document_replace_element(struct config_document *document,
 	/* Evaluate the xpath expression */
 	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
 	if (!xpath_object) {
-		/*TODO set valid error */
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_QUERY;
 		ERR("Unable to evaluate xpath query (invalid query format)");
 		goto end;
 	}
 
 	xpath_result_set = xpath_object->nodesetval;
 	if (!xpath_result_set) {
-		/*TODO set valid error */
-		ret = -1;
-		ERR("Unset xpath result set or empty set ?");
+		ret = -LTTNG_ERR_CONFIG_EMPTY_SET;
 		goto end;
 	}
 
 	xpath_result_size = xpath_result_set->nodeNr;
 
 	if (xpath_result_size > 1) {
-		/*TODO set valid error */
-		ERR("To many result while fetching config element value");
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_COUNT;
 		goto end;
 	}
 
 	if (xpath_result_size == 0) {
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_COUNT;
 		goto end;
 	}
 
@@ -3428,8 +3414,7 @@ int config_document_replace_element(struct config_document *document,
 	/* Do a copy of the element to ease caller memory management */
 	copy = xmlCopyNode(element->element, 1);
 	if (!copy) {
-		ret = -1;
-		ERR("Copy failed for node replacement");
+		ret = -LTTNG_ERR_NOMEM;
 		goto end;
 	}
 
@@ -3437,9 +3422,8 @@ int config_document_replace_element(struct config_document *document,
 	if (xpath_result_set->nodeTab[0]->type != XML_NAMESPACE_DECL)
 		   xpath_result_set->nodeTab[0] = NULL;
 	if (!old_node) {
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_REPLACEMENT;
 		xmlFreeNode(copy);
-		ERR("Node replacement failed");
 		goto end;
 	}
 	xmlUnlinkNode(old_node);
@@ -3451,9 +3435,6 @@ end:
 	return ret;
 }
 
-/* TODO: DOC
- *
- */
 LTTNG_HIDDEN
 char *config_document_get_element_value(struct config_document *document,
 		const char *xpath)
@@ -3473,7 +3454,6 @@ char *config_document_get_element_value(struct config_document *document,
 
 	internal_xpath = encode_string(xpath);
 	if (!internal_xpath) {
-		/*TODO set valid error */
 		value = NULL;
 		ERR("Unable to encode xpath string");
 		goto end;
@@ -3482,7 +3462,6 @@ char *config_document_get_element_value(struct config_document *document,
 	/* Initialize xpath context */
 	xpath_context = xmlXPathNewContext(document->document);
 	if (!xpath_context) {
-		/*TODO set valid error */
 		value = NULL;
 		ERR("Unable to create xpath context");
 		goto end;
@@ -3491,7 +3470,6 @@ char *config_document_get_element_value(struct config_document *document,
 	/* Evaluate the xpath expression */
 	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
 	if (!xpath_object) {
-		/*TODO set valid error */
 		value = NULL;
 		ERR("Unable to evaluate xpath query (invalid query format)");
 		goto end;
@@ -3499,7 +3477,6 @@ char *config_document_get_element_value(struct config_document *document,
 
 	xpath_result_set = xpath_object->nodesetval;
 	if (!xpath_result_set) {
-		/*TODO set valid error */
 		value = NULL;
 		goto end;
 	}
@@ -3507,7 +3484,6 @@ char *config_document_get_element_value(struct config_document *document,
 	xpath_result_size = xpath_result_set->nodeNr;
 
 	if (xpath_result_size > 1) {
-		/*TODO set valid error */
 		ERR("To many result while fetching config element value");
 		value = NULL;
 		goto end;
@@ -3559,7 +3535,6 @@ int config_document_element_exist(struct config_document *document,
 
 	internal_xpath = encode_string(xpath);
 	if (!internal_xpath) {
-		/*TODO set valid error */
 		ERR("Unable to encode xpath string");
 		goto end;
 	}
@@ -3567,7 +3542,6 @@ int config_document_element_exist(struct config_document *document,
 	/* Initialize xpath context */
 	xpath_context = xmlXPathNewContext(document->document);
 	if (!xpath_context) {
-		/*TODO set valid error */
 		ERR("Unable to create xpath context");
 		goto end;
 	}
@@ -3575,7 +3549,6 @@ int config_document_element_exist(struct config_document *document,
 	/* Evaluate the xpath expression */
 	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
 	if (!xpath_object) {
-		/*TODO set valid error */
 		ERR("Unable to evaluate xpath query (invalid query format)");
 		goto end;
 	}
@@ -3658,17 +3631,13 @@ int config_element_add_child(struct config_element *parent,
 	/* Do a copy to ease the memory management for caller */
 	copy = xmlCopyNode(child->element, 1);
 	if (!copy) {
-		ERR("Duplication of child to be added failed");
-		/* TODO: return valid error */
-		ret = -1;
+		ret = -LTTNG_ERR_NOMEM;
 		goto error;
 	}
 	node = xmlAddChild(parent->element, copy);
 	if (!node) {
-		ERR("Add child failed");
-		/* TODO: return valid error */
 		xmlFreeNode(copy);
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_ADD_CHILD;
 		goto error;
 	}
 error:
@@ -3680,7 +3649,6 @@ LTTNG_HIDDEN
 int config_document_insert_element(struct config_document *document,
 		const char *xpath, const struct config_element *element)
 {
-	/* TODO: real ret default value */
 	int ret = 0;
 	int xpath_result_size;
 
@@ -3698,49 +3666,39 @@ int config_document_insert_element(struct config_document *document,
 
 	internal_xpath = encode_string(xpath);
 	if (!internal_xpath) {
-		/*TODO set valid error */
-		ret = -1;
-		ERR("Unable to encode xpath string");
+		ret = -LTTNG_ERR_NOMEM;
 		goto end;
 	}
 
 	/* Initialize xpath context */
 	xpath_context = xmlXPathNewContext(document->document);
 	if (!xpath_context) {
-		/*TODO set valid error */
-		ret = -1;
-		ERR("Unable to create xpath context");
+		ret = -LTTNG_ERR_NOMEM;
 		goto end;
 	}
 
 	/* Evaluate the xpath expression */
 	xpath_object = xmlXPathEvalExpression(internal_xpath, xpath_context);
 	if (!xpath_object) {
-		/*TODO set valid error */
-		ret = -1;
-		ERR("Unable to evaluate xpath query (invalid query format)");
+		ret = -LTTNG_ERR_CONFIG_INVALID_QUERY;
 		goto end;
 	}
 
 	xpath_result_set = xpath_object->nodesetval;
 	if (!xpath_result_set) {
-		/*TODO set valid error */
-		ret = -1;
-		ERR("Unset xpath result set or empty set ?");
+		ret = -LTTNG_ERR_CONFIG_EMPTY_SET;
 		goto end;
 	}
 
 	xpath_result_size = xpath_result_set->nodeNr;
 
 	if (xpath_result_size > 1) {
-		/*TODO set valid error */
-		ERR("To many result while fetching config element value");
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_COUNT;
 		goto end;
 	}
 
 	if (xpath_result_size == 0) {
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_COUNT;
 		goto end;
 	}
 
@@ -3748,16 +3706,14 @@ int config_document_insert_element(struct config_document *document,
 	/* Do a copy to simply memory management */
 	local_copy = xmlCopyNode(element->element, 1);
 	if (!local_copy) {
-		ret = -1;
-		ERR("Duplication of node to be insert failed");
+		ret = -LTTNG_ERR_NOMEM;
 		goto end;
 	}
 
 	child_node = xmlAddChild(xpath_result_set->nodeTab[0], local_copy);
 	if (!child_node) {
-		ret = -1;
+		ret = -LTTNG_ERR_CONFIG_ADD_CHILD;
 		xmlFreeNode(local_copy);
-		ERR("Insertion failed on add child");
 		goto end;
 	}
 end:
@@ -4040,13 +3996,14 @@ int config_element_add_or_replace_child(struct config_element *parent, struct co
 	/* Add the child */
 	local_copy = xmlCopyNode(x_child, 1);
 	if (!local_copy) {
-		ret = -1;
 		ERR("Duplication of node to be insert failed");
+		ret = -LTTNG_ERR_CONFIG_ADD_CHILD;
 		goto end;
 	}
 	x_ret = xmlAddChild(x_parent, local_copy);
 	if (!x_ret) {
 		xmlFreeNode(local_copy);
+		ret = -LTTNG_ERR_CONFIG_ADD_CHILD;
 	}
 end:
 	return ret;
@@ -4196,8 +4153,7 @@ int config_process_event_element(const struct config_element *element, const cha
 
 	handle = lttng_create_handle(session_name, &domain);
 	if (!handle) {
-		ERR("Handle creation");
-		ret = 1;
+		ret = -LTTNG_ERR_HANDLE_CREATION;
 		goto error;
 	}
 
@@ -4205,8 +4161,7 @@ int config_process_event_element(const struct config_element *element, const cha
 	node = element->element;
 	/* Check if element is really and event */
 	if (xmlStrcmp(BAD_CAST config_element_event, node->name)) {
-		ERR("Passed element is not an event");
-		ret = 1;
+		ret = -LTTNG_ERR_CONFIG_INVALID_ELEMENT;
 		goto error;
 	}
 
