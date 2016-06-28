@@ -33,6 +33,11 @@ Live mode:
 *lttng* ['linkgenoptions:(GENERAL OPTIONS)'] *create* option:--live[='DELAYUS'] [option:--shm-path='PATH']
       [option:--set-url='URL' | option:--ctrl-url='URL' option:--data-url='URL'] ['SESSION']
 
+Template:
+[verse]
+*lttng* ['linkgenoptions:(GENERAL OPTIONS)'] *create* option:--template-path='TEMPLATE'] [option:--shm-path='PATH']
+      [option:--set-url='URL' | option:--ctrl-url='URL' option:--data-url='URL']
+
 
 DESCRIPTION
 -----------
@@ -222,6 +227,14 @@ option:-U, option:--set-url='URL'::
 +
 In <<local-mode,local>> mode, 'URL' must start with `file://` followed
 by the destination path on the local file system.
+
+TEMPLATE
+~~~
+option:--template-path='TEMPLATE'::
+    Create a session based on the specified template.
+    Note: The mode selection flag have no effect when combined with the
+    (option:--template-path option). Other options and arguments overrides
+    the values present in the template when present.
 
 
 include::common-cmd-help-options.txt[]
