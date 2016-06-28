@@ -228,6 +228,7 @@ error_create:
 static int validate_command_options(void)
 {
 	int ret = CMD_SUCCESS;
+
 	if (opt_snapshot && opt_live_timer) {
 		ERR("Snapshot and live modes are mutually exclusive.");
 		ret = CMD_ERROR;
@@ -235,7 +236,7 @@ static int validate_command_options(void)
 	}
 
 	if ((!opt_ctrl_url && opt_data_url) || (opt_ctrl_url && !opt_data_url)) {
-		ERR("You need both control and data URL.");
+		ERR("Control and data URLs must both be set.");
 		ret = CMD_ERROR;
 		goto error;
 	}
