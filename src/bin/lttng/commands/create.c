@@ -246,7 +246,7 @@ error:
 }
 
 /*
- * Create a session via direct calls to liblttng-ctl.
+ * Create a session using direct calls to liblttng-ctl.
  *
  * Return CMD_SUCCESS on success, negative value on internal lttng errors and positive
  * value on command errors.
