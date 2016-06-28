@@ -326,10 +326,14 @@ static int create_session_basic (const char *session_name,
 	case OUTPUT_LOCAL:
 		break;
 	case OUTPUT_NET:
+		if (!ctrl_url || !data_url) {
+			break;
+		}
+
 		if (session_type == SESSION_SNAPSHOT) {
 			ret = add_snapshot_output(session_name, ctrl_url,
 					data_url);
-		} else if (ctrl_url && data_url) {
+		} else {
 			/*
 			 * Normal sessions and live sessions behave the same way
 			 * regarding consumer url.
