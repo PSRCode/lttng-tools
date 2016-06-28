@@ -509,7 +509,7 @@ static int create_session(void)
 				strlen(DEFAULT_SESSION_NAME) + 1) == 0) ||
 			(strncmp(opt_session_name, DEFAULT_SESSION_NAME,
 				strlen(DEFAULT_SESSION_NAME)) == 0 &&
-			 strlen(opt_session_name) == strlen(DEFAULT_SESSION_NAME))) {
+			strlen(opt_session_name) == strlen(DEFAULT_SESSION_NAME))) {
 			ERR("%s is a reserved keyword for default session(s)",
 					DEFAULT_SESSION_NAME);
 
@@ -724,15 +724,14 @@ static int create_session(void)
 	ret = CMD_SUCCESS;
 
 error:
-
 	/* Session temp stuff */
 	free(session_name_date);
-
 	free(uris);
 
 	if (ret < 0) {
 		ERR("%s", lttng_strerror(ret));
 	}
+
 	free(base_session_name);
 	free(base_url);
 	free(base_ctrl_url);
