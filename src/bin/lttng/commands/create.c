@@ -59,13 +59,13 @@ enum {
 	OPT_LIVE_TIMER,
 };
 
-enum {
+enum output_type {
 	OUTPUT_UNKNOWN = -1,
 	OUTPUT_NONE,
 	OUTPUT_LOCAL,
 	OUTPUT_NET,
 };
-enum {
+enum session_type {
 	SESSION_UNKNOWN = -1,
 	SESSION_NORMAL,
 	SESSION_LIVE,
@@ -228,7 +228,7 @@ error_create:
  * CMD_ERROR on error
  * CMD_SUCCESS on success
  */
-static int validate_command_options(int session_type)
+static int validate_command_options(enum session_type type)
 {
 	int ret = CMD_SUCCESS;
 
@@ -248,8 +248,8 @@ static int validate_command_options(int session_type)
 		/* Restriction on flags exist when using template */
 		/* Session type flags are not permitted */
 		/* --live & --snapshot */
-		if ((opt_live_timer && session_type != SESSION_LIVE) ||
-				(opt_snapshot && session_type != SESSION_SNAPSHOT)) {
+		if ((opt_live_timer && type != SESSION_LIVE) ||
+				(opt_snapshot && type != SESSION_SNAPSHOT)) {
 			ERR("It is not possible to change the session type of a template");
 			ret = CMD_ERROR;
 			goto error;
@@ -267,9 +267,9 @@ error:
  * value on command errors.
  */
 static int create_session_basic (const char *session_name,
-		int session_type,
+		enum session_type session_type,
 		int live_timer,
-		int output_type,
+		enum output_type output_type,
 		const char* url,
 		const char* ctrl_url,
 		const char* data_url,
@@ -385,9 +385,9 @@ error:
 }
 
 static int generate_output(const char *session_name,
-		int session_type,
+		enum session_type session_type,
 		int live_timer,
-		int output_type,
+		enum output_type output_type,
 		const char* url,
 		const char* ctrl_url,
 		const char* data_url,
@@ -450,9 +450,9 @@ error:
 
 static int parse_template (struct config_document *template,
 		char **session_name,
-		int *session_type,
+		enum session_type *session_type,
 		int *live_timer,
-		int *output_type,
+		enum output_type *output_type,
 		char **url,
 		char **ctrl_url,
 		char **data_url,
@@ -556,6 +556,9 @@ static int parse_template (struct config_document *template,
 			/* There is no output definition */
 		}
 		break;
+	case SESSION_UNKNOWN:
+		ret = -1;
+		goto error;
 	}
 
 
@@ -569,9 +572,9 @@ error:
 }
 static int create_session_from_template(struct config_document *template,
 		const char *session_name,
-		int session_type,
+		enum session_type session_type,
 		int live_timer,
-		int output_type,
+		enum output_type output_type,
 		const char *url,
 		const char *ctrl_url,
 		const char *data_url,
@@ -827,8 +830,8 @@ static int create_session(void)
 	struct config_document *template = NULL;
 
 	/* Base data */
-	int base_session_type = SESSION_UNKNOWN;
-	int base_output_type = OUTPUT_UNKNOWN;
+	enum session_type base_session_type = SESSION_UNKNOWN;
+	enum output_type base_output_type = OUTPUT_UNKNOWN;
 	char *base_session_name = NULL;
 	char *base_url = NULL;
 	char *base_ctrl_url = NULL;
