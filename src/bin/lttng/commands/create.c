@@ -876,6 +876,9 @@ static int create_session(void)
 				&base_ctrl_url,
 				&base_data_url,
 				&base_shm_path);
+		if (ret) {
+			goto error;
+		}
 	}
 
 	/* Option validation */
