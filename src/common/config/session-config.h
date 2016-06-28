@@ -33,6 +33,11 @@ struct config_entry {
 /* Instance of a configuration writer. */
 struct config_writer;
 
+/* Instance of a configuration document */
+struct config_document;
+
+struct config_element;
+
 /*
  * A config_entry_handler_cb receives config_entry structures belonging to the
  * sections the handler has been registered to.
@@ -224,5 +229,127 @@ int config_writer_write_element_string(struct config_writer *writer,
 LTTNG_HIDDEN
 int config_load_session(const char *path, const char *session_name,
 		int override, unsigned int autoload);
+
+/*
+ * Load session configuration from a document
+ *
+ * document The document to be loaded as a configuration
+ * session_name Name of the session to load. Will load all sessions from the
+ * passed document if NULL
+ *
+ * override Override current session configuration if it exists.
+ *
+ * Returns zero if the session could be loaded successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ */
+LTTNG_HIDDEN
+int config_load_configuration_sessions(struct config_document *document,
+		const char *session_name, int override);
+
+/*
+ * Get the document corresponding to the path.
+ *
+ * path Path to a configuration file.
+ * xsd_validation Whether or not to do a xsd validation
+ *
+ * Returns an new allocated config_document when successful.
+ * Returns NULL on error;
+ *
+ * The caller is responsible of freeing the document via config_document_free.
+ */
+LTTNG_HIDDEN
+struct config_document *config_document_get(const char *path);
+
+/*
+ * Free an allocated document.
+ *
+ * document The document to free.
+ */
+LTTNG_HIDDEN
+void config_document_free(struct config_document *document);
+
+/*
+ * Replace the value of a document element
+ *
+ * document The document containing the element to be modified.
+ * xpath The xpath string to the element.
+ * value The value to be placed inside the element.
+ *
+ * Returns zero if the session could be loaded successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ * */
+LTTNG_HIDDEN
+int config_document_replace_element_value(struct config_document *document, const char *xpath, const char *value);
+
+/*
+ * Swap a document node by the passed element.
+ *
+ * document The document containing the element to be modified.
+ * xpath The xpath string to the element.
+ * element The replacement element.
+ *
+ * Returns zero if the session could be loaded successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ */
+LTTNG_HIDDEN
+int config_document_replace_element(struct config_document *document, const char *xpath, const struct config_element *element);
+
+/*
+ * Get the value of a document element.
+ *
+ * document The document to be searched.
+ * xpath The xpath string to the element.
+ *
+ * Return null if multiple values exists or there is no
+ * value for the passed path.
+ */
+LTTNG_HIDDEN
+char *config_document_get_element_value(struct config_document *document, const char *xpath);
+
+/*
+ * Check if an element exists inside a document.
+ *
+ * document The document to be searched.
+ * xpath The xpath string to the element.
+ *
+ * Returns 1 on success and 0 on failure.
+ */
+LTTNG_HIDDEN
+int config_document_element_exist(struct config_document *document, const char *xpath);
+
+/*
+ *
+ */
+LTTNG_HIDDEN
+void config_element_free(struct config_element *element);
+
+LTTNG_HIDDEN
+struct config_element *config_element_create(const char *name, const char *value);
+
+/*
+ * Add a child element to an element.
+ *
+ * parent The parent element.
+ * child The element to add as a child.
+ *
+ * Returns zero if the session could be loaded successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ */
+LTTNG_HIDDEN
+int config_element_add_child(struct config_element *parent, const struct config_element *child);
+
+/*
+ * Insert element to an existing document.
+ *
+ * document The document to be modified.
+ * xpath The xpath string to the insertion path.
+ * element The element to be inserted.
+ *
+ * Returns zero if the session could be loaded successfully. Returns
+ * a negative LTTNG_ERR code on error.
+ */
+LTTNG_HIDDEN
+int config_document_insert_element(struct config_document *document, const char *xpath, const struct config_element *element);
+
 
 #endif /* _CONFIG_H */
