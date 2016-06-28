@@ -538,10 +538,9 @@ static int create_session(void)
 		}
 	} else {
 		/* Generate a name */
-		/* TODO: use asprint */
 		ret = asprintf(&base_session_name, DEFAULT_SESSION_NAME "-%s", datetime);
 		if (ret < 0) {
-			PERROR("Asprintf generated session name");
+			PERROR("Asprintf session name");
 			goto error;
 		}
 		session_name_date = strdup(base_session_name);
