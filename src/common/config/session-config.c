@@ -3495,6 +3495,7 @@ struct config_element *config_element_create(const char *name,
 	if (!element->element) {
 		free(element);
 		element = NULL;
+		goto end;
 	}
 
 	if (internal_value) {
