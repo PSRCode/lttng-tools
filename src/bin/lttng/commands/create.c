@@ -773,6 +773,12 @@ static int create_session_from_template(struct config_document *template,
 	}
 
 
+	if (ret) {
+		ERR("%s", lttng_strerror(ret));
+		ret = CMD_ERROR;
+		goto error;
+	}
+
 
 	/* Shm path */
 	if (shm_path && config_document_element_exist(template, "/sessions/session/shared_memory_path")) {
