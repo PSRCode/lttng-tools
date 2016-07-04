@@ -1218,7 +1218,7 @@ int create_snapshot_session(const char *session_name, xmlNodePtr output_node)
 			snapshot_output_node; snapshot_output_node =
 			xmlNextElementSibling(snapshot_output_node)) {
 		char *name = NULL;
-		uint64_t max_size = UINT64_MAX;
+		uint64_t max_size = DEFAULT_SNAPSHOT_MAX_SIZE;
 		struct consumer_output output = { 0 };
 		struct lttng_snapshot_output *snapshot_output = NULL;
 
@@ -1260,6 +1260,18 @@ int create_snapshot_session(const char *session_name, xmlNodePtr output_node)
 		if (!snapshot_output) {
 			ret = -LTTNG_ERR_NOMEM;
 			goto error_snapshot_output;
+		}
+
+		if (!name) {
+			/* Generate a default name */
+			int pret;
+			pret = asprintf(&name, DEFAULT_SNAPSHOT_NAME "-%" PRIu32,
+					lttng_snapshot_output_get_id(snapshot_output));
+			if (pret < 0) {
+				name = NULL;
+				PERROR("snprintf output name");
+				goto error_snapshot_output;
+			}
 		}
 
 		ret = lttng_snapshot_output_set_name(name, snapshot_output);

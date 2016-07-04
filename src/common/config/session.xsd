@@ -296,8 +296,8 @@ elementFormDefault="qualified" version="3.0">
 
 <xs:complexType name="snapshot_output_type">
 	<xs:all>
-		<xs:element name="name" type="name_type"/>
-		<xs:element name="max_size" type="uint64_type"/>
+		<xs:element name="name" type="name_type" minOccurs="0"/>
+		<xs:element name="max_size" type="uint64_type" minOccurs="0"/>
 		<xs:element name="consumer_output" type="consumer_output_type"/>
 	</xs:all>
 </xs:complexType>
