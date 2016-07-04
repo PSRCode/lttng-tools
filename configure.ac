@@ -940,6 +940,8 @@ AC_CONFIG_FILES([
 	extras/bindings/swig/Makefile
 	extras/bindings/swig/python/Makefile
 	extras/core-handler/Makefile
+	extras/templates/Makefile
+	extras/templates/session/Makefile
 	src/Makefile
 	src/common/Makefile
 	src/common/kernel-ctl/Makefile
