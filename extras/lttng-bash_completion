@@ -99,7 +99,7 @@ _lttng_cmd_create() {
 	options=$(lttng create --list-options)
 
 	case $prev in
-	--output|-o)
+	--output|-o|--template-path)
 		_filedir -d
 		return
 		;;
