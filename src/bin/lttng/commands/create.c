@@ -765,6 +765,59 @@ static int create_session_from_template(struct config_document *template,
 	config_element_free(temp_element_child);
 	temp_element_child = NULL;
 
+	/* Construct the output/consumer_output/ node*/
+	temp_element_child = temp_element;
+	temp_element = config_element_create("consumer_output", NULL);
+	if (!temp_element) {
+		ERR("Could not create consumer_output node configuration");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	ret = config_element_add_child(temp_element, temp_element_child);
+	if (ret) {
+		ERR("Could not append output data to the consumer_output node configuration");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	config_element_free(temp_element_child);
+	temp_element_child = config_element_create("enabled", "true");
+	if (!temp_element_child) {
+		ERR("Could not create enbaled node configuration");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	ret = config_element_add_child(temp_element, temp_element_child);
+	if (ret) {
+		ERR("Could not append node to the consumer_output node configuration");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	config_element_free(temp_element_child);
+	temp_element_child = NULL;
+
+
+	temp_element_child = temp_element;
+	temp_element = config_element_create("output", NULL);
+	if (!temp_element) {
+		ERR("Could not create output node configuration");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	ret = config_element_add_child(temp_element, temp_element_child);
+	if (ret) {
+		ERR("Could not append output data to the output node configuration");
+		ret = CMD_ERROR;
+		goto error;
+	}
+
+	config_element_free(temp_element_child);
+	temp_element_child = NULL;
+
 
 	/*
 	 * validate and replace the destination node for each session type
@@ -774,27 +827,55 @@ static int create_session_from_template(struct config_document *template,
 	switch (session_type) {
 	case SESSION_NORMAL:
 	case SESSION_LIVE:
-		if (!config_document_element_exist(template, "/sessions/session/output/consumer_output/destination")) {
-			ERR("Invalid template no destination node configuration present");
-			ret = CMD_ERROR;
-			goto error;
-		}
-
-		ret = config_document_replace_element(template, "/sessions/session/output/consumer_output/destination", temp_element);
 		break;
 	case SESSION_SNAPSHOT:
-		if (!config_document_element_exist(template, "/sessions/session/output/snapshot_outputs/output/consumer_output/destination")) {
-			ERR("Invalid template no destination node configuration present");
+		/* construct the output/snapshots_outputs/ */
+		temp_element_child = temp_element;
+		temp_element = config_element_create("snapshot_outputs", NULL);
+		if (!temp_element) {
+			ERR("Could not create snapshot_outputs node configuration");
 			ret = CMD_ERROR;
 			goto error;
 		}
 
-		ret = config_document_replace_element(template, "/sessions/session/output/snapshot_outputs/output/consumer_output/destination", temp_element);
+		ret = config_element_add_child(temp_element, temp_element_child);
+		if (ret) {
+			ERR("Could not append output data to the snapshot_outputs node configuration");
+			ret = CMD_ERROR;
+			goto error;
+		}
+
+		config_element_free(temp_element_child);
+		temp_element_child = NULL;
+
+		temp_element_child = temp_element;
+		temp_element = config_element_create("output", NULL);
+		if (!temp_element) {
+			ERR("Could not create output node configuration");
+			ret = CMD_ERROR;
+			goto error;
+		}
+
+		ret = config_element_add_child(temp_element, temp_element_child);
+		if (ret) {
+			ERR("Could not append output data to the output node configuration");
+			ret = CMD_ERROR;
+			goto error;
+		}
+
+		config_element_free(temp_element_child);
+		temp_element_child = NULL;
 		break;
 	default:
 		ERR("Invalid session type");
 		ret = CMD_UNDEFINED;
 		goto error;
+	}
+
+	if (!config_document_element_exist(template, "/sessions/session/output")) {
+		ret = config_document_insert_element(template, "/sessions/session", temp_element);
+	} else {
+		ret = config_document_replace_element(template, "/sessions/session/output", temp_element);
 	}
 
 	config_element_free(temp_element);
