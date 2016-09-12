@@ -42,9 +42,12 @@ void lttng_load_session_attr_destroy(struct lttng_load_session_attr *attr)
 		free(attr->raw_override_path_url);
 		free(attr->raw_override_ctrl_url);
 		free(attr->raw_override_data_url);
-		free(attr->override_attr.path_url);
-		free(attr->override_attr.ctrl_url);
-		free(attr->override_attr.data_url);
+		if (attr->override_attr) {
+			free(attr->override_attr->path_url);
+			free(attr->override_attr->ctrl_url);
+			free(attr->override_attr->data_url);
+		}
+		free(attr->override_attr);
 		free(attr);
 	}
 }
@@ -84,7 +87,7 @@ const char *lttng_load_session_attr_get_override_path_url(
 {
 	const char *ret = NULL;
 
-	if (attr && attr->override_attr.path_url) {
+	if (attr && attr->override_attr->path_url) {
 		ret = attr->raw_override_path_url;
 	}
 
@@ -96,7 +99,7 @@ const char *lttng_load_session_attr_get_override_ctrl_url(
 {
 	const char *ret = NULL;
 
-	if (attr && attr->override_attr.ctrl_url) {
+	if (attr && attr->override_attr->ctrl_url) {
 		ret = attr->raw_override_ctrl_url;
 	}
 
@@ -108,7 +111,7 @@ const char *lttng_load_session_attr_get_override_data_url(
 {
 	const char *ret = NULL;
 
-	if (attr && attr->override_attr.data_url) {
+	if (attr && attr->override_attr->data_url) {
 		ret = attr->raw_override_data_url;
 	}
 
@@ -120,9 +123,9 @@ const char *lttng_load_session_attr_get_override_url(
 {
 	const char *ret = NULL;
 
-	if (attr && (attr->override_attr.path_url ||
-		(attr->override_attr.ctrl_url &&
-		 attr->override_attr.data_url))) {
+	if (attr && (attr->override_attr->path_url ||
+		(attr->override_attr->ctrl_url &&
+		 attr->override_attr->data_url))) {
 		ret = attr->raw_override_url;
 	}
 
@@ -227,7 +230,11 @@ int lttng_load_session_attr_set_override_path_url(
 		goto end;
 	}
 
-	if (attr->override_attr.ctrl_url || attr->override_attr.data_url) {
+	if (!attr->override_attr) {
+		attr->override_attr = zmalloc(sizeof(struct config_load_session_override_attr));
+	}
+
+	if (attr->override_attr->ctrl_url || attr->override_attr->data_url) {
 		/*
 		 * FIXME: return a more meaningful error.
 		 * Setting a path override after a ctrl or data override make no
@@ -272,11 +279,11 @@ int lttng_load_session_attr_set_override_path_url(
 
 
 	/* Squash old value if any */
-	free(attr->override_attr.path_url);
+	free(attr->override_attr->path_url);
 	free(attr->raw_override_path_url);
 
 	/* Populate the object */
-	attr->override_attr.path_url = url_str;
+	attr->override_attr->path_url = url_str;
 	attr->raw_override_path_url = raw_str;
 
 	url_str = NULL;
@@ -303,7 +310,11 @@ int lttng_load_session_attr_set_override_ctrl_url(
 		goto end;
 	}
 
-	if (attr->override_attr.path_url) {
+	if (!attr->override_attr) {
+		attr->override_attr = zmalloc(sizeof(struct config_load_session_override_attr));
+	}
+
+	if (attr->override_attr->path_url) {
 		/*
 		 * FIXME: return a more meaningful error.
 		 * Setting a ctrl override after a path override make no
@@ -349,11 +360,11 @@ int lttng_load_session_attr_set_override_ctrl_url(
 	}
 
 	/* Squash old value if any */
-	free(attr->override_attr.ctrl_url);
+	free(attr->override_attr->ctrl_url);
 	free(attr->raw_override_ctrl_url);
 
 	/* Populate the object */
-	attr->override_attr.ctrl_url = url_str;
+	attr->override_attr->ctrl_url = url_str;
 	attr->raw_override_ctrl_url = raw_str;
 
 	url_str = NULL;
@@ -381,7 +392,11 @@ int lttng_load_session_attr_set_override_data_url(
 		goto end;
 	}
 
-	if (attr->override_attr.path_url) {
+	if (!attr->override_attr) {
+		attr->override_attr = zmalloc(sizeof(struct config_load_session_override_attr));
+	}
+
+	if (attr->override_attr->path_url) {
 		/*
 		 * FIXME: return a more meaningful error.
 		 * Setting a data override after a path override make no
@@ -427,11 +442,11 @@ int lttng_load_session_attr_set_override_data_url(
 	}
 
 	/* Squash old value if any */
-	free(attr->override_attr.data_url);
+	free(attr->override_attr->data_url);
 	free(attr->raw_override_data_url);
 
 	/* Populate the object */
-	attr->override_attr.data_url = url_str;
+	attr->override_attr->data_url = url_str;
 	attr->raw_override_data_url = raw_str;
 
 	url_str = NULL;
@@ -465,6 +480,9 @@ int lttng_load_session_attr_set_override_url(
 		goto end;
 	}
 
+	if (!attr->override_attr) {
+		attr->override_attr = zmalloc(sizeof(struct config_load_session_override_attr));
+	}
 
 	/*
 	 * FIXME: uri_parse should be able to take as parameter the protocol
@@ -555,18 +573,18 @@ int lttng_load_session_attr_set_override_url(
 		goto end;
 	}
 
-	free(attr->override_attr.path_url);
-	free(attr->override_attr.ctrl_url);
-	free(attr->override_attr.data_url);
+	free(attr->override_attr->path_url);
+	free(attr->override_attr->ctrl_url);
+	free(attr->override_attr->data_url);
 	free(attr->raw_override_url);
 	free(attr->raw_override_path_url);
 	free(attr->raw_override_ctrl_url);
 	free(attr->raw_override_data_url);
 
 
-	attr->override_attr.path_url = path_str;
-	attr->override_attr.ctrl_url = ctrl_str;
-	attr->override_attr.data_url = data_str;
+	attr->override_attr->path_url = path_str;
+	attr->override_attr->ctrl_url = ctrl_str;
+	attr->override_attr->data_url = data_str;
 
 	attr->raw_override_url = raw_url_str;
 	attr->raw_override_path_url = raw_path_str;
@@ -612,7 +630,8 @@ int lttng_load_session(struct lttng_load_session_attr *attr)
 	session_name = attr->session_name[0] != '\0' ?
 			attr->session_name : NULL;
 
-	ret = config_load_session(url, session_name, attr->overwrite, 0);
+	ret = config_load_session(url, session_name, attr->overwrite, 0,
+			attr->override_attr);
 
 end:
 	return ret;
