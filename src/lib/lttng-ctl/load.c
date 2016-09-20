@@ -269,14 +269,12 @@ int lttng_load_session_attr_set_override_path_url(
 		goto end;
 	}
 
-
 	raw_str = strndup(url, PATH_MAX);
 	if (!raw_str) {
 		/* FIXME: return valid error */
 		ret = LTTNG_ERR_INVALID;
 		goto end;
 	}
-
 
 	/* Squash old value if any */
 	free(attr->override_attr->path_url);
@@ -451,7 +449,6 @@ int lttng_load_session_attr_set_override_data_url(
 
 	url_str = NULL;
 	raw_str = NULL;
-
 end:
 	free(raw_str);
 	free(url_str);
@@ -580,7 +577,6 @@ int lttng_load_session_attr_set_override_url(
 	free(attr->raw_override_path_url);
 	free(attr->raw_override_ctrl_url);
 	free(attr->raw_override_data_url);
-
 
 	attr->override_attr->path_url = path_str;
 	attr->override_attr->ctrl_url = ctrl_str;
