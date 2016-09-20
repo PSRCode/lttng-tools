@@ -1259,17 +1259,16 @@ int create_snapshot_session(const char *session_name, xmlNodePtr output_node,
 
 		if (overrides) {
 			if (overrides->path_url) {
-				control_uri = NULL;
-				data_uri = NULL;
+				/* Control/data_uri are null */
 				path = overrides->path_url;
 			} else {
 				if (overrides->ctrl_url) {
+					/* path is null */
 					control_uri = overrides->ctrl_url;
-					path = NULL;
 				}
 				if (overrides->data_url) {
+					/* path is null */
 					data_uri = overrides->data_url;
-					path = NULL;
 				}
 			}
 		} else {
@@ -1376,17 +1375,16 @@ int create_session(const char *name,
 	/* Check for override and apply them */
 	if (overrides) {
 		if (overrides->path_url) {
-			control_uri = NULL;
-			data_uri = NULL;
+			/* control/data_uri are null */;
 			path = overrides->path_url;
 		} else {
 			if (overrides->ctrl_url) {
+				/* path is null */
 				control_uri = overrides->ctrl_url;
-				path = NULL;
 			}
 			if (overrides->data_url) {
+				/* path is null */
 				data_uri = overrides->data_url;
-				path = NULL;
 			}
 		}
 	} else {
