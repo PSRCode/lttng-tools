@@ -239,7 +239,7 @@ int cmd_load(int argc, const char **argv)
 		ret = lttng_load_session_attr_set_override_url(session_attr,
 				opt_override_url);
 		if (ret) {
-			ERR("Url overrides is invalid");
+			ERR("Url override is invalid");
 			goto end;
 		}
 	}
