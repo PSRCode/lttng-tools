@@ -176,14 +176,14 @@ int main(int argc, char **argv)
 	}
 
 	condition_status = lttng_condition_buffer_usage_set_session_name(
-			condition, "my_session");
+			condition, session_name);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
 		printf("error: Could not set session name\n");
 		ret = 1;
 		goto end;
 	}
 	condition_status = lttng_condition_buffer_usage_set_channel_name(
-			condition, "my_ust_channel");
+			condition, channel_name);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
 		printf("error: Could not set channel name\n");
 		ret = 1;
