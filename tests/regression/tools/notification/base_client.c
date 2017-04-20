@@ -102,7 +102,7 @@ int parse_arguments(char **argv) {
 		sscanf(buffer_usage_threshold_value, "%" SCNu64, &threshold_bytes);
 	}
 
-	if (!strcasecmp("ratio", buffer_usage_type_string)) {
+	if (!strcasecmp("ratio", buffer_usage_threshold_type)) {
 		is_threshold_ratio = true;
 		sscanf(buffer_usage_threshold_value, "%lf", &threshold_ratio);
 	}
