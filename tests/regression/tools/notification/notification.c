@@ -31,6 +31,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <inttypes.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <lttng/action/action.h>
 #include <lttng/action/notify.h>
@@ -46,14 +50,60 @@
 
 #include <tap/tap.h>
 
-/* For error.h */
-int lttng_opt_quiet = 1;
-int lttng_opt_verbose = 0;
-int lttng_opt_mi;
+#define NUM_TESTS 104
+int nb_args = 0;
+int named_pipe_args_start = 0;
 
-#define NUM_TESTS 98
+int write_pipe(const char *path, uint8_t data)
+{
+	int ret = 0;
+	int fd = 0;
 
-void test_triggers_buffer_usage_condition(const char *session_name, const char *channel_name, enum lttng_domain_type domain_type, enum lttng_condition_type condition_type)
+	fd = open(path, O_WRONLY | O_NONBLOCK);
+	if (fd < 0) {
+		perror("Could not open consumer control named pipe");
+		goto end;
+	}
+
+	ret = write(fd, &data , sizeof(data));
+	if (ret < 1) {
+		perror("Named pipe write failed");
+		ret = -1;
+		goto end;
+	}
+
+	ret = close(fd);
+	if (ret < 0) {
+		perror("Name pipe closing failed");
+		ret = -1;
+		goto end;
+	}
+end:
+	return ret;
+}
+
+int stop_consumer(const char **argv)
+{
+	int ret = 0;
+	for (int i = named_pipe_args_start; i < nb_args; i++) {
+		ret = write_pipe(argv[i], 49);
+	}
+	return ret;
+}
+
+int resume_consumer(const char **argv)
+{
+	int ret = 0;
+	for (int i = named_pipe_args_start; i < nb_args; i++) {
+		ret = write_pipe(argv[i], 0);
+	}
+	return ret;
+}
+
+void test_triggers_buffer_usage_condition(const char *session_name,
+		const char *channel_name,
+		enum lttng_domain_type domain_type,
+		enum lttng_condition_type condition_type)
 {
 	enum lttng_condition_status condition_status;
 	struct lttng_action *action;
@@ -231,7 +281,7 @@ end:
 	lttng_action_destroy(action);
 }
 
-void test_notification_channel(const char *session_name, const char *channel_name, enum lttng_domain_type domain_type)
+void test_notification_channel(const char *session_name, const char *channel_name, enum lttng_domain_type domain_type, const char **argv)
 {
 	int ret = 0;
 	enum lttng_condition_status condition_status;
@@ -242,9 +292,13 @@ void test_notification_channel(const char *session_name, const char *channel_nam
 	struct lttng_notification_channel *notification_channel = NULL;
 	struct lttng_trigger *trigger = NULL;
 
-	struct lttng_condition *condition = NULL;
+	struct lttng_condition *low_condition = NULL;
+	struct lttng_condition *high_condition = NULL;
 	struct lttng_condition *dummy_invalid_condition = NULL;
 	struct lttng_condition *dummy_condition = NULL;
+
+	double low_ratio = 0.0;
+	double high_ratio = 0.99;
 
 	/* Set-up */
 	action = lttng_action_notify_create();
@@ -292,49 +346,98 @@ void test_notification_channel(const char *session_name, const char *channel_nam
 		fail("Setup error on dummy_condition creation");
 		goto end;
 	}
-	/* Register a low condition with a ratio of 0.0 */
-	condition = lttng_condition_buffer_usage_low_create();
-	if (!condition) {
-		fail("Setup error on condition creation");
-		goto end;
 
+	/* Register a low condition with a ratio */
+	low_condition = lttng_condition_buffer_usage_low_create();
+	if (!low_condition) {
+		fail("Setup error on low_condition creation");
+		goto end;
 	}
 	condition_status = lttng_condition_buffer_usage_set_threshold_ratio(
-			condition, 0.0);
+			low_condition, low_ratio);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fail("Setup error on condition creation");
+		fail("Setup error on low_condition creation");
 		goto end;
 	}
 
 	condition_status = lttng_condition_buffer_usage_set_session_name(
-			condition, session_name);
+			low_condition, session_name);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fail("Setup error on condition creation");
+		fail("Setup error on low_condition creation");
 		goto end;
 	}
 	condition_status = lttng_condition_buffer_usage_set_channel_name(
-			condition, channel_name);
+			low_condition, channel_name);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fail("Setup error on condition creation");
+		fail("Setup error on low_condition creation");
 		goto end;
 	}
 	condition_status = lttng_condition_buffer_usage_set_domain_type(
-			condition, domain_type);
+			low_condition, domain_type);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fail("Setup error on condition creation");
+		fail("Setup error on low_condition creation");
+		goto end;
+
+	}
+
+	/* Register a high condition with a ratio */
+	high_condition = lttng_condition_buffer_usage_high_create();
+	if (!high_condition) {
+		fail("Setup error on high_condition creation");
 		goto end;
 	}
 
-	/* Register the trigger */
-	trigger = lttng_trigger_create(condition, action);
+	condition_status = lttng_condition_buffer_usage_set_threshold_ratio(
+			high_condition, high_ratio);
+	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
+		fail("Setup error on high_condition creation");
+		goto end;
+	}
+
+	condition_status = lttng_condition_buffer_usage_set_session_name(
+			high_condition, session_name);
+	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
+		fail("Setup error on high_condition creation");
+		goto end;
+	}
+	condition_status = lttng_condition_buffer_usage_set_channel_name(
+			high_condition, channel_name);
+	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
+		fail("Setup error on high_condition creation");
+		goto end;
+	}
+	condition_status = lttng_condition_buffer_usage_set_domain_type(
+			high_condition, domain_type);
+	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
+		fail("Setup error on high_condition creation");
+		goto end;
+	}
+
+	/* Register the triggers for low and high condition */
+	trigger = lttng_trigger_create(low_condition, action);
 	if (!trigger) {
-		fail("Setup error on trigger creation");
+		fail("Setup error on low trigger creation");
 		goto end;
 	}
 
 	ret = lttng_register_trigger(trigger);
 	if (ret) {
-		fail("Setup error on trigger registration");
+		fail("Setup error on low trigger registration");
+		goto end;
+	}
+
+	lttng_trigger_destroy(trigger);
+	trigger = NULL;
+
+	trigger = lttng_trigger_create(high_condition, action);
+	if (!trigger) {
+		fail("Setup error on high trigger creation");
+		goto end;
+	}
+
+	ret = lttng_register_trigger(trigger);
+	if (ret) {
+		fail("Setup error on high trigger registration");
 		goto end;
 	}
 
@@ -352,7 +455,7 @@ void test_notification_channel(const char *session_name, const char *channel_nam
 	nc_status = lttng_notification_channel_subscribe(notification_channel, NULL);
 	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_INVALID, "Notification channel subscription is invalid: NON-NULL, NULL");
 
-	nc_status = lttng_notification_channel_subscribe(NULL, condition);
+	nc_status = lttng_notification_channel_subscribe(NULL, low_condition);
 	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_INVALID, "Notification channel subscription is invalid: NULL, NON-NULL");
 
 	nc_status = lttng_notification_channel_subscribe(notification_channel, dummy_invalid_condition);
@@ -364,17 +467,34 @@ void test_notification_channel(const char *session_name, const char *channel_nam
 	nc_status = lttng_notification_channel_unsubscribe(notification_channel, dummy_condition);
 	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_UNKNOWN_CONDITION, "Unsubscribing to an valid unknown condition");
 
-	/* Subscribe a valid condition */
-	nc_status = lttng_notification_channel_subscribe(notification_channel, condition);
+	/* Subscribe a valid low condition */
+	nc_status = lttng_notification_channel_subscribe(notification_channel, low_condition);
 	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK, "Subscribe to condition");
 
-	nc_status = lttng_notification_channel_subscribe(notification_channel, condition);
+	/* Subscribe a valid high condition */
+	nc_status = lttng_notification_channel_subscribe(notification_channel, high_condition);
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK, "Subscribe to condition");
+
+	nc_status = lttng_notification_channel_subscribe(notification_channel, low_condition);
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_ALREADY_SUBSCRIBED, "Subscribe to a condition for which subscription was already done");
+
+	nc_status = lttng_notification_channel_subscribe(notification_channel, high_condition);
 	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_ALREADY_SUBSCRIBED, "Subscribe to a condition for which subscription was already done");
 
 	/* Wait for notification to happen */
 	lttng_start_tracing(session_name);
-	/* Todo replace with active wait on sampling modification */
-	sleep(3);
+	stop_consumer(argv);
+
+	/* Wait for high notification */
+	nc_status = lttng_notification_channel_get_next_notification(notification_channel, &notification);
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK
+			&& notification
+			&& lttng_condition_get_type(lttng_notification_get_condition(notification)) == LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH,
+			"High notification received after intermediary communication");
+	lttng_notification_destroy(notification);
+	notification = NULL;
+
+	resume_consumer(argv);
 	lttng_stop_tracing(session_name);
 
 	/*
@@ -382,38 +502,70 @@ void test_notification_channel(const char *session_name, const char *channel_nam
 	 * waiting for consumption.
 	 */
 
-	nc_status = lttng_notification_channel_unsubscribe(notification_channel, condition);
+	nc_status = lttng_notification_channel_unsubscribe(notification_channel, low_condition);
 	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK, "Unsubscribe with pending notification");
 
-	nc_status = lttng_notification_channel_subscribe(notification_channel, condition);
+	nc_status = lttng_notification_channel_subscribe(notification_channel, low_condition);
 	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK, "subscribe with pending notification");
 
 	nc_status = lttng_notification_channel_get_next_notification(notification_channel, &notification);
-	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK && notification, "Notification received after intermediary communication");
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK
+			&& notification
+			&& lttng_condition_get_type(lttng_notification_get_condition(notification)) == LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW,
+			"Low notification received after intermediary communication");
 	lttng_notification_destroy(notification);
+	notification = NULL;
 
-	/* Wait for notification to happen */
+	/* Stop consumer to force a high notification */
 	lttng_start_tracing(session_name);
-	/* Todo replace with active wait on sampling modification */
-	sleep(5);
+	stop_consumer(argv);
+
+	nc_status = lttng_notification_channel_get_next_notification(notification_channel, &notification);
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK && notification &&
+			lttng_condition_get_type(lttng_notification_get_condition(notification)) == LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH,
+			"High notification received after intermediary communication");
+	lttng_notification_destroy(notification);
+	notification = NULL;
+
+	/* Resume consumer to allow event consumption */
+	resume_consumer(argv);
 	lttng_stop_tracing(session_name);
 
 	nc_status = lttng_notification_channel_get_next_notification(notification_channel, &notification);
-	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK && notification, "Notification received after re-subscription");
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK && notification &&
+			lttng_condition_get_type(lttng_notification_get_condition(notification)) == LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW,
+			"Low notification received after re-subscription");
 	lttng_notification_destroy(notification);
+	notification = NULL;
 
-	nc_status = lttng_notification_channel_unsubscribe(notification_channel, condition);
-	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK, "Unsubscribe with pending notification");
+	/* Stop consumer to force a high notification */
+	lttng_start_tracing(session_name);
+	stop_consumer(argv);
+
+	nc_status = lttng_notification_channel_get_next_notification(notification_channel, &notification);
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK && notification &&
+			lttng_condition_get_type(lttng_notification_get_condition(notification)) == LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH,
+			"High notification");
+	lttng_notification_destroy(notification);
+	notification = NULL;
+
+	/* Resume consumer to allow event consumption */
+	resume_consumer(argv);
+	lttng_stop_tracing(session_name);
+
+	nc_status = lttng_notification_channel_unsubscribe(notification_channel, low_condition);
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK, "Unsubscribe low condition with pending notification");
+	nc_status = lttng_notification_channel_unsubscribe(notification_channel, high_condition);
+	ok(nc_status == LTTNG_NOTIFICATION_CHANNEL_STATUS_OK, "Unsubscribe high condition with pending notification");
 
 end:
 	lttng_notification_channel_destroy(notification_channel);
 	lttng_trigger_destroy(trigger);
 	lttng_action_destroy(action);
-	lttng_condition_destroy(condition);
+	lttng_condition_destroy(low_condition);
 	lttng_condition_destroy(dummy_invalid_condition);
 	lttng_condition_destroy(dummy_condition);
 }
-
 
 int main(int argc, const char *argv[])
 {
@@ -423,10 +575,16 @@ int main(int argc, const char *argv[])
 	enum lttng_domain_type domain_type = LTTNG_DOMAIN_NONE;
 
 	plan_tests(NUM_TESTS);
-	if (argc < 4) {
-		fail("Missing parameter for tests to run %d",argc);
+
+	/* Argument 4 and upward are named pipe location for consumerd control */
+	named_pipe_args_start = 4;
+
+	if (argc < 5) {
+		fail("Missing parameter for tests to run %d", argc);
 		goto error;
 	}
+
+	nb_args = argc;
 
 	session_name = argv[1];
 	channel_name = argv[2];
@@ -449,10 +607,8 @@ int main(int argc, const char *argv[])
 	test_triggers_buffer_usage_condition(session_name, channel_name, domain_type, LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH);
 
 	diag("Test notification channel api for domain %s", domain_type_string);
-	test_notification_channel(session_name, channel_name, domain_type);
-
-	return 0;
+	test_notification_channel(session_name, channel_name, domain_type, argv);
 error:
-	return 1;
+	return exit_status();
 }
 
