@@ -19,23 +19,27 @@ TEST_DESC="Notification"
 
 CURDIR=$(dirname $0)/
 TESTDIR=$CURDIR/../../../
-SESSIOND_BIN="lttng-sessiond"
-RELAYD_BIN="lttng-relayd"
-LTTNG_BIN="lttng"
 
-NR_ITER=100000
-NR_USEC_WAIT=5
-DELAY_USEC=2000000
+#This is needed since the testpoint create a pipe with the consumerd type suffixed
+TESTPOINT_BASE_PATH=$(realpath "$CURDIR/lttng.t_p_n")
+TESTPOINT_PIPE_PATH=$(mktemp -u "${TESTPOINT_BASE_PATH}.XXXXXX")
+TESTPOIT_ARGS="CONSUMER_PAUSE_PIPE_PATH=${TESTPOINT_PIPE_PATH} LTTNG_TESTPOINT_ENABLE=1"
+TESTPOINT=$(realpath ${CURDIR}/.libs/libpause_consumer.so)
+
+
 TESTAPP_PATH="$TESTDIR/utils/testapp"
 TESTAPP_NAME="gen-ust-events"
 TESTAPP_BIN="$TESTAPP_PATH/$TESTAPP_NAME/$TESTAPP_NAME"
+
+NR_ITER=-1
+NR_USEC_WAIT=5
 
 SESSION_NAME="my_session"
 UST_CHANNEL_NAME="my_ust_channel"
 EVENT_NAME="tp:tptest"
 
-NR_NOTIFICATION_EXPECTED=3
-NR_CLIENT_APP=5
+NR_NOTIFICATION_EXPECTED=5
+NR_CLIENT_APP=50
 
 MAX_RETRY_NUMBER_VALIDATE_NOTIFICATION=100
 
@@ -43,9 +47,15 @@ TRACE_PATH=$(mktemp -d)
 
 DIR=$(readlink -f $TESTDIR)
 
-NUM_TESTS=15
+NUM_TESTS=46
 
 source $TESTDIR/utils/utils.sh
+
+# Redefine test binary since we need to ld_preload testpoint
+SESSIOND_BIN=".libs/lttng-sessiond"
+
+consumerd_pipe=()
+file_sync_after_first_event=$(mktemp -u)
 
 # MUST set TESTDIR before calling those functions
 plan_tests $NUM_TESTS
@@ -68,84 +78,146 @@ function start_client {
 	pid=$!
 
 	# Set to cpu zero to force specific sub-buffer-usage
-	taskset -p -c 0 $pid >/dev/null 2&>1
+	taskset -p -c 0 $pid >/dev/null 2>&1
 
 	app_pids+=("$pid")
 }
 
 function wait_for_message ()
 {
-	local message=$1
-	local nr_apps=$2
-	local nr_attempt_recv_notficatyion_validation=0
+	local file_pattern=$1
+	local message=$2
 
-	for (( j = 0; j < $nr_apps; j++ )); do
-		# Check for "error" message
-		grep -q "error" $CURDIR/app_output_file_$j
-		app_error=$?
-		if [ $app_error -eq "0" ] || [ $nr_attempt_recv_notficatyion_validation -gt $MAX_RETRY_NUMBER_VALIDATE_NOTIFICATION ]; then
-			# An error occurred
-			return 1
-		fi
+	for file in $CURDIR/${file_pattern}*; do
+		for (( j = 0; j < ${MAX_RETRY_NUMBER_VALIDATE_NOTIFICATION}; j++ )); do
+			# Check for "error" message
+			grep -q "error:" ${file}
+			app_error=$?
+			if [ $app_error -eq "0" ] ; then
+				# An error occurred
+				fail "Waiting message: error logged see file content: ${message}, ${file}"
+				return 1
+			fi
 
-		grep -q "${message}" $CURDIR/app_output_file_$j
-		if [[ "$?" -ne "0" ]]; then
-			# Lookup failed restart loop
-			nr_attempt_recv_notficatyion_validation+=1
-			sleep 0.5
-			j=0;
+			grep -q "${message}" ${file}
+			if [[ "$?" -ne "0" ]]; then
+				# Lookup failed restart loop
+				sleep 0.5
+				continue
+			fi
+			break
+		done
+		if [[ $j -eq ${MAX_RETRY_NUMBER_VALIDATE_NOTIFICATION} ]]; then
+			fail "Waiting message timeout: ${message}, ${file}"
 		fi
 	done
+	pass "Message received: ${message}"
 	return 0
 }
 
 function print_errors ()
 {
-	local nr_apps=$1
+	local file_pattern=$1
 
-	for (( j = 0; j < $nr_apps; j++ )); do
+	for file in $CURDIR/${file_pattern}*; do
 		# Check for "error" message
-		error_message=$(grep "error:" $CURDIR/app_output_file_$j)
+		error_message=$(grep "error:" ${file})
 		if [[ "${error_message}" -ne "" ]]; then
-			diag "Errors for application $j:"
+			diag "Errors for application ${file}:"
 			diag "${error_message}"
 		fi
 	done
 }
 
-function test_multi_app_low ()
+function comm_consumerd ()
+{
+	local message=$1
+	local pipe=$2
+	echo -ne "${message}" > "${pipe}"
+	return $?
+}
+
+function stop_consumerd ()
+{
+	local pipe=$1
+	comm_consumerd "1" "$pipe"
+	ok $? "Stopping consumption consumerd"
+}
+
+function resume_consumerd ()
+{
+	local pipe=$1
+	comm_consumerd "\0" "$pipe"
+	ok $? "Resuming consumerd"
+}
+
+function test_multi_app ()
 {
 	local app_pids=()
+	local low_output_file_pattern="low_app_output_file_"
+	local high_output_file_pattern="high_app_output_file_"
 
 	# Cleanup
-	rm ${CURDIR}*app_output_file* 2> /dev/null
+	rm ${CURDIR}/${low_output_file_pattern}* 2> /dev/null
+	rm ${CURDIR}/${high_output_file_pattern}* 2> /dev/null
 
 	# Setup
+	LTTNG_SESSIOND_ENV_VARS="LTTNG_TESTPOINT_ENABLE=1 CONSUMER_PAUSE_PIPE_PATH=${TESTPOINT_PIPE_PATH} LD_PRELOAD=${TESTPOINT}"
+	start_lttng_sessiond
+
+	# Start app in infinite loop
+	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT $file_sync_after_first_event &
+	app_pid=$!
+	# Pin to CPU zero to force specific sub buffer usage
+	taskset -p -c 0 $app_pid > /dev/null 2>&1
+
+	# Wait for sync with app
+	while [ ! -f "${file_sync_after_first_event}" ]; do
+		sleep 0.5
+	done
+	rm ${file_sync_after_first_event}
+
+
 	create_lttng_session_ok $SESSION_NAME $TRACE_PATH
 	enable_ust_lttng_channel_ok $SESSION_NAME $UST_CHANNEL_NAME --subbuf-size=4096
 	enable_ust_lttng_event_ok $SESSION_NAME $EVENT_NAME $UST_CHANNEL_NAME
 
-	for (( i = 0; i < $NR_CLIENT_APP; i++ )); do
-		app_output_file=$CURDIR/app_output_file_$i
-		start_client $app_output_file $SESSION_NAME $UST_CHANNEL_NAME LTTNG_DOMAIN_UST LOW RATIO 0.0 $NR_NOTIFICATION_EXPECTED
+	# Fetch consumerd testpoint pipe information
+	# This is needed since the testpoint create a pipe with the consumer type suffixed
+	for f in "$TESTPOINT_BASE_PATH"*; do
+		consumerd_pipe+=("$f")
 	done
 
-	wait_for_message "sync: ready" $NR_CLIENT_APP
+	for (( i = 0; i < $NR_CLIENT_APP; i++ )); do
+		low_app_output_file=$CURDIR/${low_output_file_pattern}${i}
+		high_app_output_file=$CURDIR/${high_output_file_pattern}${i}
+		start_client $low_app_output_file $SESSION_NAME $UST_CHANNEL_NAME LTTNG_DOMAIN_UST LOW RATIO 0.0 $NR_NOTIFICATION_EXPECTED
+		start_client $high_app_output_file $SESSION_NAME $UST_CHANNEL_NAME LTTNG_DOMAIN_UST HIGH RATIO 0.420 $NR_NOTIFICATION_EXPECTED
+	done
+
+	wait_for_message "${low_output_file_pattern}" "sync: ready"
+	wait_for_message "${high_output_file_pattern}" "sync: ready"
 
 	# Test notification reception
 	for (( i = 0; i < $NR_NOTIFICATION_EXPECTED; i++ )); do
-		start_lttng_tracing_ok $SESSION_NAME
-		$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT >/dev/null 2>&1
-		# Ensure that the sampling reset the last trigger state
-		# and that a sampling as occurred.
-		# TODO: real synchronization point
-		sleep 1.5
 
+		# Stop consumerd consumption to force high notification
+		start_lttng_tracing_ok $SESSION_NAME
+		for pipe in "${consumerd_pipe[@]}"; do
+			stop_consumerd "${pipe}"
+		done
+
+		wait_for_message "${high_output_file_pattern}" "notification: high $i"
+
+		# Resume consumerd
+		for pipe in "${consumerd_pipe[@]}"; do
+			resume_consumerd "${pipe}"
+		done
 		# Stop tracing forcing full buffer consumption
 		stop_lttng_tracing $SESSION_NAME
 
 		# Check for notifications reception
-		wait_for_message "notification: low $i" $NR_CLIENT_APP
+		wait_for_message "${low_output_file_pattern}" "notification: low $i"
 		ret=$?
 		ok $ret "Notifications $i received"
 		if [[ $ret -ne "0" ]]; then
@@ -154,21 +226,35 @@ function test_multi_app_low ()
 		fi
 	done
 
-	wait_for_message "exit: 0" $NR_CLIENT_APP
+	wait_for_message "${low_output_file_pattern}" "exit: 0"
 	ret=$?
-	ok $ret "Application terminated normally"
-	print_errors $NR_CLIENT_APP
-
-	# Run app in background
+	ok $ret "Application for low notification terminated normally"
 	if [[ $ret -eq "0" ]]; then
-		rm ${CURDIR}*app_output_file*
+		rm ${CURDIR}/${low_output_file_pattern}* 2> /dev/null
+	else
+		# Keep the file
+		print_errors "${low_output_file_pattern}"
 	fi
+
+	wait_for_message "${high_output_file_pattern}" "exit: 0"
+	ret=$?
+	ok $ret "Application for high notification terminated normally"
+	if [[ $ret -eq "0" ]]; then
+		rm ${CURDIR}/${high_output_file_pattern}* 2> /dev/null
+	else
+		# Keep the file
+		print_errors "${high_output_file_pattern}"
+	fi
+
+	kill -9 $app_pid
+	wait $app_pid 2> /dev/null
+
+	stop_lttng_sessiond
 }
 
-start_lttng_sessiond
 
 TESTS=(
-	test_multi_app_low
+	test_multi_app
 )
 
 for fct_test in ${TESTS[@]};
@@ -184,4 +270,3 @@ do
 	rm -rf $TRACE_PATH
 done
 
-stop_lttng_sessiond

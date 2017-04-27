@@ -346,16 +346,40 @@ int handle_condition(
 	if (is_threshold_ratio) {
 		lttng_evaluation_buffer_usage_get_usage_ratio(
 				evaluation, &buffer_usage_ratio);
-		/* Expect notification to have the previous set ratio */
-		if (buffer_usage_ratio != threshold_ratio) {
+		switch (condition_type) {
+		case LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW:
+			if (buffer_usage_ratio > threshold_ratio) {
+				ret = 1;
+				goto end;
+			}
+			break;
+		case LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH:
+			if (buffer_usage_ratio < threshold_ratio) {
+				ret = 1;
+				goto end;
+			}
+			break;
+		default:
 			ret = 1;
 			goto end;
 		}
 	} else {
 		lttng_evaluation_buffer_usage_get_usage(
 				evaluation, &buffer_usage_bytes);
-		/* Expect notification to have the previous set bytes */
-		if (buffer_usage_bytes != threshold_bytes) {
+		switch (condition_type) {
+		case LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW:
+			if (buffer_usage_bytes > threshold_bytes) {
+				ret = 1;
+				goto end;
+			}
+			break;
+		case LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH:
+			if (buffer_usage_bytes < threshold_bytes) {
+				ret = 1;
+				goto end;
+			}
+			break;
+		default:
 			ret = 1;
 			goto end;
 		}
