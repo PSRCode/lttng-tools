@@ -206,6 +206,13 @@ static int kernel_poll_pipe[2] = { -1, -1 };
 static int thread_quit_pipe[2] = { -1, -1 };
 
 /*
+ * This pipe is used to inform the ust_thread_manage_notify thread that the
+ * thread_dispatch_ust_registration thread is terminated. Allowing the
+ * ust_thread_manage_notify to perform its termination.
+ */
+int thread_dispatch_ust_registration_teardown_complete_pipe[2] = { -1, -1 };
+
+/*
  * This pipe is used to inform the thread managing application communication
  * that a command is queued and ready to be processed.
  */
@@ -477,6 +484,11 @@ static int init_thread_quit_pipe(void)
 	return __init_thread_quit_pipe(thread_quit_pipe);
 }
 
+static int init_thread_dispatch_ust_registration_teardown_complete_pipe(void)
+{
+	return __init_thread_quit_pipe(thread_dispatch_ust_registration_teardown_complete_pipe);
+}
+
 /*
  * Stop all threads by closing the thread quit pipe.
  */
@@ -623,6 +635,7 @@ static void sessiond_cleanup(void)
 	 * since we are now called.
 	 */
 	utils_close_pipe(thread_quit_pipe);
+	utils_close_pipe(thread_dispatch_ust_registration_teardown_complete_pipe);
 
 	/*
 	 * If opt_pidfile is undefined, the default file will be wiped when
@@ -2128,6 +2141,11 @@ static void *thread_dispatch_ust_registration(void *data)
 	err = 0;
 
 error:
+	ret = notify_thread_pipe(thread_dispatch_ust_registration_teardown_complete_pipe[1]);
+	if (ret < 0) {
+		ERR("write error on thread thread_dispatch_ust_registration_teardown_complete_pipe");
+	}
+
 	/* Clean up wait queue. */
 	cds_list_for_each_entry_safe(wait_node, tmp_wait_node,
 			&wait_queue.head, head) {
@@ -5711,8 +5729,12 @@ int main(int argc, char **argv)
 		goto exit_ht_cleanup;
 	}
 
-	/* Create thread quit pipe */
 	if (init_thread_quit_pipe()) {
+		retval = -1;
+		goto exit_init_data;
+	}
+
+	if (init_thread_dispatch_ust_registration_teardown_complete_pipe()) {
 		retval = -1;
 		goto exit_init_data;
 	}

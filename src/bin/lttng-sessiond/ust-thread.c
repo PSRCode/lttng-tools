@@ -27,6 +27,11 @@
 #include "health-sessiond.h"
 #include "testpoint.h"
 
+static
+int thread_should_quit(int pollfd, uint32_t revents)
+{
+	return (pollfd == thread_dispatch_ust_registration_teardown_complete_pipe[0] && (revents & LPOLLIN)) ? 1 : 0;
+}
 
 static
 void notify_sock_unregister_all()
@@ -64,9 +69,14 @@ void *ust_thread_manage_notify(void *data)
 
 	health_code_update();
 
-	ret = sessiond_set_thread_pollset(&events, 2);
+	ret = lttng_poll_create(&events, 2, LTTNG_CLOEXEC);
 	if (ret < 0) {
 		goto error_poll_create;
+	}
+
+	ret = lttng_poll_add(&events, thread_dispatch_ust_registration_teardown_complete_pipe[0], LPOLLIN | LPOLLERR);
+	if (ret < 0) {
+		goto error;
 	}
 
 	/* Add notify pipe to the pollset. */
@@ -112,9 +122,7 @@ restart:
 				continue;
 			}
 
-			/* Thread quit pipe has been closed. Killing thread. */
-			ret = sessiond_check_thread_quit_pipe(pollfd, revents);
-			if (ret) {
+			if (thread_should_quit(pollfd, revents)) {
 				err = 0;
 				goto exit;
 			}
