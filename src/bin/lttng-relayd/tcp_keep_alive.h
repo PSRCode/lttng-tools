@@ -18,8 +18,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+int tcp_keep_alive_init(void);
+int socket_apply_keep_alive_config(int socket_fd);
 
-int tcp_keepalive_get_settings(void);
-int tcp_keepalive_setsockopt(int socket_fd);
-
-#endif /* RELAYD_UTILS_H */
+#endif /* RELAYD_TCP_KEEP_ALIVE_H */

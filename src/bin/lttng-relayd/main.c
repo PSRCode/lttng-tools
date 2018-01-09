@@ -901,7 +901,7 @@ restart:
 					goto error;
 				}
 
-				ret = tcp_keepalive_setsockopt(newsock->fd);
+				ret = socket_apply_keep_alive_config(newsock->fd);
 				if (ret < 0) {
 					PERROR("setsockopt tcp_keep_alive");
 					lttcomm_destroy_sock(newsock);
@@ -2764,7 +2764,8 @@ int main(int argc, char **argv)
 		goto exit_options;
 	}
 
-	if (tcp_keepalive_get_settings()) {
+
+	if(tcp_keep_alive_init()){
 		retval = -1;
 		goto exit_options;
 	}
