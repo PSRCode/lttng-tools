@@ -170,28 +170,36 @@ ENVIRONMENT VARIABLES
     mechanism is OS specific.
     See tcp(7) tcp_keepalive_* for more information.
 
+NOTE: Supported on Linux and Solaris only.
+
 `LTTNG_RELAYD_TCP_KEEP_ALIVE_IDLE_TIME`::
     The number of seconds a connection needs to be idle before TCP begins
     sending out keep-alive probes.
     See tcp(7) tcp_keepalive_time or tcp_keepalive_interval on Solaris 11.
-    A value of 0 lets the operating system manage this parameter (default).
-NOTE:
-    On Solaris the accepted values are: 0, [10,864000].
+    A value of 0 or -1 lets the operating system manage this parameter (default).
+
+NOTE: On Solaris 11 the accepted values are: 0, [10,864000].
 
 `LTTNG_RELAYD_TCP_KEEP_ALIVE_MAX_PROBE_COUNT`::
     The maximum number of TCP keep-alive probes to send before giving up and
     killing the connection if no response is obtained from the other end.
     See tcp(7) tcp_keepalive_probes.
-    A value of 0 lets the operating system manage this parameter (default).
+    A value of 0 or -1 lets the operating system manage this parameter (default).
 
 NOTE: Not supported on Solaris.
 
 `LTTNG_RELAYD_TCP_KEEP_ALIVE_PROBE_INTERVAL.`::
     The number of seconds between TCP keep-alive probes.
     See tcp(7) tcp_keepalive_intvl.
-    A value of 0 lets the operating system manage this parameter (default).
+    A value of 0 or -1 lets the operating system manage this parameter (default).
 
 NOTE: Not supported on Solaris.
+
+`LTTNG_RELAYD_TCP_KEEP_ALIVE_ABORT_THRESHOLD`
+   This variable is only effective on the Solaris 11 platform.
+   The time threshold to abort a TCP connection after the keepalive probing mechanism has failed.
+
+NOTE: Supported on Solaris 11 only.
 
 FILES
 -----
