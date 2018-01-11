@@ -33,19 +33,31 @@
 #define SOLARIS_ABORT_THRESHOLD_MAX_S 480 /* 8 minutes */
 
 /* Per-platform definition of TCP socket option */
-#ifdef __sun__
-#define COMPAT_SOL_TCP IPPROTO_TCP /* Solaris does not support SOL_TCP */
-#ifdef TCP_KEEPALIVE_THRESHOLD
-#define COMPAT_TCP_KEEPIDLE TCP_KEEPALIVE_THRESHOLD
-#endif /* TCP_KEEPALIVE_THRESHOLD */
-#ifdef TCP_KEEPALIVE_THRESHOLD
-#define COMPAT_TCP_ABORT_THRESHOLD TCP_KEEPALIVE_ABORT_THRESHOLD
-#endif /* TCP_KEEPALIVE_THRESHOLD */
-#else
-#define COMPAT_TCP_ABORT_THRESHOLD 0 /* Does not exists */
+#if defined (__linux__)
+#define COMPAT_TCP_ABORT_THRESHOLD 0 /* Does not exists on linux */
 #define COMPAT_TCP_KEEPIDLE TCP_KEEPIDLE
 #define COMPAT_SOL_TCP SOL_TCP
-#endif /* __sun__ */
+
+#elif defined (__sun__) /* ! defined (__linux__) */
+#define COMPAT_SOL_TCP IPPROTO_TCP /* Solaris does not support SOL_TCP */
+
+#ifdef TCP_KEEPALIVE_THRESHOLD
+#define COMPAT_TCP_KEEPIDLE TCP_KEEPALIVE_THRESHOLD
+#else /* ! defined (TCP_KEEPALIVE_THRESHOLD) */
+#define COMPAT_TCP_KEEPIDLE 0
+#endif /* TCP_KEEPALIVE_THRESHOLD */
+
+#ifdef TCP_KEEPALIVE_ABORT_THRESHOLD
+#define COMPAT_TCP_ABORT_THRESHOLD TCP_KEEPALIVE_ABORT_THRESHOLD
+#else /* ! defined (TCP_KEEPALIVE_ABORT_THRESHOLD) */
+#define COMPAT_TCP_ABORT_THRESHOLD 0
+#endif /* TCP_KEEPALIVE_ABORT_THRESHOLD */
+
+#else /* ! defined (__linux__) && ! defined (__sun__) */
+#define COMPAT_TCP_ABORT_THRESHOLD 0
+#define COMPAT_TCP_KEEPIDLE 0
+#define COMPAT_SOL_TCP 0
+#endif /* ! defined (__linux__) && ! defined (__sun__) */
 
 struct tcp_keep_alive_support {
 	/* TCP keep-alive is supported by this platform. */
@@ -200,15 +212,26 @@ static int tcp_keep_alive_idle_time_modifier(int value)
 end:
 	return ret;
 }
-#else
+#else /* ! defined(__sun__) */
 static int tcp_keep_alive_idle_time_modifier(int value)
 {
 	return value;
 }
-#endif /* __sun__ */
+#endif /* ! defined(__sun__) */
 
 /* Per-platform support of tcp_keep_alive functionality. */
-#ifdef __sun__
+#if defined (__linux__)
+static
+void tcp_keep_alive_init_support(struct tcp_keep_alive_support *support)
+{
+	support->supported = true;
+	support->idle_time_supported = true;
+	support->probe_interval_supported = true;
+	support->max_probe_count_supported = true;
+	/* Solaris specific */
+	support->abort_threshold_supported = false;
+}
+#elif defined(__sun__) /* ! defined (__linux__) */
 static
 void tcp_keep_alive_init_support(struct tcp_keep_alive_support *support)
 {
@@ -236,18 +259,20 @@ void tcp_keep_alive_init_support(struct tcp_keep_alive_support *support)
 	support->abort_threshold_supported = false;
 #endif /* TCP_KEEPALIVE_THRESHOLD */
 }
-#else
+#else /* ! defined(__sun__) && ! defined(__linux__) */
+/* Not supported */
 static
 void tcp_keep_alive_init_support(struct tcp_keep_alive_support *support)
 {
-	support->supported = true;
-	support->idle_time_supported = true;
-	support->probe_interval_supported = true;
-	support->max_probe_count_supported = true;
+	support->supported = false;
+	support->idle_time_supported = false;
+	support->probe_interval_supported = false;
+	support->max_probe_count_supported = false;
 	support->abort_threshold_supported = false;
 }
-#endif /* (__sun__) */
+#endif /* ! defined(__sun__) && ! defined(__linux__) */
 
+#ifdef __sun__
 /*
  * Sun specific modifier for abort threshold.
  * Return -2 on error.
@@ -294,6 +319,13 @@ static int tcp_keep_alive_abort_threshold_modifier(int value)
 end:
 	return ret;
 }
+#else
+static int tcp_keep_alive_abort_threshold_modifier(int value)
+{
+	return value;
+}
+#endif /* defined (__sun__) */
+
 
 
 /* Retrieve settings from env vars and check/warn if supported by platform. */
