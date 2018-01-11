@@ -34,12 +34,16 @@
 
 /* Per-platform definition of TCP socket option */
 #if defined (__linux__)
+#define COMPAT_SOCKET_LEVEL SOL_TCP
+#define COMPAT_TCP_LEVEL SOL_TCP
 #define COMPAT_TCP_ABORT_THRESHOLD 0 /* Does not exists on linux */
 #define COMPAT_TCP_KEEPIDLE TCP_KEEPIDLE
-#define COMPAT_SOL_TCP SOL_TCP
+#define COMPAT_TCP_KEEPINTVL TCP_KEEPINTVL
+#define COMPAT_TCP_KEEPCNT TCP_KEEPCNT
 
 #elif defined (__sun__) /* ! defined (__linux__) */
-#define COMPAT_SOL_TCP IPPROTO_TCP /* Solaris does not support SOL_TCP */
+#define COMPAT_SOCKET_LEVEL SOL_SOCKET
+#define COMPAT_TCP_LEVEL IPPROTO_TCP
 
 #ifdef TCP_KEEPALIVE_THRESHOLD
 #define COMPAT_TCP_KEEPIDLE TCP_KEEPALIVE_THRESHOLD
@@ -53,10 +57,16 @@
 #define COMPAT_TCP_ABORT_THRESHOLD 0
 #endif /* TCP_KEEPALIVE_ABORT_THRESHOLD */
 
+#define COMPAT_TCP_KEEPINTVL 0 /* Does not exists on sun */
+#define COMPAT_TCP_KEEPCNT 0 /* Does not exists on sun */
+
 #else /* ! defined (__linux__) && ! defined (__sun__) */
+#define COMPAT_SOCKET_LEVEL 0
+#define COMPAT_TCP_LEVEL 0
 #define COMPAT_TCP_ABORT_THRESHOLD 0
 #define COMPAT_TCP_KEEPIDLE 0
-#define COMPAT_SOL_TCP 0
+#define COMPAT_TCP_KEEPINTVL 0
+#define COMPAT_TCP_KEEPCNT 0
 #endif /* ! defined (__linux__) && ! defined (__sun__) */
 
 struct tcp_keep_alive_support {
@@ -110,7 +120,7 @@ static struct tcp_keep_alive_config config = {
 	.idle_time = 0,
 	.probe_interval = 0,
 	.max_probe_count = 0,
-	.abort_threshold = 0
+	.abort_threshold = -1
 };
 
 static struct tcp_keep_alive_support support = {
@@ -473,7 +483,7 @@ int socket_apply_keep_alive_config(int socket_fd)
 		goto end;
 	}
 
-	ret = setsockopt(socket_fd, COMPAT_SOL_TCP, SO_KEEPALIVE, &val,
+	ret = setsockopt(socket_fd, COMPAT_SOCKET_LEVEL, SO_KEEPALIVE, &val,
 			sizeof(val));
 	if (ret < 0) {
 		PERROR("setsockopt so_keepalive");
@@ -482,7 +492,7 @@ int socket_apply_keep_alive_config(int socket_fd)
 
 	/* TCP keep-alive idle time */
 	if (support.idle_time_supported && config.idle_time > 0) {
-		ret = setsockopt(socket_fd, COMPAT_SOL_TCP, COMPAT_TCP_KEEPIDLE, &config.idle_time,
+		ret = setsockopt(socket_fd, COMPAT_TCP_LEVEL, COMPAT_TCP_KEEPIDLE, &config.idle_time,
 				sizeof(config.idle_time));
 		if (ret < 0) {
 			PERROR("setsockopt TCP_KEEPIDLE");
@@ -491,7 +501,7 @@ int socket_apply_keep_alive_config(int socket_fd)
 	}
 	/* TCP keep-alive probe interval */
 	if (support.probe_interval_supported && config.probe_interval > 0) {
-		ret = setsockopt(socket_fd, COMPAT_SOL_TCP, TCP_KEEPINTVL, &config.probe_interval,
+		ret = setsockopt(socket_fd, COMPAT_TCP_LEVEL, COMPAT_TCP_KEEPINTVL, &config.probe_interval,
 				sizeof(config.probe_interval));
 		if (ret < 0) {
 			PERROR("setsockopt TCP_KEEPINTVL");
@@ -501,7 +511,7 @@ int socket_apply_keep_alive_config(int socket_fd)
 
 	/* TCP keep-alive max probe count */
 	if (support.max_probe_count_supported && config.max_probe_count > 0) {
-		ret = setsockopt(socket_fd, COMPAT_SOL_TCP, TCP_KEEPCNT, &config.max_probe_count,
+		ret = setsockopt(socket_fd, COMPAT_TCP_LEVEL, COMPAT_TCP_KEEPCNT, &config.max_probe_count,
 				sizeof(config.max_probe_count));
 		if (ret < 0) {
 			PERROR("setsockopt TCP_KEEPCNT");
@@ -511,7 +521,7 @@ int socket_apply_keep_alive_config(int socket_fd)
 
 	/* TCP keep-alive abort threshold */
 	if (support.abort_threshold_supported && config.abort_threshold > -1) {
-		ret = setsockopt(socket_fd, COMPAT_SOL_TCP, COMPAT_TCP_ABORT_THRESHOLD, &config.max_probe_count,
+		ret = setsockopt(socket_fd, COMPAT_TCP_LEVEL, COMPAT_TCP_ABORT_THRESHOLD, &config.abort_threshold,
 				sizeof(config.max_probe_count));
 		if (ret < 0) {
 			PERROR("setsockopt TCP_KEEPALIVE_ABORT_THRESHOLD");
