@@ -24,12 +24,13 @@
 #include <common/compat/getenv.h>
 #include <common/time.h>
 #include <common/defaults.h>
+#include <common/config/session-config.h>
 
 #include "tcp_keep_alive.h"
 
 #define SOLARIS_IDLE_TIME_MIN_S 10
 #define SOLARIS_IDLE_TIME_MAX_S 864000 /* 10 days */
-#define SOLARIS_ABORT_THRESHOLD_MIN_S 0
+#define SOLARIS_ABORT_THRESHOLD_MIN_S 1
 #define SOLARIS_ABORT_THRESHOLD_MAX_S 480 /* 8 minutes */
 
 /* Per-platform definition of TCP socket option */
@@ -93,7 +94,7 @@ struct tcp_keep_alive_support {
 struct tcp_keep_alive_config {
 	bool initialized;
 	/* Maps to the environment variable defined
-	 * by LTTNG_RELAYD_TCP_KEEPALIVE_ENV
+	 * by LTTNG_RELAYD_TCP_KEEP_ALIVE_ENV
 	 */
 	bool enabled;
 	/* Maps to the environment variable defined
@@ -117,9 +118,9 @@ struct tcp_keep_alive_config {
 static struct tcp_keep_alive_config config = {
 	.initialized = false,
 	.enabled = false,
-	.idle_time = 0,
-	.probe_interval = 0,
-	.max_probe_count = 0,
+	.idle_time = -1,
+	.probe_interval = -1,
+	.max_probe_count = -1,
 	.abort_threshold = -1
 };
 
@@ -299,9 +300,13 @@ static int tcp_keep_alive_abort_threshold_modifier(int value)
 	}
 
 	/*
-	 * Additional constraints for Solaris.
+	 * Additional constraints for Solaris 11.
 	 * Between 0 and 8 minutes.
 	 * https://docs.oracle.com/cd/E19120-01/open.solaris/819-2724/fsvdh/index.html
+	 * Restrict from 1 seconds to 8 minutes sice the 0 value goes against
+	 * the purpose of dead peers detection by never timing out when probing.
+	 * It does NOT mean that the connection timeout immediately.
+	 * (Make no sense but was tested, validated and match the doc).
 	 */
 	if ((value < SOLARIS_ABORT_THRESHOLD_MIN_S || value > SOLARIS_ABORT_THRESHOLD_MAX_S)) {
 		ERR("%s must be comprised between %d and %d inclusively on Solaris.",
@@ -345,25 +350,35 @@ int tcp_keep_alive_init_config(struct tcp_keep_alive_support *support, struct tc
 	int ret;
 	const char *value;
 
+	/* config is already defined with default value */
 	config->initialized = true;
 
 	value = lttng_secure_getenv(DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_ENV);
-	if (value && !support->supported) {
-		WARN("Using per-socket TCP Keep-alive mechanism is not supported by this platform. Ignoring the %s environment variable.",
-			DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_ENV);
+	if (!support->supported) {
+		if (value) {
+			WARN("Using per-socket TCP Keep-alive mechanism is not supported by this platform. Ignoring the %s environment variable.",
+				DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_ENV);
+		}
 		config->enabled = false;
-	} else if (value && !strcmp(value, "1")) {
-		config->enabled = true;
-		DBG(DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_ENV " enabled");
-	} else {
-		config->enabled = false;
+	} else if (value) {
+		ret = config_parse_value(value);
+		if (ret < 0 || ret > 1) {
+			ERR("Invalid value for %s", DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_ENV);
+			ret = 1;
+			goto error;
+		}
+		config->enabled = ret;
 	}
+	DBG("TCP keep-alive mechanism %s", config->enabled ? "enabled": "disabled");
 
 	/* Get value for tcp_keepalive_time in seconds*/
 	value = lttng_secure_getenv(DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_IDLE_TIME_ENV);
-	if (value && !support->idle_time_supported) {
-		WARN("Overriding the TCP keep-alive idle time threshold per-socket is not supported by this platform. Ignoring the %s environment variable.",
+	if (!support->idle_time_supported) {
+		if (value) {
+			WARN("Overriding the TCP keep-alive idle time threshold per-socket is not supported by this platform. Ignoring the %s environment variable.",
 				DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_IDLE_TIME_ENV);
+		}
+		config->idle_time = -1;
 	} else if (value) {
 		int idle_time_platform;
 		int idle_time_seconds;;
@@ -387,9 +402,12 @@ int tcp_keep_alive_init_config(struct tcp_keep_alive_support *support, struct tc
 
 	/* Get value for tcp_keepalive_intvl in seconds */
 	value = lttng_secure_getenv(DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_PROBE_INTERVAL_ENV);
-	if (value && !support->probe_interval_supported) {
-		WARN("Overriding the TCP keep-alive probe interval time per-socket is not supported by this platform. Ignoring the %s environment variable.",
+	if (!support->probe_interval_supported) {
+		if (value) {
+			WARN("Overriding the TCP keep-alive probe interval time per-socket is not supported by this platform. Ignoring the %s environment variable.",
 				DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_PROBE_INTERVAL_ENV);
+		}
+		config->probe_interval=-1;
 	} else if (value) {
 		int probe_interval;
 		probe_interval = tcp_keep_alive_string_to_pos_int_parser(DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_PROBE_INTERVAL_ENV, value);
@@ -405,9 +423,12 @@ int tcp_keep_alive_init_config(struct tcp_keep_alive_support *support, struct tc
 
 	/* Get value for tcp_keepalive_probes */
 	value = lttng_secure_getenv(DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_MAX_PROBE_COUNT_ENV);
-	if (value && !support->max_probe_count_supported) {
-		WARN("Overriding the TCP keep-alive maximum probe count per-socket is not supported by this platform. Ignoring the %s environment variable.",
-				DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_MAX_PROBE_COUNT_ENV);
+	if (!support->max_probe_count_supported) {
+		if (value) {
+			WARN("Overriding the TCP keep-alive maximum probe count per-socket is not supported by this platform. Ignoring the %s environment variable.",
+				 DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_MAX_PROBE_COUNT_ENV);
+		}
+		config->max_probe_count = -1;
 	} else if (value) {
 		int max_probe_count;
 		max_probe_count = tcp_keep_alive_string_to_pos_int_parser(
@@ -425,9 +446,12 @@ int tcp_keep_alive_init_config(struct tcp_keep_alive_support *support, struct tc
 
 	/* Get value for tcp_keepalive_abort_interval*/
 	value = lttng_secure_getenv(DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_ABORT_THRESHOLD_ENV);
-	if (value && !support->abort_threshold_supported) {
-		WARN("Overriding the TCP keep-alive abort threshold per-socket is not supported by this platform. Ignoring the %s environment variable.",
+	if (!support->abort_threshold_supported) {
+		if (value) {
+			WARN("Overriding the TCP keep-alive abort threshold per-socket is not supported by this platform. Ignoring the %s environment variable.",
 				DEFAULT_LTTNG_RELAYD_TCP_KEEP_ALIVE_ABORT_THRESHOLD_ENV);
+		}
+		config->abort_threshold = -1;
 	} else if (value) {
 		int abort_threshold_platform;
 		int abort_threshold_seconds;
@@ -520,7 +544,7 @@ int socket_apply_keep_alive_config(int socket_fd)
 	}
 
 	/* TCP keep-alive abort threshold */
-	if (support.abort_threshold_supported && config.abort_threshold > -1) {
+	if (support.abort_threshold_supported && config.abort_threshold > 0) {
 		ret = setsockopt(socket_fd, COMPAT_TCP_LEVEL, COMPAT_TCP_ABORT_THRESHOLD, &config.abort_threshold,
 				sizeof(config.max_probe_count));
 		if (ret < 0) {
