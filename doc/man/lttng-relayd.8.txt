@@ -163,43 +163,48 @@ ENVIRONMENT VARIABLES
     Path to relay daemon health's socket.
 
 `LTTNG_RELAYD_TCP_KEEP_ALIVE`::
-    Set to 1 to enable the use of tcp keep-alive.
-    The tcp keepalive mechanism allows the detection of dead peers
+    The TCP keep-alive mechanism allows the detection of dead peers
     (lttng-sessiond) in cases of unclean termination (e.g hard reset) of a peer.
-    Tcp keepalive is disabled by default. Default behavior of the tcp keepalive
-    mechanism is OS specific.
-    See tcp(7) tcp_keepalive_* for more information.
 
-NOTE: Supported on Linux and Solaris only.
+    Accepted value for enabling: yes, true, on, 1
+    Accepted value for disabling: no, false, off, 0
+    Default: disabled
+
+    Supported on Linux and Solaris only.
+    Default behaviour of the TCP keep-alive mechanism is OS specific. 
+    See man:tcp(7) tcp_keepalive_* for more information.
 
 `LTTNG_RELAYD_TCP_KEEP_ALIVE_IDLE_TIME`::
     The number of seconds a connection needs to be idle before TCP begins
     sending out keep-alive probes.
-    See tcp(7) tcp_keepalive_time or tcp_keepalive_interval on Solaris 11.
-    A value of 0 or -1 lets the operating system manage this parameter (default).
+    A value of 0 or -1 uses the value of the operating system (default).
 
-NOTE: On Solaris 11 the accepted values are: 0, [10,864000].
+    Supported on Linux and Solaris 11 only.
+    On Solaris 11 the accepted values are: -1, 0, [10,864000].
+    See man:tcp(7) tcp_keepalive_time or tcp_keepalive_interval on Solaris 11.
 
 `LTTNG_RELAYD_TCP_KEEP_ALIVE_MAX_PROBE_COUNT`::
     The maximum number of TCP keep-alive probes to send before giving up and
     killing the connection if no response is obtained from the other end.
-    See tcp(7) tcp_keepalive_probes.
-    A value of 0 or -1 lets the operating system manage this parameter (default).
+    A value of 0 or -1 uses the value of the operating system (default).
 
-NOTE: Not supported on Solaris.
+    Supported on Linux only.
+    See man:tcp(7) tcp_keepalive_probes.
 
 `LTTNG_RELAYD_TCP_KEEP_ALIVE_PROBE_INTERVAL.`::
     The number of seconds between TCP keep-alive probes.
-    See tcp(7) tcp_keepalive_intvl.
-    A value of 0 or -1 lets the operating system manage this parameter (default).
+    A value of 0 or -1 uses the value of the operating system (default).
 
-NOTE: Not supported on Solaris.
+    Supported on Linux only.
+    See man:tcp(7) tcp_keepalive_intvl.
 
-`LTTNG_RELAYD_TCP_KEEP_ALIVE_ABORT_THRESHOLD`
-   This variable is only effective on the Solaris 11 platform.
-   The time threshold to abort a TCP connection after the keepalive probing mechanism has failed.
+`LTTNG_RELAYD_TCP_KEEP_ALIVE_ABORT_THRESHOLD`::
+   The time threshold to abort a TCP connection after the keep-alive probing
+   mechanism has failed. A value of 0 or -1 uses the value of the operating
+   system (default).
 
-NOTE: Supported on Solaris 11 only.
+   Supported on Solaris 11 only.
+   See man:tcp(7) tcp_keepalive_abort_threshold.
 
 FILES
 -----
