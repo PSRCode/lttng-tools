@@ -37,6 +37,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/un.h>
+#include <stdbool.h>
 
 #include "inet.h"
 #include "inet6.h"
@@ -194,6 +195,7 @@ struct lttcomm_sockaddr {
 
 struct lttcomm_sock {
 	int32_t fd;
+	bool non_blocking;
 	enum lttcomm_sock_proto proto;
 	struct lttcomm_sockaddr sockaddr;
 	const struct lttcomm_proto_ops *ops;
