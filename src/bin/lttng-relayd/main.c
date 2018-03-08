@@ -2595,6 +2595,7 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 	char data_buffer[chunk_size];
 	bool partial_recv = false;
 	bool new_stream = false, close_requested = false;
+	uint64_t left_to_receive = state->left_to_receive;
 	struct relay_session *session;
 
 	stream = stream_get_by_id(state->header.stream_id);
@@ -2610,7 +2611,7 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 
 	DBG3("Receiving data for stream id %" PRIu64 " seqnum %" PRIu64 ", %" PRIu64" bytes received, %" PRIu64 " bytes left to receive",
 			state->header.stream_id, state->header.net_seq_num,
-			state->received, state->left_to_receive);
+			state->received, left_to_receive);
 
 	/*
 	 * The size of the "chunk" received on any  iteration is bounded by:
@@ -2618,9 +2619,9 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 	 *   - the data immediately available on the socket,
 	 *   - the on-stack data buffer
 	 */
-	while (state->left_to_receive > 0 && !partial_recv) {
+	while (left_to_receive > 0 && !partial_recv) {
 		ssize_t write_ret;
-		size_t recv_size = min(state->left_to_receive, chunk_size);
+		size_t recv_size = min(left_to_receive, chunk_size);
 
 		ret = conn->sock->ops->recvmsg(conn->sock, data_buffer, recv_size, 0);
 		if (ret < 0) {
@@ -2651,8 +2652,9 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 			goto end_stream_unlock;
 		}
 
+		left_to_receive -= recv_size;
 		state->received += recv_size;
-		state->left_to_receive -= recv_size;
+		state->left_to_receive = left_to_receive;
 
 		DBG2("Relay wrote %zd bytes to tracefile for stream id %" PRIu64,
 				write_ret, stream->stream_handle);
@@ -2710,8 +2712,9 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 
 end_stream_unlock:
 	close_requested = stream->close_requested;
+	left_to_receive = state->left_to_receive;
 	pthread_mutex_unlock(&stream->lock);
-	if (close_requested) {
+	if (close_requested && left_to_receive == 0) {
 		try_stream_close(stream);
 	}
 
