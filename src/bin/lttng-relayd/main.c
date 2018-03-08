@@ -3443,8 +3443,6 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 		goto end_stream_unlock;
 	}
 
-	stream->tracefile_size_current += state->header.data_size +
-			state->header.padding_size;
 
 	if (session->minor >= 4 && !session->snapshot) {
 		ret = handle_index_data(stream, state->header.net_seq_num,
@@ -3456,6 +3454,9 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 			goto end_stream_unlock;
 		}
 	}
+
+	stream->tracefile_size_current += state->header.data_size +
+			state->header.padding_size;
 
 	if (stream->prev_seq == -1ULL) {
 		new_stream = true;
