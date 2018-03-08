@@ -1358,6 +1358,7 @@ static int relay_close_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 		}
 	}
 	stream_put(stream);
+	ret = 0;
 
 end:
 	memset(&reply, 0, sizeof(reply));
@@ -1595,6 +1596,7 @@ static int relay_recv_metadata(const struct lttcomm_relayd_hdr *recv_hdr,
 	size_ret = write_padding_to_file(metadata_stream->stream_fd->fd,
 			metadata_payload_header.padding_size);
 	if (size_ret < 0) {
+		ret = -1;
 		goto end_put;
 	}
 
