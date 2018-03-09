@@ -1,4 +1,5 @@
 Backport:
+	* Port dynamic buffer to stable 2.9
 
 2018-04-30 lttng-tools 2.9.9 (CERN announces WWW protocols will be free)
 	* Add DBG statement for TCP keep-alive options
