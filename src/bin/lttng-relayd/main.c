@@ -1985,7 +1985,7 @@ static int relay_recv_index(struct lttcomm_relayd_hdr *recv_hdr,
 	}
 
 	msg_len = lttcomm_relayd_index_len(
-			lttng_to_index_major(conn->major, conn->minor),
+			lttng_to_index_major(conn->major),
 			lttng_to_index_minor(conn->major, conn->minor));
 	ret = conn->sock->ops->recvmsg(conn->sock, &index_info,
 			msg_len, 0);
@@ -2512,7 +2512,7 @@ static int handle_index_data(struct relay_stream *stream, uint64_t net_seq_num,
 				stream->channel_name,
 			        -1, -1, stream->tracefile_size,
 				tracefile_array_get_file_index_head(stream->tfa),
-				lttng_to_index_major(major, minor),
+				lttng_to_index_major(major),
 				lttng_to_index_minor(major, minor));
 		if (!stream->index_file) {
 			ret = -1;
