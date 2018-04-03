@@ -43,14 +43,22 @@ function validate_test_chunks ()
 	per_pid=$5
 
 	set_chunk_pattern
+	local path=
 
-	# Check if the 3 chunk folders exist and they contain a ${app_path}/metadata file.
-	ls $local_path/${chunk_pattern}-1/${app_path}/metadata >/dev/null
-	ok $? "Chunk 1 exists"
-	ls $local_path/${chunk_pattern}-2/${app_path}/metadata >/dev/null
-	ok $? "Chunk 2 exists"
-	ls $local_path/${chunk_pattern}-3/${domain} >/dev/null
-	ok $? "Chunk 3 exists"
+	# Check if the first and second chunk folders exist and they contain a ${app_path}/metadata file.
+	for chunk in $(seq 1 2); do
+		path=$(ls $local_path/${chunk_pattern}-${chunk}/${app_path}/metadata)
+		ok $? "Chunk ${chunk} exists based on path $path"
+	done
+
+	# In per-pid the last chunk (3) must be empty.
+	if [ "${per_pid}" -eq "1" ]; then
+		test -z "$(ls -A $local_path/${chunk_pattern}-3/${domain})"
+		ok $? "Chunk 3 is empty per-pid mode"
+	else
+		path=$(ls $local_path/${chunk_pattern}-3/${app_path}/metadata)
+		ok $? "Chunk 3 exists based on path $path"
+	fi
 
 	# Make sure we don't have anything else in the first 2 chunk directories
 	# besides the kernel folder.
