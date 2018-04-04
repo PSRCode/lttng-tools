@@ -45,7 +45,7 @@ function validate_test_chunks ()
 	set_chunk_pattern
 	local path=
 
-	# Validate that only 3 chunk are present
+	# Validate that only 3 chunks are present
 	nb_chunk=$(ls -A $local_path | wc -l)
 	test $nb_chunk -eq 3
 	ok $? "${local_path} contains 3 chunks only"
@@ -72,7 +72,7 @@ function validate_test_chunks ()
 		ok $nr_stale "No stale folders in chunk ${chunk} directory"
 	done
 
-	# We expect a session of 30 events
+	# We expect a complete session of 30 events
 	validate_trace_count $EVENT_NAME $local_path 30
 
 	# Chunk 1: 10 events
