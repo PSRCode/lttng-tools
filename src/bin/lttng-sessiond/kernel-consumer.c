@@ -85,6 +85,8 @@ error:
 
 /*
  * Sending a single channel to the consumer with command ADD_CHANNEL.
+ *
+ * The consumer socket lock must be held by the caller.
  */
 int kernel_consumer_add_channel(struct consumer_socket *sock,
 		struct ltt_kernel_channel *channel, struct ltt_kernel_session *session,
@@ -232,6 +234,8 @@ error:
 
 /*
  * Sending a single stream to the consumer with command ADD_STREAM.
+ *
+ * The consumer socket lock must be held by the caller.
  */
 int kernel_consumer_add_stream(struct consumer_socket *sock,
 		struct ltt_kernel_channel *channel, struct ltt_kernel_stream *stream,
@@ -276,6 +280,8 @@ error:
 
 /*
  * Sending the notification that all streams were sent with STREAMS_SENT.
+ *
+ * The consumer socket lock must be held by the caller.
  */
 int kernel_consumer_streams_sent(struct consumer_socket *sock,
 		struct ltt_kernel_session *session, uint64_t channel_key)

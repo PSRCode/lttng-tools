@@ -964,6 +964,8 @@ void consumer_init_streams_sent_comm_msg(struct lttcomm_consumer_msg *msg,
 
 /*
  * Send stream communication structure to the consumer.
+ *
+ * The consumer socket lock must be held by the caller.
  */
 int consumer_send_stream(struct consumer_socket *sock,
 		struct consumer_output *dst, struct lttcomm_consumer_msg *msg,
