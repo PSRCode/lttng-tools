@@ -176,3 +176,26 @@ void connection_ht_add(struct lttng_ht *relay_connections_ht,
 	conn->in_socket_ht = 1;
 	conn->socket_ht = relay_connections_ht;
 }
+
+int connection_set_session(struct relay_connection *conn, struct relay_session *session)
+{
+	int ret = 0;
+	assert(conn);
+	assert(session);
+	assert(!conn->session);
+	assert(conn->session != session);
+
+	if(connection_get(conn)) {
+		if (session_get(session)) {
+			conn->session = session;
+		} else {
+			ERR("session_get");
+			ret = -1;
+		}
+		connection_put(conn);
+	} else {
+		ERR("session_get");
+		ret = -1;
+	}
+	return ret;
+}

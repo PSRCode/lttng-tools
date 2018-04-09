@@ -3310,12 +3310,34 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 	if (!stream) {
 		DBG("relay_process_data_receive_payload: Cannot find stream %" PRIu64,
 				state->header.stream_id);
+		size_t recv_size = min(left_to_receive, chunk_size);
+
+		ret = conn->sock->ops->recvmsg(conn->sock, data_buffer, recv_size, MSG_PEEK);
+		if (ret < 0) {
+			ERR("Peeking: Socket %d error %d", conn->sock->fd, ret);
+			ret = -1;
+			goto end;
+		} else if (ret == 0) {
+			/* No more data ready to be consumed on socket. */
+			ERR("Peeking: No more data ready for consumption on data socket of stream id %" PRIu64,
+					state->header.stream_id);
+		} else if (ret < (int) recv_size) {
+			/*
+			 * All the data available on the socket has been
+			 * consumed.
+			 */
+			ERR("Peeking: all data consumed for stream %" PRIu64,
+					state->header.stream_id);
+		}
 		ret = 0;
 		goto end;
 	}
 
 	pthread_mutex_lock(&stream->lock);
 	session = stream->trace->session;
+	if (!conn->session) {
+		connection_set_session(conn, session);
+	}
 
 	DBG3("Receiving data for stream id %" PRIu64 " seqnum %" PRIu64 ", %" PRIu64" bytes received, %" PRIu64 " bytes left to receive",
 			state->header.stream_id, state->header.net_seq_num,
@@ -3638,7 +3660,13 @@ restart:
 				if (revents & LPOLLIN) {
 					ret = relay_process_control(ctrl_conn);
 					if (ret < 0) {
-						/* Clear the connection on error. */
+						/* Clear the connection on error
+						 * and flag session as aborted
+						 * to force the cleanup of its
+						 * stream otherwise it can leak
+						 * during the lifetime of the
+						 * relayd */
+						session_abort(ctrl_conn->session);
 						relay_thread_close_connection(&events,
 								pollfd,
 								ctrl_conn);
@@ -3715,6 +3743,7 @@ restart:
 				ret = relay_process_data(data_conn);
 				/* Connection closed */
 				if (ret < 0) {
+					session_abort(data_conn->session);
 					relay_thread_close_connection(&events, pollfd,
 							data_conn);
 					/*
@@ -3753,9 +3782,7 @@ error:
 			sock_n.node) {
 		health_code_update();
 
-		if (session_abort(destroy_conn->session)) {
-			assert(0);
-		}
+		session_abort(destroy_conn->session);
 
 		/*
 		 * No need to grab another ref, because we own
