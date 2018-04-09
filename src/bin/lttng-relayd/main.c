@@ -2596,7 +2596,7 @@ static enum relay_connection_status relay_process_data_receive_payload(
 	stream = stream_get_by_id(state->header.stream_id);
 	if (!stream) {
 		/* Protocol error. */
-		DBG("relay_process_data_receive_payload: Cannot find stream %" PRIu64,
+		ERR("relay_process_data_receive_payload: Cannot find stream %" PRIu64,
 				state->header.stream_id);
 		status = RELAY_CONNECTION_STATUS_ERROR;
 		goto end;
@@ -2604,6 +2604,9 @@ static enum relay_connection_status relay_process_data_receive_payload(
 
 	pthread_mutex_lock(&stream->lock);
 	session = stream->trace->session;
+	if (!conn->session) {
+		connection_set_session(conn, session);
+	}
 
 	DBG3("Receiving data for stream id %" PRIu64 " seqnum %" PRIu64 ", %" PRIu64" bytes received, %" PRIu64 " bytes left to receive",
 			state->header.stream_id, state->header.net_seq_num,
@@ -2925,6 +2928,15 @@ restart:
 
 					status = relay_process_control(ctrl_conn);
 					if (status != RELAY_CONNECTION_STATUS_OK) {
+						/*
+						 * On socket error flag the session as aborted to force
+						 * the cleanup of its stream otherwise it can leak
+						 * during the lifetime of the relayd.
+						 */
+						if (status == RELAY_CONNECTION_STATUS_ERROR) {
+							session_abort(ctrl_conn->session);
+						}
+
 						/* Clear the connection on error or close. */
 						relay_thread_close_connection(&events,
 								pollfd,
@@ -3004,6 +3016,14 @@ restart:
 				status = relay_process_data(data_conn);
 				/* Connection closed or error. */
 				if (status != RELAY_CONNECTION_STATUS_OK) {
+					/*
+					 * On socket error flag the session as aborted to force the
+					 * cleanup of its stream otherwise it can leak during the
+					 * lifetime of the relayd.
+					 */
+					if (status == RELAY_CONNECTION_STATUS_ERROR) {
+						session_abort(data_conn->session);
+					}
 					relay_thread_close_connection(&events, pollfd,
 							data_conn);
 					/*
@@ -3042,9 +3062,7 @@ error:
 			sock_n.node) {
 		health_code_update();
 
-		if (session_abort(destroy_conn->session)) {
-			assert(0);
-		}
+		session_abort(destroy_conn->session);
 
 		/*
 		 * No need to grab another ref, because we own
