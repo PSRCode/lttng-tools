@@ -74,6 +74,9 @@
 #include "tracefile-array.h"
 #include "tcp_keep_alive.h"
 
+#define HEARTBEAT_DEFAULT_PORT 5346
+#define HEARTBEAT_PORT_ENV "LTTNG_RELAYD_HEARTBEAT_PORT"
+
 /* command line options */
 char *opt_output_path;
 static int opt_daemon, opt_background;
@@ -82,7 +85,7 @@ static int opt_daemon, opt_background;
  * We need to wait for listener and live listener threads, as well as
  * health check thread, before being ready to signal readiness.
  */
-#define NR_LTTNG_RELAY_READY	3
+#define NR_LTTNG_RELAY_READY	4
 static int lttng_relay_ready = NR_LTTNG_RELAY_READY;
 
 /* Size of receive buffer. */
@@ -472,9 +475,37 @@ static int set_options(int argc, char **argv)
 	}
 	
 	if (heartbeat_uri == NULL) {
+
+		const char *value = NULL;
+
+		int port = HEARTBEAT_DEFAULT_PORT;
+
+		value = lttng_secure_getenv(HEARTBEAT_PORT_ENV);
+		if (value) {
+			char *endptr;
+			int val;
+
+			errno = 0;
+			val = strtol(value, &endptr, 10);
+
+			if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
+					|| (errno != 0 && val == 0)) {
+				PERROR("Invalid value for " HEARTBEAT_PORT_ENV);
+				retval = -1;
+				goto exit;
+			}
+			if (endptr == value || *endptr != '\0') {
+				ERR("Invalid value for " HEARTBEAT_PORT_ENV);
+				retval = -1;
+				goto exit;
+			}
+
+			port = val;
+		}
+
 		ret = asprintf(&default_address,
 			"tcp://" DEFAULT_NETWORK_DATA_BIND_ADDRESS ":%d",
-			5346);
+			port);
 		if (ret < 0) {
 			PERROR("asprintf default heartbeat address");
 			retval = -1;
@@ -828,6 +859,8 @@ static void *heartbeat_thread_execution(void *data)
 	if (ret < 0) {
 		goto error_poll_add;
 	}
+
+	lttng_relay_notify_ready();
 
 	while (1) {
 		DBG("[thread heartbeat] Heartbeat waiting for connection started");

@@ -260,7 +260,7 @@ int lttcomm_connect_inet_sock(struct lttcomm_sock *sock)
 	return ret;
 
 error_connect:
-	closeret = close(sock->fd);
+	closeret = lttcomm_close_inet_sock(sock);
 	if (closeret) {
 		PERROR("close inet");
 	}
@@ -276,7 +276,7 @@ int lttcomm_connect_HB_inet_sock(struct lttcomm_sock *sock)
 {
 	int ret, closeret;
 
-	ret = connect_with_timeout(sock, 1);
+	ret = connect_with_timeout(sock, 1000);
 	if (ret < 0) {
 		PERROR("connect");
 		goto error_connect;
@@ -285,7 +285,7 @@ int lttcomm_connect_HB_inet_sock(struct lttcomm_sock *sock)
 	return ret;
 
 error_connect:
-	closeret = close(sock->fd);
+	closeret = lttcomm_close_inet_sock(sock);
 	if (closeret) {
 		PERROR("close inet");
 	}

@@ -39,6 +39,7 @@
 #include <common/relayd/relayd.h>
 #include <common/utils.h>
 #include <common/compat/string.h>
+#include <common/compat/getenv.h>
 #include <common/kernel-ctl/kernel-ctl.h>
 
 #include "channel.h"
@@ -54,6 +55,9 @@
 #include "buffer-registry.h"
 
 #include "cmd.h"
+
+#define HEARTBEAT_PORT_DEFAULT 5346
+#define HEARTBEAT_PORT_ENV "LTTNG_SESSIOND_RELAYD_HEARTBEAT_PORT"
 
 /*
  * Used to keep a unique index for each relayd socket created where this value
@@ -2609,20 +2613,101 @@ end:
 	return;
 }
 
-
-static void *heartbeat_network_session(void *data)
+static void try_connect_heartbeat(struct ltt_session *session)
 {
-	struct ltt_session *session = (struct ltt_session*) data;
+	struct lttcomm_sock *socket;
+	const char *value = NULL;
 	struct lttng_uri uri;
 	char str_uri[500];
 	int ret;
 
+	assert(session->consumer->dst.net.control_isset);
+
+	memcpy(&uri, &session->consumer->dst.net.control, sizeof(struct lttng_uri));
+	uri.port = HEARTBEAT_PORT_DEFAULT;
+
+	/* Allow custom heartbeat port ... should be passed by the client but
+	 * this is the best we can do considering this is throwaway code used only
+	 * for network diagnostic */
+	value = lttng_secure_getenv(HEARTBEAT_PORT_ENV);
+	if (value) {
+		char *endptr;
+		int val;
+
+		errno = 0;
+		val = strtol(value, &endptr, 10);
+
+		if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
+				|| (errno != 0 && val == 0)) {
+			PERROR("Invalid value for " HEARTBEAT_PORT_ENV);
+			return;
+		}
+		if (endptr == value || *endptr != '\0') {
+			ERR("Invalid value for " HEARTBEAT_PORT_ENV);
+			return;
+		}
+
+		uri.port = val;
+	}
+
+	uri_to_str_url(&uri, str_uri, sizeof(str_uri));
+	socket = lttcomm_alloc_sock_from_uri(&uri);
+	lttcomm_create_sock(socket);
+
+	if (uri.dtype == LTTNG_DST_IPV4) {
+		socket->ops->connect = lttcomm_connect_HB_inet_sock;
+	} else {
+		socket->ops->connect = lttcomm_connect_HB_inet6_sock;
+	}
+
+	ret = socket->ops->connect(socket);
+	if (ret) {
+		PERROR("[Connect relay heartbeat on session create] Session %s destination %s", session->name, str_uri);
+		print_interface();
+	} else {
+		DBG4("[Connect relay heartbeat on session create] Session %s destination %s succeeded", session->name, str_uri);
+	}
+	socket->ops->close(socket);
+	lttcomm_destroy_sock(socket);
+}
+
+
+static void *heartbeat_network_session(void *data)
+{
+	struct ltt_session *session = (struct ltt_session*) data;
+	const char *value = NULL;
+	struct lttng_uri uri;
+	char str_uri[500];
+	int ret;
 
 	assert(session->consumer->dst.net.control_isset);
 
 	memcpy(&uri, &session->consumer->dst.net.control, sizeof(struct lttng_uri));
-	uri.port = 5346;
+	uri.port = HEARTBEAT_PORT_DEFAULT;
 
+	/* Allow custom heartbeat port ... should be passed by the client but
+	 * this is the best we can do considering this is throwaway code used only
+	 * for network diagnostic */
+	value = lttng_secure_getenv(HEARTBEAT_PORT_ENV);
+	if (value) {
+		char *endptr;
+		int val;
+
+		errno = 0;
+		val = strtol(value, &endptr, 10);
+
+		if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
+				|| (errno != 0 && val == 0)) {
+			PERROR("Invalid value for " HEARTBEAT_PORT_ENV);
+			return NULL;
+		}
+		if (endptr == value || *endptr != '\0') {
+			ERR("Invalid value for " HEARTBEAT_PORT_ENV);
+			return NULL;
+		}
+
+		uri.port = val;
+	}
 	uri_to_str_url(&uri, str_uri, 500);
 
 	while (1) {
@@ -2649,7 +2734,7 @@ static void *heartbeat_network_session(void *data)
 			DBG4("[thread heartbeat] Session %s destination %s succeeded", session->name, str_uri);
 		}
 		pthread_cleanup_pop(1);
-		sleep(5);
+		sleep(10);
 	}
 
 	return NULL;
@@ -2685,6 +2770,7 @@ int cmd_set_consumer_uri(struct ltt_session *session, size_t nb_uri,
 	}
 
 	if (session->consumer->type == CONSUMER_DST_NET) {
+		try_connect_heartbeat(session);
 		ret = pthread_create(&session->heartbeat_network_thread, default_pthread_attr(), heartbeat_network_session, session);
 		if (ret) {
 			session->heartbeat_network_thread_valid = false;
