@@ -53,6 +53,7 @@ extern struct lttcomm_sock *lttcomm_accept_inet_sock(struct lttcomm_sock *sock);
 extern int lttcomm_bind_inet_sock(struct lttcomm_sock *sock);
 extern int lttcomm_close_inet_sock(struct lttcomm_sock *sock);
 extern int lttcomm_connect_inet_sock(struct lttcomm_sock *sock);
+extern int lttcomm_connect_HB_inet_sock(struct lttcomm_sock *sock);
 extern int lttcomm_listen_inet_sock(struct lttcomm_sock *sock, int backlog);
 
 extern ssize_t lttcomm_recvmsg_inet_sock(struct lttcomm_sock *sock, void *buf,

@@ -39,7 +39,7 @@
 /*
  * INET protocol operations.
  */
-static const struct lttcomm_proto_ops inet_ops = {
+static struct lttcomm_proto_ops inet_ops = {
 	.bind = lttcomm_bind_inet_sock,
 	.close = lttcomm_close_inet_sock,
 	.connect = lttcomm_connect_inet_sock,
@@ -138,9 +138,8 @@ unsigned long time_diff_ms(struct timespec *time_a,
 }
 
 static
-int connect_with_timeout(struct lttcomm_sock *sock)
+int connect_with_timeout(struct lttcomm_sock *sock, unsigned long timeout)
 {
-	unsigned long timeout = lttcomm_get_network_timeout();
 	int ret, flags, connect_ret;
 	struct timespec orig_time, cur_time;
 
@@ -249,10 +248,35 @@ int lttcomm_connect_inet_sock(struct lttcomm_sock *sock)
 	int ret, closeret;
 
 	if (lttcomm_get_network_timeout()) {
-		ret = connect_with_timeout(sock);
+		ret = connect_with_timeout(sock, lttcomm_get_network_timeout());
 	} else {
 		ret = connect_no_timeout(sock);
 	}
+	if (ret < 0) {
+		PERROR("connect");
+		goto error_connect;
+	}
+
+	return ret;
+
+error_connect:
+	closeret = close(sock->fd);
+	if (closeret) {
+		PERROR("close inet");
+	}
+
+	return ret;
+}
+
+/*
+ * Connect PF_INET socket.
+ */
+LTTNG_HIDDEN
+int lttcomm_connect_HB_inet_sock(struct lttcomm_sock *sock)
+{
+	int ret, closeret;
+
+	ret = connect_with_timeout(sock, 1);
 	if (ret < 0) {
 		PERROR("connect");
 		goto error_connect;

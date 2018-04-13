@@ -94,6 +94,7 @@ static pid_t child_ppid;	/* Internal parent PID use with daemonize. */
 static struct lttng_uri *control_uri;
 static struct lttng_uri *data_uri;
 static struct lttng_uri *live_uri;
+static struct lttng_uri *heartbeat_uri;
 
 const char *progname;
 
@@ -117,6 +118,7 @@ static int relay_conn_pipe[2] = { -1, -1 };
 /* Shared between threads */
 static int dispatch_thread_exit;
 
+static pthread_t heartbeat_thread;
 static pthread_t listener_thread;
 static pthread_t dispatcher_thread;
 static pthread_t worker_thread;
@@ -468,6 +470,25 @@ static int set_options(int argc, char **argv)
 			goto exit;
 		}
 	}
+	
+	if (heartbeat_uri == NULL) {
+		ret = asprintf(&default_address,
+			"tcp://" DEFAULT_NETWORK_DATA_BIND_ADDRESS ":%d",
+			5346);
+		if (ret < 0) {
+			PERROR("asprintf default heartbeat address");
+			retval = -1;
+			goto exit;
+		}
+
+		ret = uri_parse(default_address, &heartbeat_uri);
+		free(default_address);
+		if (ret < 0) {
+			ERR("Invalid heartbeat control URI specified");
+			retval = -1;
+			goto exit;
+		}
+	}
 
 exit:
 	free(optstring);
@@ -779,6 +800,132 @@ int socket_set_non_blocking(struct lttcomm_sock *socket)
 end:
 	return ret;
 }
+
+static void *heartbeat_thread_execution(void *data)
+{
+	int i, ret, pollfd;
+	uint32_t revents, nb_fd;
+	struct lttng_poll_event events;
+	struct lttcomm_sock *heartbeat_socket;
+
+	DBG("[thread heartbeat] Relay network heartbeat started");
+
+	heartbeat_socket  = relay_socket_create(heartbeat_uri);
+	if (!heartbeat_socket) {
+		goto error_socket;
+	}
+
+	/*
+	 * Pass 2 as size here for the thread quit pipe and heartbeat socket
+	 */
+	ret = create_thread_poll_set(&events, 2);
+	if (ret < 0) {
+		goto error_create_poll;
+	}
+
+	/* Add the heartbeat socket */
+	ret = lttng_poll_add(&events, heartbeat_socket->fd, LPOLLIN | LPOLLRDHUP);
+	if (ret < 0) {
+		goto error_poll_add;
+	}
+
+	while (1) {
+		DBG("[thread heartbeat] Heartbeat waiting for connection started");
+
+restart:
+		ret = lttng_poll_wait(&events, -1);
+		if (ret < 0) {
+			/*
+			 * Restart interrupted system call.
+			 */
+			if (errno == EINTR) {
+				goto restart;
+			}
+			goto error;
+		}
+
+		nb_fd = ret;
+
+		for (i = 0; i < nb_fd; i++) {
+			health_code_update();
+
+			/* Fetch once the poll data */
+			revents = LTTNG_POLL_GETEV(&events, i);
+			pollfd = LTTNG_POLL_GETFD(&events, i);
+
+			if (!revents) {
+				/*
+				 * No activity for this FD (poll
+				 * implementation).
+				 */
+				continue;
+			}
+
+			/* Thread quit pipe has been closed. Killing thread. */
+			ret = check_thread_quit_pipe(pollfd, revents);
+			if (ret) {
+				goto exit;
+			}
+
+			if (revents & LPOLLIN) {
+				int val = 1;
+				struct lttcomm_sock *newsock;
+				char ipstr[INET6_ADDRSTRLEN];
+				int port;
+
+				newsock = heartbeat_socket->ops->accept(heartbeat_socket);
+				if (!newsock) {
+					PERROR("accepting sock");
+					goto error;
+				}
+
+				ret = setsockopt(newsock->fd, SOL_SOCKET, SO_REUSEADDR, &val,
+						sizeof(val));
+				if (ret < 0) {
+					PERROR("setsockopt inet");
+					lttcomm_destroy_sock(newsock);
+					goto error;
+				}
+
+				if (newsock->sockaddr.type == LTTCOMM_INET) {
+					struct sockaddr_in *s = &newsock->sockaddr.addr.sin;
+					port = ntohs(s->sin_port);
+					inet_ntop(AF_INET, &s->sin_addr, ipstr, sizeof ipstr);
+				} else { // AF_INET6
+					struct sockaddr_in6 *s = &newsock->sockaddr.addr.sin6;
+					port = ntohs(s->sin6_port);
+					inet_ntop(AF_INET6, &s->sin6_addr, ipstr, sizeof ipstr);
+				}
+
+				DBG4("[thread heartbeat] Got network heartbeat from %s:%d", ipstr, port);
+				ret = newsock->ops->close(newsock);
+				lttcomm_destroy_sock(newsock);
+			} else if (revents & (LPOLLERR | LPOLLHUP | LPOLLRDHUP)) {
+				ERR("socket poll error");
+				goto error;
+			} else {
+				ERR("Unexpected poll events %u for sock %d", revents, pollfd);
+				goto error;
+			}
+		}
+	}
+
+exit:
+error:
+error_poll_add:
+	lttng_poll_clean(&events);
+error_create_poll:
+	if (heartbeat_socket->fd >= 0) {
+		ret = heartbeat_socket->ops->close(heartbeat_socket);
+		if (ret) {
+			PERROR("close");
+		}
+	}
+	lttcomm_destroy_sock(heartbeat_socket);
+error_socket:
+	return NULL;
+}
+
 
 /*
  * This thread manages the listening for new connections on the network
@@ -3238,6 +3385,16 @@ int main(int argc, char **argv)
 		goto exit_worker_thread;
 	}
 
+	/* Setup the heartbeat thread */
+	ret = pthread_create(&heartbeat_thread, default_pthread_attr(),
+			heartbeat_thread_execution, (void *) NULL);
+	if (ret) {
+		errno = ret;
+		PERROR("pthread_create hearbeat");
+		retval = -1;
+		goto exit_heartbeat_thread;
+	}
+
 	/* Setup the listener thread */
 	ret = pthread_create(&listener_thread, default_pthread_attr(),
 			relay_thread_listener, (void *) NULL);
@@ -3274,12 +3431,21 @@ exit_live:
 	}
 
 exit_listener_thread:
+	ret = pthread_join(heartbeat_thread, &status);
+	if (ret) {
+		errno = ret;
+		PERROR("pthread_join heartbeat_thread");
+		retval = -1;
+	}
+
+exit_heartbeat_thread:
 	ret = pthread_join(worker_thread, &status);
 	if (ret) {
 		errno = ret;
 		PERROR("pthread_join worker_thread");
 		retval = -1;
 	}
+
 
 exit_worker_thread:
 	ret = pthread_join(dispatcher_thread, &status);

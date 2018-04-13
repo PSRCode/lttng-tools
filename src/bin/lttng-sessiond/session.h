@@ -117,6 +117,9 @@ struct ltt_session {
 	 * Node in ltt_sessions_ht_by_id.
 	 */
 	struct lttng_ht_node_u64 node;
+
+	pthread_t heartbeat_network_thread;
+	bool heartbeat_network_thread_valid;
 };
 
 /* Prototypes */

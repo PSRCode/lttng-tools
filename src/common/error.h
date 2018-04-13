@@ -66,12 +66,14 @@ enum lttng_error_level {
 	PRINT_DBG =	4,
 	PRINT_DBG2 =	5,
 	PRINT_DBG3 =	6,
+	PRINT_DBG4 =	7,
 };
 
 static inline bool __lttng_print_check_opt(enum lttng_error_level type)
 {
 	/* lttng_opt_mi and lttng_opt_quiet. */
 	switch (type) {
+	case PRINT_DBG4:
 	case PRINT_DBG3:
 	case PRINT_DBG2:
 	case PRINT_DBG:
@@ -109,6 +111,7 @@ static inline bool __lttng_print_check_opt(enum lttng_error_level type)
 	case PRINT_WARN:
 	case PRINT_BUG:
 	case PRINT_ERR:
+	case PRINT_DBG4:
 		break;
 	}
 
@@ -120,6 +123,7 @@ void lttng_abort_on_error(void);
 static inline void __lttng_print_check_abort(enum lttng_error_level type)
 {
 	switch (type) {
+	case PRINT_DBG4:
 	case PRINT_DBG3:
 	case PRINT_DBG2:
 	case PRINT_DBG:
@@ -167,6 +171,7 @@ static inline void __lttng_print_check_abort(enum lttng_error_level type)
 #define DBG(fmt, args...) _ERRMSG("DEBUG1", PRINT_DBG, fmt, ## args)
 #define DBG2(fmt, args...) _ERRMSG("DEBUG2", PRINT_DBG2, fmt, ## args)
 #define DBG3(fmt, args...) _ERRMSG("DEBUG3", PRINT_DBG3, fmt, ## args)
+#define DBG4(fmt, args...) _ERRMSG("DEBUG4", PRINT_DBG4, fmt, ## args)
 #define LOG(type, fmt, args...)			\
 	do {					\
 		switch (type) {			\
@@ -190,6 +195,9 @@ static inline void __lttng_print_check_abort(enum lttng_error_level type)
 			break;			\
 		case PRINT_DBG3:		\
 			DBG3(fmt, ## args);	\
+			break;			\
+		case PRINT_DBG4:		\
+			DBG4(fmt, ## args);	\
 			break;			\
 		default:			\
 			assert(0);		\

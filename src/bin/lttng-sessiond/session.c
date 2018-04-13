@@ -325,8 +325,18 @@ end:
  */
 int session_destroy(struct ltt_session *session)
 {
+	int ret;
 	/* Safety check */
 	assert(session);
+
+	if (session->heartbeat_network_thread_valid) {
+		ret = pthread_cancel(session->heartbeat_network_thread);
+		if (ret) {
+			ERR("heartbeat No thread with the ID thread could be found");
+		}
+		(void) pthread_join(session->heartbeat_network_thread, NULL);
+		session->heartbeat_network_thread_valid = false;
+	}
 
 	DBG("Destroying session %s", session->name);
 	del_session_list(session);
@@ -356,6 +366,7 @@ int session_create(char *name, uid_t uid, gid_t gid)
 		goto error_malloc;
 	}
 
+	new_session->heartbeat_network_thread_valid = false ;
 	/* Define session name */
 	if (name != NULL) {
 		if (snprintf(new_session->name, NAME_MAX, "%s", name) < 0) {

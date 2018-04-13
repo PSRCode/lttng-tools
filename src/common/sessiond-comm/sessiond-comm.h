@@ -198,7 +198,7 @@ struct lttcomm_sock {
 	bool non_blocking;
 	enum lttcomm_sock_proto proto;
 	struct lttcomm_sockaddr sockaddr;
-	const struct lttcomm_proto_ops *ops;
+	struct lttcomm_proto_ops *ops;
 } LTTNG_PACKED;
 
 /*

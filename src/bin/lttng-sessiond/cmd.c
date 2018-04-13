@@ -17,7 +17,18 @@
  */
 
 #define _LGPL_SOURCE
+#include <arpa/inet.h>
 #include <assert.h>
+#include <ifaddrs.h>
+#include <linux/if_link.h>
+#include <netdb.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+
 #include <inttypes.h>
 #include <urcu/list.h>
 #include <urcu/uatomic.h>
@@ -2507,6 +2518,143 @@ error:
 	return ret;
 }
 
+static void cleanup_handler(void *arg)
+{
+    struct lttcomm_sock *socket = (struct lttcomm_sock*) arg;
+    socket->ops->close(socket);
+    lttcomm_destroy_sock(socket);
+}
+
+static void cleanup_interface_handler(void *arg)
+{
+	freeifaddrs((struct ifaddrs*) arg);
+}
+
+static void print_interface(void)
+{
+	struct ifaddrs *ifaddr, *ifa;
+	int family, s, n;
+	char host[NI_MAXHOST];
+
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+	if (getifaddrs(&ifaddr) == -1) {
+		PERROR("getifaddrs");
+		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+		return;
+	}
+	pthread_cleanup_push(cleanup_interface_handler, ifaddr);
+	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+	
+
+	/* Walk through linked list, maintaining head pointer so we
+	   can free list later */
+
+	for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
+		if (ifa->ifa_addr == NULL)
+			continue;
+
+		family = ifa->ifa_addr->sa_family;
+
+		/* For an AF_INET* interface address, display the address */
+		if (family == AF_INET || family == AF_INET6) {
+			s = getnameinfo(ifa->ifa_addr,
+					(family == AF_INET) ? sizeof(struct sockaddr_in) :
+					sizeof(struct sockaddr_in6),
+					host, NI_MAXHOST,
+					NULL, 0, NI_NUMERICHOST);
+			if (s != 0) {
+				ERR("getnameinfo() failed: %s", gai_strerror(s));
+				goto end;
+			}
+			DBG4("%s %s (%d) address: %s",
+				ifa->ifa_name,
+				(family == AF_PACKET) ? "AF_PACKET" :
+				(family == AF_INET) ? "AF_INET" :
+				(family == AF_INET6) ? "AF_INET6" : "???",
+				family,
+				host);
+
+		} else if (family == AF_PACKET && ifa->ifa_data != NULL) {
+			struct rtnl_link_stats *stats = ifa->ifa_data;
+			DBG4("%-8s %s (%d) "
+					"tx_packets=%u "
+					"rx_packets=%u "
+					"tx_bytes=%u "
+					"rx_bytes=%u "
+					"rx_errors=%u "
+					"tx_errors=%u "
+					"rx_dropped=%u "
+					"tx_dropped=%u "
+					"multicast=%u "
+					"collisions=%u ",
+					ifa->ifa_name,
+					(family == AF_PACKET) ? "AF_PACKET" :
+					(family == AF_INET) ? "AF_INET" :
+					(family == AF_INET6) ? "AF_INET6" : "???",
+					family,
+					stats->tx_packets,
+					stats->rx_packets,
+					stats->tx_bytes,
+					stats->rx_bytes,
+					stats->rx_errors,
+					stats->tx_errors,
+					stats->rx_dropped,
+					stats->tx_dropped,
+					stats->multicast,
+					stats->collisions);
+		}
+	}
+end:
+	pthread_cleanup_pop(1);
+	return;
+}
+
+
+static void *heartbeat_network_session(void *data)
+{
+	struct ltt_session *session = (struct ltt_session*) data;
+	struct lttng_uri uri;
+	char str_uri[500];
+	int ret;
+
+
+	assert(session->consumer->dst.net.control_isset);
+
+	memcpy(&uri, &session->consumer->dst.net.control, sizeof(struct lttng_uri));
+	uri.port = 5346;
+
+	uri_to_str_url(&uri, str_uri, 500);
+
+	while (1) {
+		struct lttcomm_sock *socket;
+		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+
+		socket = lttcomm_alloc_sock_from_uri(&uri);
+		lttcomm_create_sock(socket);
+
+		pthread_cleanup_push(cleanup_handler, socket);
+
+		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+		if (uri.dtype == LTTNG_DST_IPV4) {
+			socket->ops->connect = lttcomm_connect_HB_inet_sock;
+		} else {
+			socket->ops->connect = lttcomm_connect_HB_inet6_sock;
+		}
+
+		ret = socket->ops->connect(socket);
+		if (ret) {
+			PERROR("[thread heartbeat] Session %s destination %s", session->name, str_uri);
+			print_interface();
+		} else {
+			DBG4("[thread heartbeat] Session %s destination %s succeeded", session->name, str_uri);
+		}
+		pthread_cleanup_pop(1);
+		sleep(5);
+	}
+
+	return NULL;
+}
+
 /*
  * Command LTTNG_SET_CONSUMER_URI processed by the client thread.
  */
@@ -2534,6 +2682,18 @@ int cmd_set_consumer_uri(struct ltt_session *session, size_t nb_uri,
 		if (ret != LTTNG_OK) {
 			goto error;
 		}
+	}
+
+	if (session->consumer->type == CONSUMER_DST_NET) {
+		ret = pthread_create(&session->heartbeat_network_thread, default_pthread_attr(), heartbeat_network_session, session);
+		if (ret) {
+			session->heartbeat_network_thread_valid = false;
+			errno = ret;
+			PERROR("pthread_create heartbeat for session %s", session->name);
+			ret = LTTNG_ERR_UNK;
+			goto error;
+		}
+		session->heartbeat_network_thread_valid = true;
 	}
 
 	/* Set UST session URIs */
@@ -2581,6 +2741,7 @@ int cmd_set_consumer_uri(struct ltt_session *session, size_t nb_uri,
 error:
 	return ret;
 }
+
 
 /*
  * Command LTTNG_CREATE_SESSION processed by the client thread.
