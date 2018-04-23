@@ -27,7 +27,7 @@
 #include <common/compat/string.h>
 #include <lttng/constant.h>
 
-#include "cmd-generic.h"
+#include "cmd-2-4.h"
 #include "lttng-relayd.h"
 
 int cmd_create_session_2_4(const struct lttng_buffer_view *payload,
