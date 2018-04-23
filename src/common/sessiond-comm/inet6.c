@@ -370,7 +370,7 @@ ssize_t lttcomm_recvmsg_inet6_sock(struct lttcomm_sock *sock, void *buf,
 		len_last = iov[0].iov_len;
 		ret = recvmsg(sock->fd, &msg, flags);
 		if (ret > 0) {
-			if (sock->non_blocking) {
+			if (flags & MSG_DONTWAIT) {
 				goto end;
 			}
 			iov[0].iov_base += ret;

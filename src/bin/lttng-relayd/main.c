@@ -767,29 +767,6 @@ error:
 	return NULL;
 }
 
-static
-int socket_set_non_blocking(struct lttcomm_sock *socket)
-{
-	int ret, flags;
-
-	ret = fcntl(socket->fd, F_GETFL, 0);
-	if (ret == -1) {
-		PERROR("fcntl get socket flags");
-		goto end;
-	}
-	flags = ret;
-
-	ret = fcntl(socket->fd, F_SETFL, flags | O_NONBLOCK);
-	if (ret == -1) {
-		PERROR("fcntl set O_NONBLOCK socket flag");
-		goto end;
-	}
-	DBG("Client socket (fd = %i) set as non-blocking", socket->fd);
-	socket->non_blocking = true;
-end:
-	return ret;
-}
-
 /*
  * This thread manages the listening for new connections on the network
  */
@@ -930,14 +907,6 @@ restart:
 							newsock->fd);
 					lttcomm_destroy_sock(newsock);
 					goto error;
-				}
-
-				DBG("Switching new socket to non-blocking mode");
-				ret = socket_set_non_blocking(newsock);
-				if (ret) {
-					ERR("Failed to set socket (fd = %i) to non-blocking mode",
-						newsock->fd);
-						goto error;
 				}
 
 				new_conn = connection_create(newsock, type);
@@ -3013,7 +2982,7 @@ static int relay_process_control_receive_payload(struct relay_connection *conn)
 
 	ret = conn->sock->ops->recvmsg(conn->sock,
 			reception_buffer->data + state->received,
-			state->left_to_receive, 0);
+			state->left_to_receive, MSG_DONTWAIT);
 	if (ret < 0) {
 		ERR("Unable to receive command payload on sock %d", conn->sock->fd);
 		goto end;
@@ -3077,7 +3046,7 @@ static int relay_process_control_receive_header(struct relay_connection *conn)
 
 	ret = conn->sock->ops->recvmsg(conn->sock,
 			reception_buffer->data + state->received,
-			state->left_to_receive, 0);
+			state->left_to_receive, MSG_DONTWAIT);
 	if (ret < 0) {
 		ERR("Unable to receive control command header on sock %d", conn->sock->fd);
 		goto end;
@@ -3251,7 +3220,7 @@ static int relay_process_data_receive_header(struct relay_connection *conn)
 
 	ret = conn->sock->ops->recvmsg(conn->sock,
 			state->header_reception_buffer + state->received,
-			state->left_to_receive, 0);
+			state->left_to_receive, MSG_DONTWAIT);
 	if (ret < 0) {
 		ERR("Unable to receive data header on sock %d", conn->sock->fd);
 		goto end;
@@ -3387,7 +3356,7 @@ static int relay_process_data_receive_payload(struct relay_connection *conn)
 		ssize_t write_ret;
 		size_t recv_size = min(left_to_receive, chunk_size);
 
-		ret = conn->sock->ops->recvmsg(conn->sock, data_buffer, recv_size, 0);
+		ret = conn->sock->ops->recvmsg(conn->sock, data_buffer, recv_size, MSG_DONTWAIT);
 		if (ret < 0) {
 			ERR("Socket %d error %d", conn->sock->fd, ret);
 			ret = -1;
