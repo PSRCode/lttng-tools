@@ -1114,7 +1114,8 @@ static int relay_create_session(const struct lttcomm_relayd_hdr *recv_hdr,
 		struct relay_connection *conn,
 		const struct lttng_buffer_view *payload)
 {
-	int ret = 0, send_ret;
+	int ret = 0;
+	ssize_t send_ret;
 	struct relay_session *session;
 	struct lttcomm_relayd_status_session reply;
 	char session_name[LTTNG_NAME_MAX];
@@ -1161,11 +1162,9 @@ send_reply:
 	}
 
 	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
-	if (send_ret < 0) {
-		ERR("Relayd sending session id");
-		ret = send_ret;
-	} else if (send_ret < sizeof(reply)) {
-		ERR("Failed to send \"create session\" command reply (ret = %i)", send_ret);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"create session\" command reply (ret = %zd)",
+				send_ret);
 		ret = -1;
 	}
 
@@ -1273,11 +1272,9 @@ send_reply:
 
 	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
 			sizeof(struct lttcomm_relayd_status_stream), 0);
-	if (send_ret < 0) {
-		ERR("Relay sending stream id");
-		ret = (int) send_ret;
-	} else if (send_ret < sizeof(reply)) {
-		ERR("Failed to send \"add stream\" command reply (ret = %zi)", send_ret);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"add stream\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
 	}
 
@@ -1294,7 +1291,8 @@ static int relay_close_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 		struct relay_connection *conn,
 		const struct lttng_buffer_view *payload)
 {
-	int ret, send_ret;
+	int ret;
+	ssize_t send_ret;
 	struct relay_session *session = conn->session;
 	struct lttcomm_relayd_close_stream stream_info;
 	struct lttcomm_relayd_generic_reply reply;
@@ -1371,11 +1369,9 @@ end:
 	}
 	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
 			sizeof(struct lttcomm_relayd_generic_reply), 0);
-	if (send_ret < 0) {
-		ERR("Relay sending stream id");
-		ret = send_ret;
-	} else if (send_ret < sizeof(reply)) {
-		ERR("Failed to send \"close stream\" command reply (ret = %i)", send_ret);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"close stream\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
 	}
 
@@ -1391,7 +1387,8 @@ int relay_reset_metadata(const struct lttcomm_relayd_hdr *recv_hdr,
 		struct relay_connection *conn,
 		const struct lttng_buffer_view *payload)
 {
-	int ret, send_ret;
+	int ret;
+	ssize_t send_ret;
 	struct relay_session *session = conn->session;
 	struct lttcomm_relayd_reset_metadata stream_info;
 	struct lttcomm_relayd_generic_reply reply;
@@ -1456,11 +1453,9 @@ end:
 	}
 	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
 			sizeof(struct lttcomm_relayd_generic_reply), 0);
-	if (send_ret < 0) {
-		ERR("Relay sending reset metadata reply");
-		ret = send_ret;
-	} else if (send_ret < sizeof(reply)) {
-		ERR("Failed to send \"reset metadata\" command reply (ret = %i)", send_ret);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"reset metadata\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
 	}
 
@@ -1474,14 +1469,13 @@ end_no_session:
 static void relay_unknown_command(struct relay_connection *conn)
 {
 	struct lttcomm_relayd_generic_reply reply;
-	int ret;
+	ssize_t send_ret;
 
 	memset(&reply, 0, sizeof(reply));
 	reply.ret_code = htobe32(LTTNG_ERR_UNK);
-	ret = conn->sock->ops->sendmsg(conn->sock, &reply,
-			sizeof(struct lttcomm_relayd_generic_reply), 0);
-	if (ret < 0) {
-		ERR("Relay sending unknown command");
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
+	if (send_ret < sizeof(reply)) {
+		ERR("Failed to send \"unknown command\" command reply (ret = %zd)", send_ret);
 	}
 }
 
@@ -1493,7 +1487,8 @@ static int relay_start(const struct lttcomm_relayd_hdr *recv_hdr,
 		struct relay_connection *conn,
 		const struct lttng_buffer_view *payload)
 {
-	int ret = htobe32(LTTNG_OK);
+	int ret = 0;
+	ssize_t send_ret;
 	struct lttcomm_relayd_generic_reply reply;
 	struct relay_session *session = conn->session;
 
@@ -1503,11 +1498,13 @@ static int relay_start(const struct lttcomm_relayd_hdr *recv_hdr,
 	}
 
 	memset(&reply, 0, sizeof(reply));
-	reply.ret_code = ret;
-	ret = conn->sock->ops->sendmsg(conn->sock, &reply,
-			sizeof(struct lttcomm_relayd_generic_reply), 0);
-	if (ret < 0) {
-		ERR("Relay sending start ack");
+	reply.ret_code = htobe32(LTTNG_OK);
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
+			sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"relay_start\" command reply (ret = %zd)",
+			send_ret);
+		ret = -1;
 	}
 
 	return ret;
@@ -1871,6 +1868,7 @@ static int relay_send_version(const struct lttcomm_relayd_hdr *recv_hdr,
 		const struct lttng_buffer_view *payload)
 {
 	int ret;
+	ssize_t send_ret;
 	struct lttcomm_relayd_version reply, msg;
 	bool compatible = true;
 
@@ -1909,14 +1907,15 @@ static int relay_send_version(const struct lttcomm_relayd_hdr *recv_hdr,
 
 	reply.major = htobe32(reply.major);
 	reply.minor = htobe32(reply.minor);
-	ret = conn->sock->ops->sendmsg(conn->sock, &reply,
-			sizeof(struct lttcomm_relayd_version), 0);
-	if (ret < 0) {
-		ERR("Relay sending version");
-	} else if (ret < sizeof(reply)) {
-		ERR("Failed to send \"send version\" command reply (ret = %i)", ret);
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
+			sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"send version\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
 		goto end;
+	} else {
+		ret = 0;
 	}
 
 	if (!compatible) {
@@ -1942,6 +1941,7 @@ static int relay_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 	struct lttcomm_relayd_data_pending msg;
 	struct lttcomm_relayd_generic_reply reply;
 	struct relay_stream *stream;
+	ssize_t send_ret;
 	int ret;
 
 	DBG("Data pending command received");
@@ -1991,11 +1991,10 @@ end:
 
 	memset(&reply, 0, sizeof(reply));
 	reply.ret_code = htobe32(ret);
-	ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
-	if (ret < 0) {
-		ERR("Relay data pending ret code failed");
-	} else if (ret < sizeof(reply)) {
-		ERR("Failed to send \"data pending\" command reply (ret = %i)", ret);
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"data pending\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
 	}
 
@@ -2016,6 +2015,7 @@ static int relay_quiescent_control(const struct lttcomm_relayd_hdr *recv_hdr,
 		const struct lttng_buffer_view *payload)
 {
 	int ret;
+	ssize_t send_ret;
 	struct relay_stream *stream;
 	struct lttcomm_relayd_quiescent_control msg;
 	struct lttcomm_relayd_generic_reply reply;
@@ -2050,12 +2050,13 @@ static int relay_quiescent_control(const struct lttcomm_relayd_hdr *recv_hdr,
 reply:
 	memset(&reply, 0, sizeof(reply));
 	reply.ret_code = htobe32(LTTNG_OK);
-	ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
-	if (ret < 0) {
-		ERR("Relay data quiescent control ret code failed");
-	} else if (ret < sizeof(reply)) {
-		ERR("Failed to send \"quiescent control\" command reply (ret = %i)", ret);
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"quiescent control\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
+	} else {
+		ret = 0;
 	}
 
 end_no_session:
@@ -2074,6 +2075,7 @@ static int relay_begin_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 		const struct lttng_buffer_view *payload)
 {
 	int ret;
+	ssize_t send_ret;
 	struct lttng_ht_iter iter;
 	struct lttcomm_relayd_begin_data_pending msg;
 	struct lttcomm_relayd_generic_reply reply;
@@ -2126,12 +2128,13 @@ static int relay_begin_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 	/* All good, send back reply. */
 	reply.ret_code = htobe32(LTTNG_OK);
 
-	ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
-	if (ret < 0) {
-		ERR("Relay begin data pending send reply failed");
-	} else if (ret < sizeof(reply)) {
-		ERR("Failed to send \"begin data pending\" command reply (ret = %i)", ret);
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"begin data pending\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
+	} else {
+		ret = 0;
 	}
 
 end_no_session:
@@ -2152,6 +2155,7 @@ static int relay_end_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 		const struct lttng_buffer_view *payload)
 {
 	int ret;
+	ssize_t send_ret;
 	struct lttng_ht_iter iter;
 	struct lttcomm_relayd_end_data_pending msg;
 	struct lttcomm_relayd_generic_reply reply;
@@ -2209,12 +2213,13 @@ static int relay_end_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 	/* All good, send back reply. */
 	reply.ret_code = htobe32(is_data_inflight);
 
-	ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
-	if (ret < 0) {
-		ERR("Relay end data pending send reply failed");
-	} else if (ret < sizeof(reply)) {
-		ERR("Failed to send \"end data pending\" command reply (ret = %i)", ret);
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"end data pending\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
+	} else {
+		ret = 0;
 	}
 
 end_no_session:
@@ -2230,7 +2235,8 @@ static int relay_recv_index(const struct lttcomm_relayd_hdr *recv_hdr,
 		struct relay_connection *conn,
 		const struct lttng_buffer_view *payload)
 {
-	int ret, send_ret;
+	int ret;
+	ssize_t send_ret;
 	struct relay_session *session = conn->session;
 	struct lttcomm_relayd_index index_info;
 	struct relay_index *index;
@@ -2338,11 +2344,8 @@ end:
 		reply.ret_code = htobe32(LTTNG_OK);
 	}
 	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
-	if (send_ret < 0) {
-		ERR("Relay sending close index id reply");
-		ret = send_ret;
-	} else if (send_ret < sizeof(reply)) {
-		ERR("Failed to send \"recv index\" command reply (ret = %i)", send_ret);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"recv index\" command reply (ret = %zd)", send_ret);
 		ret = -1;
 	}
 
@@ -2359,7 +2362,8 @@ static int relay_streams_sent(const struct lttcomm_relayd_hdr *recv_hdr,
 		struct relay_connection *conn,
 		const struct lttng_buffer_view *payload)
 {
-	int ret, send_ret;
+	int ret;
+	ssize_t send_ret;
 	struct lttcomm_relayd_generic_reply reply;
 
 	assert(conn);
@@ -2381,11 +2385,9 @@ static int relay_streams_sent(const struct lttcomm_relayd_hdr *recv_hdr,
 	memset(&reply, 0, sizeof(reply));
 	reply.ret_code = htobe32(LTTNG_OK);
 	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
-	if (send_ret < 0) {
-		ERR("Relay sending sent_stream reply");
-		ret = send_ret;
-	} else if (send_ret < sizeof(reply)) {
-		ERR("Failed to send \"streams sent\" command reply (ret = %i)", send_ret);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"streams sent\" command reply (ret = %zd)",
+			send_ret);
 		ret = -1;
 	} else {
 		/* Success. */
@@ -2397,14 +2399,15 @@ end_no_session:
 }
 
 /*
- * relay_rotate_stream: rotate a stream to a new tracefile for the session
+ * relay_rotate_session_stream: rotate a stream to a new tracefile for the session
  * rotation feature (not the tracefile rotation feature).
  */
 static int relay_rotate_session_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 		struct relay_connection *conn,
 		const struct lttng_buffer_view *payload)
 {
-	int ret, send_ret;
+	int ret;
+	ssize_t send_ret;
 	struct relay_session *session = conn->session;
 	struct lttcomm_relayd_rotate_stream stream_info;
 	struct lttcomm_relayd_generic_reply reply;
@@ -2525,11 +2528,9 @@ end:
 	}
 	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
 			sizeof(struct lttcomm_relayd_generic_reply), 0);
-	if (send_ret < 0) {
-		ERR("Failed to send reply of rotate session stream command");
-		ret = send_ret;
-	} else if (send_ret < sizeof(reply)) {
-		ERR("Failed to send \"streams sent\" command reply (ret = %i)", send_ret);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"rotate session stream\" command (ret = %zd)",
+				send_ret);
 		ret = -1;
 	}
 
@@ -2552,7 +2553,7 @@ static int relay_mkdir(const struct lttcomm_relayd_hdr *recv_hdr,
 	struct lttcomm_relayd_generic_reply reply;
 	char *path = NULL;
 	size_t msg_len;
-	ssize_t network_ret;
+	ssize_t send_ret;
 
 
 	if (!session || !conn->version_check_done) {
@@ -2629,12 +2630,9 @@ end:
 	} else {
 		reply.ret_code = htobe32(LTTNG_OK);
 	}
-	network_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
-			sizeof(struct lttcomm_relayd_generic_reply), 0);
-	if (network_ret < (ssize_t) sizeof(struct lttcomm_relayd_generic_reply)) {
-		ERR("Failed to send mkdir command status code with ret = %zi, expected %zu",
-				network_ret,
-				sizeof(struct lttcomm_relayd_generic_reply));
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"mkdir\" command (ret = %zd)", send_ret);
 		ret = -1;
 	}
 
@@ -2670,7 +2668,7 @@ static int relay_rotate_rename(const struct lttcomm_relayd_hdr *recv_hdr,
 		const struct lttng_buffer_view *payload)
 {
 	int ret;
-	ssize_t network_ret;
+	ssize_t send_ret;
 	struct relay_session *session = conn->session;
 	struct lttcomm_relayd_generic_reply reply;
 	struct lttcomm_relayd_rotate_rename header;
@@ -2788,10 +2786,11 @@ end:
 	} else {
 		reply.ret_code = htobe32(LTTNG_OK);
 	}
-	network_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
-			sizeof(struct lttcomm_relayd_generic_reply), 0);
-	if (network_ret < sizeof(struct lttcomm_relayd_generic_reply)) {
-		ERR("Relay sending stream id");
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
+			sizeof(reply), 0);
+	if (send_ret < sizeof(reply)) {
+		ERR("Failed to send \"rotate rename\" command (ret = %zd)",
+				send_ret);
 		ret = -1;
 	}
 
@@ -2821,7 +2820,7 @@ int relay_rotate_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 	struct lttng_ht_iter iter;
 	struct relay_stream *stream;
 	int ret = 0;
-	ssize_t network_ret;
+	ssize_t send_ret;
 	uint64_t chunk_id;
         bool rotate_pending = false;
 
@@ -2896,10 +2895,11 @@ send_reply:
 	memset(&reply, 0, sizeof(reply));
 	reply.generic.ret_code = htobe32((uint32_t) LTTNG_OK);
 	reply.is_pending = (uint8_t) !!rotate_pending;
-	network_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply,
 			sizeof(reply), 0);
-	if (network_ret < (ssize_t) sizeof(reply)) {
-		ERR("Relay rotate pending ret code failed");
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"rotate pending\" command (ret = %zd)",
+				send_ret);
 		ret = -1;
 	}
 
