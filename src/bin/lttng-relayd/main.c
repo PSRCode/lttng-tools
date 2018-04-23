@@ -2383,7 +2383,7 @@ static int relay_rotate_session_stream(const struct lttcomm_relayd_hdr *recv_hdr
 	struct relay_stream *stream;
 	size_t msg_len;
 	size_t path_len;
-	char *new_pathname = NULL;
+	struct lttng_buffer_view new_path_view;
 
 	DBG("Rotate stream received");
 
@@ -2432,14 +2432,7 @@ static int relay_rotate_session_stream(const struct lttcomm_relayd_hdr *recv_hdr
 		goto end;
 	}
 
-	new_pathname = zmalloc(path_len);
-	if (!new_pathname) {
-		PERROR("Failed to allocation new path name of relay_rotate_session_stream command");
-		ret = -1;
-		goto end;
-	}
-
-	memcpy(new_pathname, payload->data + msg_len, path_len);
+	new_path_view = lttng_buffer_view_from_view(payload, msg_len, stream_info.pathname_length);
 
 	stream = stream_get_by_id(stream_info.stream_id);
 	if (!stream) {
@@ -2454,7 +2447,7 @@ static int relay_rotate_session_stream(const struct lttcomm_relayd_hdr *recv_hdr
 	 * change).
 	 */
 	free(stream->path_name);
-	stream->path_name = create_output_path(new_pathname);
+	stream->path_name = create_output_path(new_path_view.data);
 	if (!stream->path_name) {
 		ERR("Failed to create a new output path");
 		ret = -1;
@@ -2504,7 +2497,6 @@ end:
 	}
 
 end_no_reply:
-	free(new_pathname);
 	return ret;
 }
 
@@ -2518,12 +2510,11 @@ static int relay_mkdir(const struct lttcomm_relayd_hdr *recv_hdr,
 	int ret;
 	struct relay_session *session = conn->session;
 	struct lttcomm_relayd_mkdir path_info_header;
-	struct lttcomm_relayd_mkdir *path_info = NULL;
 	struct lttcomm_relayd_generic_reply reply;
 	char *path = NULL;
 	size_t msg_len;
 	ssize_t send_ret;
-
+	struct lttng_buffer_view path_view;
 
 	if (!session || !conn->version_check_done) {
 		ERR("Trying to create a directory before version check");
@@ -2568,16 +2559,9 @@ static int relay_mkdir(const struct lttcomm_relayd_hdr *recv_hdr,
 		goto end;
 	}
 
-	path_info = zmalloc(sizeof(path_info_header) + path_info_header.length);
-	if (!path_info) {
-		PERROR("zmalloc of mkdir command path");
-		ret = -1;
-		goto end;
-	}
+	path_view = lttng_buffer_view_from_view(payload, msg_len, path_info_header.length);
 
-	memcpy(path_info->path, payload->data + msg_len, path_info_header.length);
-
-	path = create_output_path(path_info->path);
+	path = create_output_path(path_view.data);
 	if (!path) {
 		ERR("Failed to create output path");
 		ret = -1;
@@ -2607,7 +2591,6 @@ end:
 
 end_no_session:
 	free(path);
-	free(path_info);
 	return ret;
 }
 
@@ -2641,11 +2624,11 @@ static int relay_rotate_rename(const struct lttcomm_relayd_hdr *recv_hdr,
 	struct relay_session *session = conn->session;
 	struct lttcomm_relayd_generic_reply reply;
 	struct lttcomm_relayd_rotate_rename header;
-	char *received_paths = NULL;
 	size_t msg_len;
 	size_t received_paths_size;
-	const char *received_old_path, *received_new_path;
 	char *complete_old_path = NULL, *complete_new_path = NULL;
+	struct lttng_buffer_view old_path_view;
+	struct lttng_buffer_view new_path_view;
 
 	if (!session || !conn->version_check_done) {
 		ERR("Trying to rename a trace folder before version check");
@@ -2690,38 +2673,29 @@ static int relay_rotate_rename(const struct lttcomm_relayd_hdr *recv_hdr,
 		goto end;
 	}
 
-	received_paths = zmalloc(received_paths_size);
-	if (!received_paths) {
-		PERROR("Could not allocate rotate commands paths reception buffer");
-		ret = -1;
-		goto end;
-	}
-
-	memcpy(received_paths, payload->data + msg_len, received_paths_size);
+	old_path_view = lttng_buffer_view_from_view(payload, msg_len, header.old_path_length);
+	new_path_view = lttng_buffer_view_from_view(payload, msg_len + header.old_path_length, header.new_path_length);
 
 	/* Validate that both paths received are NULL terminated. */
-	if (received_paths[header.old_path_length - 1] != '\0') {
+	if (old_path_view.data[old_path_view.size - 1] != '\0') {
 		ERR("relay_rotate_rename command's \"old\" path is invalid (not NULL terminated)");
 		ret = -1;
 		goto end;
 	}
-	if (received_paths[received_paths_size - 1] != '\0') {
+	if (new_path_view.data[new_path_view.size - 1] != '\0') {
 		ERR("relay_rotate_rename command's \"new\" path is invalid (not NULL terminated)");
 		ret = -1;
 		goto end;
 	}
 
-	received_old_path = received_paths;
-	received_new_path = received_paths + header.old_path_length;
-
-	complete_old_path = create_output_path(received_old_path);
+	complete_old_path = create_output_path(old_path_view.data);
 	if (!complete_old_path) {
 		ERR("Failed to build old output path in rotate_rename command");
 		ret = -1;
 		goto end;
 	}
 
-	complete_new_path = create_output_path(received_new_path);
+	complete_new_path = create_output_path(new_path_view.data);
 	if (!complete_new_path) {
 		ERR("Failed to build new output path in rotate_rename command");
 		ret = -1;
@@ -2764,7 +2738,6 @@ end:
 	}
 
 end_no_reply:
-	free(received_paths);
 	free(complete_old_path);
 	free(complete_new_path);
 	return ret;
