@@ -3062,8 +3062,7 @@ static int relay_process_control_receive_header(struct relay_connection *conn)
 			conn->sock->fd, header.cmd, header.cmd_version,
 			header.data_size);
 
-	/* FIXME temporary arbitrary limit on data size. */
-	if (header.data_size > (128 * 1024 * 1024)) {
+	if (header.data_size > DEFAULT_NETWORK_RELAYD_CTRL_MAX_PAYLOAD_SIZE) {
 		ERR("Command header indicates a payload (%" PRIu64 " bytes) that exceeds the maximal payload size allowed on a control connection.",
 				header.data_size);
 		ret = -1;
