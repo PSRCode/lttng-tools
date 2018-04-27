@@ -1,4 +1,5 @@
 Backport:
+	* Fix: relayd protocol field present from minor 8 is not checked
 	* Fix: relay_recv_metadata does not check for partial write
 	* Backport:Use non-blocking recvmsg() for data/ctrl connections of lttng-relayd
 	* Port dynamic buffer to stable 2.9
