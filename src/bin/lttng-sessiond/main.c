@@ -5067,6 +5067,9 @@ static void sessiond_config_log(void)
 	if (EXTRA_VERSION_DESCRIPTION[0] != '\0') {
 		DBG("LTTng-sessiond extra version description:\n\t" EXTRA_VERSION_DESCRIPTION "\n");
 	}
+	if (EXTRA_VERSION_PATCHES[0] != '\0') {
+		DBG("LTTng-sessiond extra patches:\n\t" EXTRA_VERSION_PATCHES "\n");
+	}
 }
 
 static void print_version(void) {
