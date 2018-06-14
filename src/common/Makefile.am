@@ -6,7 +6,7 @@ SUBDIRS = string-utils
 # since SUBDIRS is decided at configure time.
 DIST_SUBDIRS = compat health hashtable kernel-ctl sessiond-comm relayd \
 	  kernel-consumer ust-consumer testpoint index config consumer \
-	  string-utils
+	  string-utils fd-tracker
 #
 # Common library
 noinst_LTLIBRARIES = libcommon.la
