@@ -47,6 +47,7 @@ extern struct lttng_ht *viewer_streams_ht;
 extern char *opt_output_path;
 extern const char *tracing_group_name;
 extern const char * const config_section_name;
+extern int opt_organize_per_session;
 
 extern int thread_quit_pipe[2];
 

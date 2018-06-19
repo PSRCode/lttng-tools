@@ -94,6 +94,7 @@ enum relay_connection_status {
 /* command line options */
 char *opt_output_path;
 static int opt_daemon, opt_background;
+int opt_organize_per_session;
 
 /*
  * We need to wait for listener and live listener threads, as well as
@@ -179,6 +180,7 @@ static struct option long_options[] = {
 	{ "verbose", 0, 0, 'v', },
 	{ "config", 1, 0, 'f' },
 	{ "version", 0, 0, 'V' },
+	{ "organize-per-session", 0, 0, 's', },
 	{ NULL, 0, 0, 0, },
 };
 
@@ -299,6 +301,9 @@ static int set_option(int opt, const char *arg, const char *optname)
 				lttng_opt_verbose += 1;
 			}
 		}
+		break;
+	case 's':
+		opt_organize_per_session = 1;
 		break;
 	default:
 		/* Unknown option or other error.
