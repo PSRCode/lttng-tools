@@ -94,7 +94,8 @@ enum relay_connection_status {
 /* command line options */
 char *opt_output_path;
 static int opt_daemon, opt_background;
-int opt_organize_per_session;
+int opt_group_output_by_session;
+int opt_group_output_by_host;
 
 /*
  * We need to wait for listener and live listener threads, as well as
@@ -180,7 +181,8 @@ static struct option long_options[] = {
 	{ "verbose", 0, 0, 'v', },
 	{ "config", 1, 0, 'f' },
 	{ "version", 0, 0, 'V' },
-	{ "organize-per-session", 0, 0, 's', },
+	{ "group-output-by-session", 0, 0, 'S', },
+	{ "group-output-by-host", 0, 0, 'H', },
 	{ NULL, 0, 0, 0, },
 };
 
@@ -302,8 +304,19 @@ static int set_option(int opt, const char *arg, const char *optname)
 			}
 		}
 		break;
-	case 's':
-		opt_organize_per_session = 1;
+	case 'S':
+		if (opt_group_output_by_host) {
+			ERR("Cannot set --group-output-by-session, --group-output-by-host already defined");
+			exit(EXIT_FAILURE);
+		}
+		opt_group_output_by_session = 1;
+		break;
+	case 'H':
+		if (opt_group_output_by_session) {
+			ERR("Cannot set --group-output-by-host, --group-output-by-session already defined");
+			exit(EXIT_FAILURE);
+		}
+		opt_group_output_by_host = 1;
 		break;
 	default:
 		/* Unknown option or other error.
@@ -490,6 +503,11 @@ static int set_options(int argc, char **argv)
 			retval = -1;
 			goto exit;
 		}
+	}
+
+	if (!opt_group_output_by_session && !opt_group_output_by_host) {
+		/* Group by host by defaul */
+		opt_group_output_by_host = 1;
 	}
 
 exit:

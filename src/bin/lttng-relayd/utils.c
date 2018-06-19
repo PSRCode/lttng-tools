@@ -173,11 +173,15 @@ char *create_output_path(const char *path_name)
 	char *return_path = NULL;
 	assert(path_name);
 
-	if (opt_organize_per_session) {
+	if (opt_group_output_by_session) {
 		real_path = get_filesystem_per_session(path_name);
-	} else {
+	} else if (opt_group_output_by_host) {
 		real_path = strdup(path_name);
+	} else {
+		ERR("Configuration error");
+		assert(0);
 	}
+
 	if (!real_path) {
 		goto error;
 	}
