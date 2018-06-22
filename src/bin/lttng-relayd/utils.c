@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <regex.h>
 
 #include <common/common.h>
 #include <common/defaults.h>
@@ -31,23 +32,19 @@
 
 #define DATETIME_STRING_SIZE 16
 
-static char *get_filesystem_per_session(const char *path)
-{
+#define DATETIME_REGEX ".*-[0-9][0-9][0-9][0-9][0-1][0-9][0-3][0-9]-[0-2][0-9][0-5][0-9][0-5][0-9]$"
+
+static char *get_filesystem_per_session(const char *path, const char *actual_session_name) {
 	int ret;
-	int session_name_size;
 	char *local_copy = NULL;
 	char *session_name = NULL;
 	char *datetime = NULL;
+	char *extra_path = NULL;
 	char *hostname_ptr;
-	char *session_name_with_datetime_ptr;
+	const char *second_token_ptr;
 	char *leftover_ptr;
 	char *filepath_per_session = NULL;
-
-	/*
-	 * All of this handling is HIGLY dependant on how the pathname are
-	 * transmitted to the lttng-relayd. This consider that the following
-	 * form is respected: <host-name>/<session-datetime>/<rest of path>.
-	 */
+	regex_t regex;
 
 	/* Get a local copy for strtok */
 	local_copy = strdup(path);
@@ -65,47 +62,103 @@ static char *get_filesystem_per_session(const char *path)
 	 * [3] https://tools.ietf.org/html/rfc1123#page-13
 	 */
 
-	/* Get the hostname and session_name with datetime appended */
+	/*
+	 * Get the hostname and possible session_name.
+	 * Note that we can get the hostname and session name from the
+	 * relay_session object we already have. Still, it is easier to
+	 * tokenized the passed path to obtain the start of the path leftover.
+	 */
 	hostname_ptr = strtok_r(local_copy, "/", &leftover_ptr);
 	if (!hostname_ptr) {
 		ERR("hostname token not found");
 		goto error;
 	}
 
-	session_name_with_datetime_ptr = strtok_r(NULL, "/", &leftover_ptr);
-	if (!session_name_with_datetime_ptr) {
+	second_token_ptr = strtok_r(NULL, "/", &leftover_ptr);
+	if (!second_token_ptr) {
 		ERR("Session name token not found");
 		goto error;
 	}
 
-	/* Separate the session name and datetime. Use */
-	session_name_size = strlen(session_name_with_datetime_ptr);
-
-	session_name = malloc(session_name_size + 1);
-	session_name[session_name_size] = '\0';
+	/*
+	 * Check if the second token is a extra path set at url level. This is
+	 * legal in streaming, live and snapshot [1]. Otherwise it is the
+	 * session name with possibly a datetime attached [2]. Note that when
+	 * "adding" snapshot output (lttng snapshot add-output), no session name
+	 * is present in the path by default. The handling for "extra path" take
+	 * care of this case as well.
+	 * [1] e.g --set-url net://localhost/my_marvellous_path
+	 * [2] Can be:
+	 *            <session_name>
+	 *                When using --snapshot on session create.
+	 *            <session_name>-<date>-<time>
+	 *            auto-<date>-<time>
+	 */
+	if (strncmp(second_token_ptr, actual_session_name, strlen(actual_session_name)) != 0) {
+		extra_path = strdup(second_token_ptr);
+		/*
+		 * Point the second token ptr to actual_session_name for further
+		 * information extraction based on the session name
+		 */
+		second_token_ptr = actual_session_name;
+	} else {
+		extra_path = strdup("");
+	}
+	if (!extra_path) {
+		ERR("strdup extra path failed");
+		goto error;
+	}
 
 	/*
-	 * Remove the datetime and the leading "-" using the defined sized for
-	 * the datetime/ */
-	session_name = strndup(session_name_with_datetime_ptr, session_name_size - DATETIME_STRING_SIZE);
+	 * The recuperation of the session datetime is a best effort here.
+	 * We use a regex for now to validate that a datetime is present.
+	 * Sure we can end up in very special corner case were the end of a
+	 * session name is the same format as our datetime but is not really a
+	 * datetime. There is a lot more broken stuff on lttng to fix before
+	 * fixing this.
+	 * Possible cases:
+	 *            <session_name>
+	 *            <session_name>-<date>-<time>
+	 *            auto-<date>-<time>
+	 */
+	ret = regcomp(&regex, DATETIME_REGEX, 0);
+	if (ret) {
+		ERR("Regex compilation failed with %d", ret);
+		goto error;
+	}
+
+	ret = regexec(&regex, second_token_ptr, 0, NULL, 0);
+	if (!ret) {
+		/* Match */
+		session_name = strndup(second_token_ptr, strlen(second_token_ptr) - DATETIME_STRING_SIZE);
+		datetime = strdup(&second_token_ptr[strlen(second_token_ptr) - DATETIME_STRING_SIZE +1]);
+	} else {
+		/* No datetime present */
+		session_name = strdup(second_token_ptr);
+		datetime = strdup("");
+	}
+
 	if (!session_name) {
-		ERR("strdup of session name failed");
-		goto error;
+		ERR("strdup session_name on regex match failed");
+		goto error_regex;
 	}
-
-	datetime = strndup(&session_name_with_datetime_ptr[session_name_size - DATETIME_STRING_SIZE + 1], DATETIME_STRING_SIZE);
 	if (!datetime) {
-		ERR("strdup of datetime failed");
-		goto error;
+		ERR("strdup datetime on regex match failed");
+		goto error_regex;
 	}
 
-	ret = asprintf(&filepath_per_session, "%s/%s-%s/%s", session_name, hostname_ptr, datetime, leftover_ptr);
+	ret = asprintf(&filepath_per_session, "%s/%s%s%s/%s/%s", session_name,
+			hostname_ptr,
+			datetime[0] != '\0' ? "-" : "",
+			datetime, extra_path, leftover_ptr);
 	if (ret < 0) {
 		filepath_per_session = NULL;
 		goto error;
 	}
-
+error_regex:
+	regfree(&regex);
 error:
+	free(extra_path);
 	free(local_copy);
 	free(session_name);
 	free(datetime);
@@ -167,15 +220,16 @@ exit:
  *
  * Return the allocated string containing the path name or else NULL.
  */
-char *create_output_path(const char *path_name)
+char *create_output_path(const char *path_name, char *session_name)
 {
 	char *real_path = NULL;
 	char *return_path = NULL;
 	assert(path_name);
 
 	if (opt_group_output_by_session) {
-		real_path = get_filesystem_per_session(path_name);
+		real_path = get_filesystem_per_session(path_name, session_name);
 	} else if (opt_group_output_by_host) {
+		/* By default the output is by host */
 		real_path = strdup(path_name);
 	} else {
 		ERR("Configuration error");

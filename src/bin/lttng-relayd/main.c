@@ -1232,16 +1232,17 @@ static int relay_add_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 	if (session->minor == 1) {
 		/* For 2.1 */
 		ret = cmd_recv_stream_2_1(payload, &path_name,
-			&channel_name);
+			&channel_name, session);
 	} else if (session->minor > 1 && session->minor < 11) {
 		/* From 2.2 to 2.10 */
 		ret = cmd_recv_stream_2_2(payload, &path_name,
-			&channel_name, &tracefile_size, &tracefile_count);
+			&channel_name, &tracefile_size, &tracefile_count,
+			session);
 	} else {
 		/* From 2.11 to ... */
 		ret = cmd_recv_stream_2_11(payload, &path_name,
 			&channel_name, &tracefile_size, &tracefile_count,
-			&stream_chunk_id.value);
+			&stream_chunk_id.value, session);
 		stream_chunk_id.is_set = true;
 	}
 
@@ -2494,7 +2495,7 @@ static int relay_rotate_session_stream(const struct lttcomm_relayd_hdr *recv_hdr
 	 * change).
 	 */
 	free(stream->path_name);
-	stream->path_name = create_output_path(new_path_view.data);
+	stream->path_name = create_output_path(new_path_view.data, session->session_name);
 	if (!stream->path_name) {
 		ERR("Failed to create a new output path");
 		ret = -1;
@@ -2610,7 +2611,7 @@ static int relay_mkdir(const struct lttcomm_relayd_hdr *recv_hdr,
 	path_view = lttng_buffer_view_from_view(payload, header_len,
 			path_info_header.length);
 
-	path = create_output_path(path_view.data);
+	path = create_output_path(path_view.data, session->session_name);
 	if (!path) {
 		ERR("Failed to create output path");
 		ret = -1;
@@ -2740,14 +2741,14 @@ static int relay_rotate_rename(const struct lttcomm_relayd_hdr *recv_hdr,
 		goto end;
 	}
 
-	complete_old_path = create_output_path(old_path_view.data);
+	complete_old_path = create_output_path(old_path_view.data, session->session_name);
 	if (!complete_old_path) {
 		ERR("Failed to build old output path in rotate_rename command");
 		ret = -1;
 		goto end;
 	}
 
-	complete_new_path = create_output_path(new_path_view.data);
+	complete_new_path = create_output_path(new_path_view.data, session->session_name);
 	if (!complete_new_path) {
 		ERR("Failed to build new output path in rotate_rename command");
 		ret = -1;
