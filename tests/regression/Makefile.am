@@ -29,7 +29,9 @@ TESTS = tools/filtering/test_invalid_filter \
 	tools/notification/test_notification_multi_app \
 	tools/rotation/test_ust \
 	tools/rotation/test_kernel \
-	tools/rotation/test_save_load_mi
+	tools/rotation/test_save_load_mi \
+	tools/relayd-grouping/test_ust \
+	tools/relayd-grouping/test_kernel
 
 if HAVE_LIBLTTNG_UST_CTL
 SUBDIRS += ust
