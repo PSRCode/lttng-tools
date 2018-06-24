@@ -32,7 +32,9 @@ TESTS = tools/filtering/test_invalid_filter \
 	tools/rotation/test_kernel \
 	tools/rotation/test_save_load_mi \
 	tools/rotation/test_schedule_api \
-	tools/metadata/test_kernel
+	tools/metadata/test_kernel \
+	tools/relayd-grouping/test_ust \
+	tools/relayd-grouping/test_kernel
 
 if HAVE_LIBLTTNG_UST_CTL
 SUBDIRS += ust
