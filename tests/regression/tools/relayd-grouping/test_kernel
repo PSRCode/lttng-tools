@@ -224,7 +224,7 @@ function test_kernel_streaming_snapshot_add_output_custom_name_custom_output ()
 	local channel_name=$(randstring 8 0)
 	local snapshot_name="this_is_my_snapshot"
 	local custom_output="this/is/my/custom/path"
-	diag "Test kernel snapshot using 'add-output' with custom snapshot name and custom output path"
+	diag "Test kernel snapshot using 'add-output' with custom snapshot name and custom output"
 
 	create_lttng_session_no_output $session_name
 	enable_lttng_mmap_overwrite_kernel_channel $session_name $channel_name
@@ -241,7 +241,6 @@ function test_kernel_streaming_snapshot_add_output_custom_name_custom_output ()
 
 	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/$custom_output/$snapshot_name*
 }
-
 
 plan_tests $NUM_TESTS
 
