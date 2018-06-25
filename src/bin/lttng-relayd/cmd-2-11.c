@@ -113,7 +113,7 @@ error:
 int cmd_recv_stream_2_11(const struct lttng_buffer_view *payload,
 		char **ret_path_name, char **ret_channel_name,
 		uint64_t *tracefile_size, uint64_t *tracefile_count,
-		uint64_t *trace_archive_id)
+		uint64_t *trace_archive_id, struct relay_session *session)
 {
 	int ret;
 	struct lttcomm_relayd_add_stream_2_11 header;
@@ -184,7 +184,7 @@ int cmd_recv_stream_2_11(const struct lttng_buffer_view *payload,
 		goto error;
 	}
 
-	path_name = create_output_path(pathname_view.data);
+	path_name = create_output_path(pathname_view.data, session->session_name);
 	if (!path_name) {
 		PERROR("Path name allocation");
 		ret = -ENOMEM;
