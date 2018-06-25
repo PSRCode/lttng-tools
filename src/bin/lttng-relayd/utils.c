@@ -54,7 +54,7 @@ static char *get_filesystem_per_session(const char *path, const char *local_sess
 	}
 
 	/*
-	 * The use of strtok with "/" as delimiter is valid since we refuse "/"
+	 * The use of strtok with '/' as delimiter is valid since we refuse '/'
 	 * in session name and '/' is not a valid hostname character based on
 	 * RFC-952 [1], RFC-921 [2] and refined in RFC-1123 [2].
 	 * [1] https://tools.ietf.org/html/rfc952
