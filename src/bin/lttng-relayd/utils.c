@@ -111,12 +111,12 @@ static char *get_filesystem_per_session(const char *path, const char *local_sess
 	}
 
 	/*
-	 * The recuperation of the session datetime is a best effort here.
-	 * We use a regex for now to validate that a datetime is present.
-	 * Sure we can end up in very special corner case were the end of a
+	 * The recovery of the session datetime is a best effort here.
+	 * We use a regex to validate that a datetime is present.
+	 * We can end up in corner case were the end of a
 	 * session name is the same format as our datetime but is not really a
-	 * datetime. There is a lot more broken stuff on lttng to fix before
-	 * fixing this.
+	 * datetime. This is not so much of an issue since most of the time the
+	 * datetime will be appended and result in the correct case.
 	 * Possible cases:
 	 *            <session_name>
 	 *            <session_name>-<date>-<time>
