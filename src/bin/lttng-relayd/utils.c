@@ -34,7 +34,7 @@
 
 #define DATETIME_REGEX ".*-[0-9][0-9][0-9][0-9][0-1][0-9][0-3][0-9]-[0-2][0-9][0-5][0-9][0-5][0-9]$"
 
-static char *get_filesystem_per_session(const char *path, const char *actual_session_name) {
+static char *get_filesystem_per_session(const char *path, const char *local_session_name) {
 	int ret;
 	char *local_copy = NULL;
 	char *session_name = NULL;
@@ -94,13 +94,13 @@ static char *get_filesystem_per_session(const char *path, const char *actual_ses
 	 *            <session_name>-<date>-<time>
 	 *            auto-<date>-<time>
 	 */
-	if (strncmp(second_token_ptr, actual_session_name, strlen(actual_session_name)) != 0) {
+	if (strncmp(second_token_ptr, local_session_name, strlen(local_session_name)) != 0) {
 		extra_path = strdup(second_token_ptr);
 		/*
-		 * Point the second token ptr to actual_session_name for further
+		 * Point the second token ptr to local_session_name for further
 		 * information extraction based on the session name
 		 */
-		second_token_ptr = actual_session_name;
+		second_token_ptr = local_session_name;
 	} else {
 		extra_path = strdup("");
 	}
