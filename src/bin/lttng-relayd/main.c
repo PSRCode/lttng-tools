@@ -506,7 +506,7 @@ static int set_options(int argc, char **argv)
 	}
 
 	if (!opt_group_output_by_session && !opt_group_output_by_host) {
-		/* Group by host by defaul */
+		/* Group by host by default */
 		opt_group_output_by_host = 1;
 	}
 
