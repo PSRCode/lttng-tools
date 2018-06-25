@@ -95,6 +95,7 @@ static char *get_filesystem_per_session(const char *path, const char *local_sess
 	 *            auto-<date>-<time>
 	 */
 	if (strncmp(second_token_ptr, local_session_name, strlen(local_session_name)) != 0) {
+		/* Match */
 		extra_path = strdup(second_token_ptr);
 		/*
 		 * Point the second token ptr to local_session_name for further
