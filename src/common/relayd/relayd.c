@@ -28,6 +28,7 @@
 #include <common/compat/endian.h>
 #include <common/sessiond-comm/relayd.h>
 #include <common/index/ctf-index.h>
+#include <common/dynamic-buffer.h>
 
 #include "relayd.h"
 
@@ -1336,3 +1337,68 @@ error:
 	free(msg);
 	return ret;
 }
+
+int relayd_data_pending_vector(struct lttcomm_relayd_sock *sock, int count,
+		struct relayd_pending_stream_data *streams_data) {
+	int ret;
+	struct lttcomm_relayd_pending_streams msg;
+	struct lttcomm_relayd_generic_reply reply;
+	struct lttng_dynamic_buffer buffer;
+	msg.stream_count = htobe32(count);
+
+
+	/* Code flow error. Safety net. */
+	assert(sock);
+	lttng_dynamic_buffer_init(&buffer);
+
+	/* TODO better dbg statement including all streams sent into the vector */
+	DBG("Querying relayd for pending for multiple streams");
+
+	ret = lttng_dynamic_buffer_append(&buffer, &msg, sizeof(msg));
+	if (ret) {
+		ERR("Failed to append to dynamic buffer on pending msg");
+		goto error;
+	}
+
+	for (int i = 0; i < count; i++) {
+		struct relayd_pending_stream_data node;
+
+		node.stream_id = htobe64(streams_data[i].stream_id);
+		node.next_net_seq_num = htobe64(streams_data[i].next_net_seq_num);
+
+		ret = lttng_dynamic_buffer_append(&buffer, &node, sizeof(node));
+		if (ret) {
+			ERR("Failed to append to dynamic buffer on stream iteration");
+			goto error;
+		}
+	}
+
+	/* Send command */
+	ret = send_command(sock, RELAYD_DATA_PENDING_STREAMS, (void *) buffer.data,
+			buffer.size, 0);
+	if (ret < 0) {
+		goto error;
+	}
+
+	/* Receive response */
+	ret = recv_reply(sock, (void *) &reply, sizeof(reply));
+	if (ret < 0) {
+		goto error;
+	}
+
+	reply.ret_code = be32toh(reply.ret_code);
+
+	if (reply.ret_code >= LTTNG_OK) {
+		ERR("Relayd data pending replied error %d", reply.ret_code);
+	}
+
+	/* At this point, the ret code is either 1 or 0 */
+	ret = reply.ret_code;
+
+	DBG("Relayd data is%spending for streams", ret == 1 ? " " : " NOT ");
+
+error:
+	lttng_dynamic_buffer_reset(&buffer);
+	return ret;
+}
+

@@ -1991,6 +1991,94 @@ end_no_session:
 }
 
 /*
+ * Check for data pending for list of streams id from the session daemon.
+ */
+static int relay_data_pending_streams(const struct lttcomm_relayd_hdr *recv_hdr,
+		struct relay_connection *conn,
+		const struct lttng_buffer_view *payload)
+{
+	struct relay_session *session = conn->session;
+	struct lttcomm_relayd_pending_streams *msg;
+	struct lttcomm_relayd_generic_reply reply;
+	struct relay_stream *stream;
+	ssize_t send_ret;
+	int ret;
+
+	DBG("Data pending command received");
+
+	if (!session || !conn->version_check_done) {
+		ERR("Trying to check for data before version check");
+		ret = -1;
+		goto end_no_session;
+	}
+
+	if (payload->size < sizeof(struct lttcomm_relayd_pending_streams)) {
+		ERR("Unexpected payload size in \"relay_data_pending_streams\": expected >= %zu bytes, got %zu bytes",
+				sizeof(struct lttcomm_relayd_pending_streams), payload->size);
+		ret = -1;
+		goto end_no_session;
+	}
+
+	msg = (struct lttcomm_relayd_pending_streams *)payload->data;
+
+	msg->stream_count = be32toh(msg->stream_count);
+
+	if (payload->size != sizeof(struct lttcomm_relayd_pending_streams) + msg->stream_count * sizeof(struct relayd_pending_stream_data)) {
+		ERR("Unexpected payload size in \"relay_data_pending_streams\": expected %zu bytes, got %zu bytes",
+				sizeof(struct lttcomm_relayd_pending_streams) + msg->stream_count * sizeof(struct relayd_pending_stream_data), payload->size);
+		ret = -1;
+		goto end_no_session;
+	}
+
+	for (uint32_t i = 0; i < msg->stream_count; i++) {
+		msg->streams_data[i].stream_id = be64toh(msg->streams_data[i].stream_id);
+		msg->streams_data[i].next_net_seq_num = be64toh(msg->streams_data[i].next_net_seq_num);
+		stream = stream_get_by_id(msg->streams_data[i].stream_id);
+		if (stream == NULL) {
+			ret = -1;
+			goto end;
+		}
+
+		pthread_mutex_lock(&stream->lock);
+
+		DBG("Data pending for stream id %" PRIu64 " prev_seq %" PRIu64
+				" and last_seq %" PRIu64, msg->streams_data[i].stream_id,
+				stream->prev_seq, msg->streams_data[i].next_net_seq_num);
+
+		/* Avoid wrapping issue */
+		if (((int64_t) (stream->prev_seq - msg->streams_data[i].next_net_seq_num)) >= 0) {
+			/* Data has in fact been written and is NOT pending */
+			ret = 0;
+		} else {
+			/* Data still being streamed thus pending, return
+			 * immediately
+			 */
+			ret = 1;
+			pthread_mutex_unlock(&stream->lock);
+			stream_put(stream);
+			break;
+		}
+
+		stream->data_pending_check_done = true;
+		pthread_mutex_unlock(&stream->lock);
+		stream_put(stream);
+	}
+end:
+
+	memset(&reply, 0, sizeof(reply));
+	reply.ret_code = htobe32(ret);
+	send_ret = conn->sock->ops->sendmsg(conn->sock, &reply, sizeof(reply), 0);
+	if (send_ret < (ssize_t) sizeof(reply)) {
+		ERR("Failed to send \"data pending\" command reply (ret = %zd)",
+				send_ret);
+		ret = -1;
+	}
+
+end_no_session:
+	return ret;
+}
+
+/*
  * Wait for the control socket to reach a quiescent state.
  *
  * Note that for now, when receiving this command from the session
@@ -2916,6 +3004,10 @@ static int relay_process_control_command(struct relay_connection *conn,
 	case RELAYD_DATA_PENDING:
 		DBG_CMD("RELAYD_DATA_PENDING", conn);
 		ret = relay_data_pending(header, conn, payload);
+		break;
+	case RELAYD_DATA_PENDING_STREAMS:
+		DBG_CMD("RELAYD_DATA_PENDING_STREAMS", conn);
+		ret = relay_data_pending_streams(header, conn, payload);
 		break;
 	case RELAYD_QUIESCENT_CONTROL:
 		DBG_CMD("RELAYD_QUIESCENT_CONTROL", conn);

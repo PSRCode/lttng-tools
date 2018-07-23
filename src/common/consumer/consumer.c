@@ -48,6 +48,7 @@
 #include <common/consumer/consumer-testpoint.h>
 #include <common/align.h>
 #include <common/consumer/consumer-metadata-cache.h>
+#include <common/dynamic-buffer.h>
 
 struct lttng_consumer_global_data consumer_data = {
 	.stream_count = 0,
@@ -3743,6 +3744,10 @@ int consumer_data_pending(uint64_t id)
 	struct lttng_ht *ht;
 	struct lttng_consumer_stream *stream;
 	struct consumer_relayd_sock_pair *relayd = NULL;
+	struct lttng_dynamic_buffer buffer;
+
+	lttng_dynamic_buffer_init(&buffer);
+
 	int (*data_pending)(struct lttng_consumer_stream *);
 
 	DBG("Consumer data pending command on session id %" PRIu64, id);
@@ -3798,6 +3803,7 @@ int consumer_data_pending(uint64_t id)
 	relayd = find_relayd_by_session_id(id);
 	if (relayd) {
 		unsigned int is_data_inflight = 0;
+		int count = 0;
 
 		/* Send init command for data pending. */
 		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
@@ -3813,24 +3819,49 @@ int consumer_data_pending(uint64_t id)
 				ht->hash_fct(&id, lttng_ht_seed),
 				ht->match_fct, &id,
 				&iter.iter, stream, node_session_id.node) {
+			struct relayd_pending_stream_data node;
+
 			if (stream->metadata_flag) {
 				ret = relayd_quiescent_control(&relayd->control_sock,
 						stream->relayd_stream_id);
-			} else {
-				ret = relayd_data_pending(&relayd->control_sock,
-						stream->relayd_stream_id,
-						stream->next_net_seq_num - 1);
+				if (ret == 1) {
+					pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+					pthread_mutex_unlock(&stream->lock);
+					goto data_pending;
+				}
+				if (ret < 0) {
+					pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+					pthread_mutex_unlock(&stream->lock);
+					goto data_not_pending;
+				}
+				continue;
 			}
-			if (ret == 1) {
-				pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
-				pthread_mutex_unlock(&stream->lock);
-				goto data_pending;
-			}
-			if (ret < 0) {
-				pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
-				pthread_mutex_unlock(&stream->lock);
-				goto data_not_pending;
-			}
+			node.stream_id = stream->relayd_stream_id;
+			node.next_net_seq_num = stream->next_net_seq_num - 1;
+			lttng_dynamic_buffer_append(&buffer, &node, sizeof(node));
+
+			//ret = relayd_data_pending(&relayd->control_sock,
+			//			stream->relayd_stream_id,
+			//			stream->next_net_seq_num - 1);
+			count++;
+		}
+
+		ERR("JORAJ count %d", count);
+		for (int i=0; i < count; i++) {
+			ERR("JORAJ id %" PRIu64, ((struct relayd_pending_stream_data *)buffer.data)[i].stream_id);
+			ERR("JORAJ next seq %" PRIu64, ((struct relayd_pending_stream_data *)buffer.data)[i].next_net_seq_num);
+		}
+
+		ret = relayd_data_pending_vector(&relayd->control_sock, count, (struct relayd_pending_stream_data *)buffer.data);
+		if (ret == 1) {
+			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+			pthread_mutex_unlock(&stream->lock);
+			goto data_pending;
+		}
+		if (ret < 0) {
+			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+			pthread_mutex_unlock(&stream->lock);
+			goto data_not_pending;
 		}
 
 		/* Send end command for data pending. */
@@ -3853,12 +3884,14 @@ int consumer_data_pending(uint64_t id)
 
 data_not_pending:
 	/* Data is available to be read by a viewer. */
+	lttng_dynamic_buffer_reset(&buffer);
 	pthread_mutex_unlock(&consumer_data.lock);
 	rcu_read_unlock();
 	return 0;
 
 data_pending:
 	/* Data is still being extracted from buffers. */
+	lttng_dynamic_buffer_reset(&buffer);
 	pthread_mutex_unlock(&consumer_data.lock);
 	rcu_read_unlock();
 	return 1;

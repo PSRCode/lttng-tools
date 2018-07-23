@@ -57,6 +57,11 @@ struct lttcomm_relayd_data_hdr {
 	uint32_t padding_size;  /* Size of 0 padding the data */
 } LTTNG_PACKED;
 
+struct relayd_pending_stream_data {
+	uint64_t stream_id;
+	uint64_t next_net_seq_num;
+} LTTNG_PACKED;
+
 /*
  * Reply from a create session command.
  */
@@ -250,6 +255,11 @@ struct lttcomm_relayd_mkdir {
 	/* Includes trailing NULL */
 	uint32_t length;
 	char path[];
+} LTTNG_PACKED;
+
+struct lttcomm_relayd_pending_streams {
+	uint32_t stream_count;
+	struct relayd_pending_stream_data streams_data[];
 } LTTNG_PACKED;
 
 #endif	/* _RELAYD_COMM */

@@ -60,4 +60,7 @@ int relayd_rotate_pending(struct lttcomm_relayd_sock *sock,
 		uint64_t chunk_id);
 int relayd_mkdir(struct lttcomm_relayd_sock *rsock, const char *path);
 
+int relayd_data_pending_vector(struct lttcomm_relayd_sock *sock, int count,
+		struct relayd_pending_stream_data *streams_data);
+
 #endif /* _RELAYD_H */

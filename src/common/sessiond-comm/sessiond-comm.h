@@ -138,6 +138,7 @@ enum lttcomm_relayd_command {
 	RELAYD_ROTATE_PENDING               = 20,
 	/* Create a folder on the relayd FS (2.11+) */
 	RELAYD_MKDIR                        = 21,
+	RELAYD_DATA_PENDING_STREAMS              = 22,
 };
 
 /*

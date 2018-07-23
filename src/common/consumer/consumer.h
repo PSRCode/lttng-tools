@@ -469,6 +469,8 @@ struct lttng_consumer_stream {
 	 * file before writing in it (regeneration).
 	 */
 	unsigned int reset_metadata_flag:1;
+
+	uint64_t relayd_pending_next_net_seq_num;
 };
 
 /*
