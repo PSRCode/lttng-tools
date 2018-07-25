@@ -33,6 +33,7 @@
 #include <common/sessiond-comm/sessiond-comm.h>
 #include <common/pipe.h>
 #include <common/index/ctf-index.h>
+#include <common/dynamic-buffer.h>
 
 /* Commands for consumer */
 enum lttng_consumer_command {
@@ -461,6 +462,12 @@ struct consumer_relayd_sock_pair {
 	uint64_t relayd_session_id;
 	uint64_t sessiond_session_id;
 	struct lttng_consumer_local_data *ctx;
+
+	/* Deferred commands to be sent to this relay daemon. */
+	struct {
+		unsigned int count;
+		struct lttng_dynamic_buffer buffer;
+	} deferred_commands;
 };
 
 /*
