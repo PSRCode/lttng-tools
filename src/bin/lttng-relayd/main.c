@@ -2287,7 +2287,6 @@ static int relay_recv_index(const struct lttcomm_relayd_hdr *recv_hdr,
 		ret = 0;
 	} else {
 		ERR("relay_index_try_flush error %d", ret);
-		relay_index_put(index);
 		ret = -1;
 	}
 
@@ -2691,9 +2690,6 @@ static int handle_index_data(struct relay_stream *stream, uint64_t net_seq_num,
 		/* No flush. */
 		ret = 0;
 	} else {
-		/* Put self-ref for this index due to error. */
-		relay_index_put(index);
-		index = NULL;
 		ret = -1;
 	}
 end:
