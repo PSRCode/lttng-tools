@@ -500,7 +500,8 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 		if (tracker->count.suspendable.active > 0) {
 			ret = fd_tracker_suspend_handles(tracker, 1);
 			if (ret) {
-				goto error_destroy;
+				ERR("Suspend handled failed");
+				goto error_free;
 			}
 		} else {
 			/*
@@ -511,28 +512,27 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 			WARN("Cannot open file system handle, too many unsuspendable file descriptors are opened (%u)",
 					tracker->count.unsuspendable);
 			ret = -EMFILE;
-			goto error_destroy;
+			goto error_free;
 		}
 	}
 
 	handle = zmalloc(sizeof(*handle));
 	if (!handle) {
-		goto end;
+		goto error_free;
 	}
 	handle->tracker = tracker;
 
 	ret = pthread_mutex_init(&handle->lock, NULL);
 	if (ret) {
 		PERROR("Failed to initialize handle mutex while creating fs handle");
-		free(handle);
-		goto error_free;
+		goto error_init;
 	}
 
 	handle->fd = open_from_properties(path, &properties);
 	if (handle->fd < 0) {
 		PERROR("Failed to open fs handle to %s, open() returned", path);
 		ret = -errno;
-		goto error_destroy;
+		goto error;
 	}
 
 	handle->properties = properties;
@@ -542,28 +542,28 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 	if (!handle->inode) {
 		ERR("Failed to get lttng_inode corresponding to file %s",
 				path);
-		goto error_destroy;
+		goto error;
 	}
 
 	if (fstat(handle->fd, &fd_stat)) {
 		PERROR("Failed to retrieve file descriptor inode while creating fs handle, fstat() returned");
 		ret = -errno;
-		goto error_destroy;
+		goto error;
 	}
 	handle->ino = fd_stat.st_ino;
 
 	fd_tracker_track(tracker, handle);
-	pthread_mutex_unlock(&tracker->lock);
 end:
+	pthread_mutex_unlock(&tracker->lock);
 	return handle;
-error_destroy:
+error:
 	pthread_mutex_destroy(&handle->lock);
-error_free:
+error_init:
 	if (handle->inode) {
 		lttng_inode_put(handle->inode);
 	}
+error_free:
 	free(handle);
-	pthread_mutex_unlock(&tracker->lock);
 	handle = NULL;
 	goto end;
 }
