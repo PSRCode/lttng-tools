@@ -486,7 +486,7 @@ end:
 struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 		const char *path, int flags, mode_t *mode)
 {
-	int ret;
+	int ret = 0;
 	struct fs_handle *handle = NULL;
 	struct stat fd_stat;
 	struct open_properties properties = {
@@ -501,29 +501,32 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 			ret = fd_tracker_suspend_handles(tracker, 1);
 			if (ret) {
 				ERR("Suspend handled failed");
+				ret = EMFILE;
 				goto error_free;
 			}
 		} else {
 			/*
 			 * There are not enough active suspendable file
-			 * descriptors to open a new fd and still accomodate the
+			 * descriptors to open a new fd and still accommodate the
 			 * tracker's capacity.
 			 */
 			WARN("Cannot open file system handle, too many unsuspendable file descriptors are opened (%u)",
 					tracker->count.unsuspendable);
-			ret = -EMFILE;
+			ret = EMFILE;
 			goto error_free;
 		}
 	}
 
 	handle = zmalloc(sizeof(*handle));
 	if (!handle) {
+		ret = ENOMEM;
 		goto error_free;
 	}
 	handle->tracker = tracker;
 
 	ret = pthread_mutex_init(&handle->lock, NULL);
 	if (ret) {
+		ret = errno;
 		PERROR("Failed to initialize handle mutex while creating fs handle");
 		goto error_init;
 	}
@@ -531,7 +534,7 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 	handle->fd = open_from_properties(path, &properties);
 	if (handle->fd < 0) {
 		PERROR("Failed to open fs handle to %s, open() returned", path);
-		ret = -errno;
+		ret = errno;
 		goto error;
 	}
 
@@ -540,6 +543,7 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 	handle->inode = lttng_inode_registry_get_inode(tracker->inode_registry,
 			handle->fd, path);
 	if (!handle->inode) {
+		ret = errno;
 		ERR("Failed to get lttng_inode corresponding to file %s",
 				path);
 		goto error;
@@ -547,7 +551,7 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 
 	if (fstat(handle->fd, &fd_stat)) {
 		PERROR("Failed to retrieve file descriptor inode while creating fs handle, fstat() returned");
-		ret = -errno;
+		ret = errno;
 		goto error;
 	}
 	handle->ino = fd_stat.st_ino;
@@ -565,6 +569,7 @@ error_init:
 error_free:
 	free(handle);
 	handle = NULL;
+	errno = ret;
 	goto end;
 }
 
