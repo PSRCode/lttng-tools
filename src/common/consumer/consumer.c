@@ -67,6 +67,40 @@ struct consumer_channel_msg {
 	uint64_t key;				/* del */
 };
 
+/* Utility stream array and its utility functions */
+struct stream_array {
+	unsigned int count;
+	struct lttng_dynamic_buffer buffer;
+};
+
+typedef int (*stream_action)(struct lttng_consumer_stream *, void *);
+
+static int for_each_stream_array(struct stream_array *streams,
+		stream_action action, void *data)
+{
+	unsigned int i;
+	bool error = false;
+	struct lttng_consumer_stream **it =
+			(struct lttng_consumer_stream **) streams->buffer.data;
+
+	for (i = 0; i < streams->count; i++) {
+		int ret;
+
+		ret = action(*it, data);
+		if (ret) {
+			error = true;
+		}
+		it++;
+	}
+	return error ? -1 : 0;
+}
+
+static int unlock_stream(struct lttng_consumer_stream *stream, void *data)
+{
+	pthread_mutex_unlock(&stream->lock);
+	return 0;
+}
+
 /*
  * Flag to inform the polling thread to quit when all fd hung up. Updated by
  * the consumer_thread_receive_fds when it notices that all fds has hung up.
@@ -3572,6 +3606,18 @@ found:
 	return relayd;
 }
 
+static int add_data_pending_deferred(struct lttng_consumer_stream *stream,
+		void *_relayd)
+{
+	struct consumer_relayd_sock_pair *relayd = _relayd;
+
+	assert(stream);
+	return relayd_data_pending_deferred(relayd,
+			stream->relayd_stream_id,
+			stream->next_net_seq_num - 1);
+
+}
+
 /*
  * Check if for a given session id there is still data needed to be extract
  * from the buffers.
@@ -3581,13 +3627,17 @@ found:
 int consumer_data_pending(uint64_t id)
 {
 	int ret;
+	int is_data_pending = 0;
 	struct lttng_ht_iter iter;
 	struct lttng_ht *ht;
 	struct lttng_consumer_stream *stream;
 	struct consumer_relayd_sock_pair *relayd = NULL;
+	struct stream_array streams = { .count = 0 };
 	int (*data_pending)(struct lttng_consumer_stream *);
 
 	DBG("Consumer data pending command on session id %" PRIu64, id);
+
+	lttng_dynamic_buffer_init(&streams.buffer);
 
 	rcu_read_lock();
 	pthread_mutex_lock(&consumer_data.lock);
@@ -3626,7 +3676,8 @@ int consumer_data_pending(uint64_t id)
 			ret = data_pending(stream);
 			if (ret == 1) {
 				pthread_mutex_unlock(&stream->lock);
-				goto data_pending;
+				is_data_pending = 1;
+				goto end;
 			}
 		}
 
@@ -3641,68 +3692,84 @@ int consumer_data_pending(uint64_t id)
 		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
 		ret = relayd_begin_data_pending(&relayd->control_sock,
 				relayd->relayd_session_id);
+		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
 		if (ret < 0) {
-			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
 			/* Communication error thus the relayd so no data pending. */
-			goto data_not_pending;
+			is_data_pending = 0;
+			goto end;
 		}
 
+		/* Take all lock of know streams and append it to the local list
+		 * of streams while holding the stream lock.
+		 */
 		cds_lfht_for_each_entry_duplicate(ht->ht,
 				ht->hash_fct(&id, lttng_ht_seed),
 				ht->match_fct, &id,
 				&iter.iter, stream, node_session_id.node) {
+
+			pthread_mutex_lock(&stream->lock);
 			if (stream->metadata_flag) {
+				pthread_mutex_lock(&relayd->ctrl_sock_mutex);
 				ret = relayd_quiescent_control(&relayd->control_sock,
 						stream->relayd_stream_id);
+				pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+				pthread_mutex_unlock(&stream->lock);
 			} else {
-				ret = relayd_data_pending(&relayd->control_sock,
-						stream->relayd_stream_id,
-						stream->next_net_seq_num - 1);
+				ret = lttng_dynamic_buffer_append(&streams.buffer, &stream, sizeof(stream));
+				if (ret == 0) {
+					streams.count++;
+				}
 			}
-			if (ret == 1) {
-				pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
-				pthread_mutex_unlock(&stream->lock);
-				goto data_pending;
-			}
+
 			if (ret < 0) {
-				pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
-				pthread_mutex_unlock(&stream->lock);
-				goto data_not_pending;
+				is_data_pending = 0;
+				goto end;
 			}
 		}
 
+		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+		ret = for_each_stream_array(&streams, add_data_pending_deferred, relayd);
+		if (ret) {
+			relayd_reset_commands(relayd);
+			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+			is_data_pending = 0;
+			goto end;
+		}
+
+		ret = relayd_flush_commands(relayd, relayd_data_pending_reply_handling);
+		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+		if (ret == 1) {
+			is_data_pending = 1;
+			goto end;
+		}
+		if (ret < 0) {
+			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+			is_data_pending = 0;
+			goto end;
+		}
+
 		/* Send end command for data pending. */
+		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
 		ret = relayd_end_data_pending(&relayd->control_sock,
 				relayd->relayd_session_id, &is_data_inflight);
 		if (ret < 0) {
 			ERR("Relayd end data pending failed. Cleaning up relayd %" PRIu64".", relayd->id);
-			lttng_consumer_cleanup_relayd(relayd);
-			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
-			goto data_not_pending;
+			is_data_pending = 0;
+			goto end;
 		}
 		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
 		if (is_data_inflight) {
-			goto data_pending;
+			is_data_pending = 1;
+			goto end;
 		}
 	}
 
-	/*
-	 * Finding _no_ node in the hash table and no inflight data means that the
-	 * stream(s) have been removed thus data is guaranteed to be available for
-	 * analysis from the trace files.
-	 */
-
-data_not_pending:
-	/* Data is available to be read by a viewer. */
+end:
+	for_each_stream_array(&streams, unlock_stream, NULL);
 	pthread_mutex_unlock(&consumer_data.lock);
 	rcu_read_unlock();
-	return 0;
-
-data_pending:
-	/* Data is still being extracted from buffers. */
-	pthread_mutex_unlock(&consumer_data.lock);
-	rcu_read_unlock();
-	return 1;
+	lttng_dynamic_buffer_reset(&streams.buffer);
+	return is_data_pending;
 }
 
 /*

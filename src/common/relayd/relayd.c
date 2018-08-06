@@ -674,47 +674,29 @@ error:
  *
  * Return 0 if NOT pending, 1 if so and a negative value on error.
  */
-int relayd_data_pending(struct lttcomm_relayd_sock *rsock, uint64_t stream_id,
+int relayd_data_pending_deferred(struct consumer_relayd_sock_pair *relayd, uint64_t stream_id,
 		uint64_t last_net_seq_num)
 {
 	int ret;
 	struct lttcomm_relayd_data_pending msg;
-	struct lttcomm_relayd_generic_reply reply;
+	struct lttcomm_relayd_sock *rsock;
 
 	/* Code flow error. Safety net. */
+	rsock = &relayd->control_sock;
 	assert(rsock);
 
-	DBG("Relayd data pending for stream id %" PRIu64, stream_id);
+	DBG("Relayd data pending deferred for stream id %" PRIu64, stream_id);
 
 	memset(&msg, 0, sizeof(msg));
 	msg.stream_id = htobe64(stream_id);
 	msg.last_net_seq_num = htobe64(last_net_seq_num);
 
-	/* Send command */
-	ret = send_command(rsock, RELAYD_DATA_PENDING, (void *) &msg,
-			sizeof(msg), 0);
-	if (ret < 0) {
+	ret = relayd_add_deferred_command(relayd, RELAYD_DATA_PENDING,
+				&msg, sizeof(msg));
+	if (ret) {
+		ret = -1;
 		goto error;
 	}
-
-	/* Receive response */
-	ret = recv_reply(rsock, (void *) &reply, sizeof(reply));
-	if (ret < 0) {
-		goto error;
-	}
-
-	reply.ret_code = be32toh(reply.ret_code);
-
-	/* Return session id or negative ret code. */
-	if (reply.ret_code >= LTTNG_OK) {
-		ERR("Relayd data pending replied error %d", reply.ret_code);
-	}
-
-	/* At this point, the ret code is either 1 or 0 */
-	ret = reply.ret_code;
-
-	DBG("Relayd data is %s pending for stream id %" PRIu64,
-			ret == 1 ? "" : "NOT", stream_id);
 
 error:
 	return ret;
@@ -1028,6 +1010,57 @@ int relayd_generic_reply_handling(struct consumer_relayd_sock_pair *relayd)
 	}
 
 	ret = got_error ? -1 : 0;
+error:
+	return ret;
+}
+
+int relayd_data_pending_reply_handling(struct consumer_relayd_sock_pair *relayd)
+{
+	int ret = 0;
+	bool got_error = false;
+	bool is_data_pending = false;
+
+	/* Consume the replies of all pending commands. */
+	for (int i = 0; i < relayd->deferred_commands.count; i++) {
+		struct lttcomm_relayd_generic_reply reply;
+
+		ret = recv_reply(&relayd->control_sock, (void *) &reply,
+				 sizeof(reply));
+		if (ret < 0) {
+			ERR("Error occured receiving reply in relayd_flush_commands()");
+			goto error;
+		}
+
+		reply.ret_code = be32toh(reply.ret_code);
+		DBG("Received reply with code %i in relayd_flush_commands()", reply.ret_code);
+
+		/* Return session id or negative ret code. */
+		if (reply.ret_code >= LTTNG_OK) {
+			/*
+			 * Consume all replies even if an error was
+			 * encountered as the relayd will send a response for
+			 * each command.
+			 */
+			got_error = true;
+			ERR("Relayd send data pending replied error %d", reply.ret_code);
+			continue;
+		}
+
+		/* Data is pending for this stream on ret == 1*/
+		if (reply.ret_code == 1) {
+			/* We could break immediately but we would need to
+			 * discard stuff on recv side anyway. So just keep
+			 * iterating
+			 */
+			is_data_pending = true;
+		}
+	}
+
+	ret = is_data_pending;
+
+	if (got_error) {
+		ret = -1;
+	}
 error:
 	return ret;
 }
