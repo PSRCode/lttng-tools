@@ -517,7 +517,11 @@ struct consumer_relayd_sock_pair {
 	uint64_t relayd_session_id;
 	uint64_t sessiond_session_id;
 
-	/* Deferred commands to be sent to this relay daemon. */
+	/*
+	 * Deferred commands to be sent to this relay daemon.
+	 * The ctrl_sock_mutex must be held from the moment command are deferred
+	 * until the replies are processed (relayd_flush_command).
+	 */
 	struct {
 		unsigned int count;
 		struct lttng_dynamic_buffer buffer;
