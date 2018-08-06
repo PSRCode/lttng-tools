@@ -444,21 +444,21 @@ static void live_timer(struct lttng_consumer_local_data *ctx,
 		goto unlock_streams;
 	}
 
+	pthread_mutex_lock(&relayd->ctrl_sock_mutex);
 	ret = for_each_stream_array(&streams, check_stream, relayd);
 	if (ret) {
 		goto unlock_streams;
 	}
 
 	if (relayd) {
-		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
 		ret = relayd_flush_commands(relayd);
-		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
 		if (ret) {
 			ERR("relayd_flush_commands failed in live_timer()");
 		}
 	}
 
 unlock_streams:
+	pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
 	ret = for_each_stream_array(&streams, unlock_stream, NULL);
 	if (ret) {
 		goto error;
