@@ -25,6 +25,8 @@
 #include <common/sessiond-comm/sessiond-comm.h>
 #include <common/consumer/consumer.h>
 
+typedef int (*relayd_replies_handling)(struct consumer_relayd_sock_pair *relayd);
+
 int relayd_connect(struct lttcomm_relayd_sock *sock);
 int relayd_close(struct lttcomm_relayd_sock *sock);
 int relayd_create_session(struct lttcomm_relayd_sock *sock, uint64_t *session_id,
@@ -53,6 +55,9 @@ int relayd_send_index(struct consumer_relayd_sock_pair *relayd,
 		uint64_t net_seq_num, bool deferred);
 int relayd_reset_metadata(struct lttcomm_relayd_sock *rsock,
 		uint64_t stream_id, uint64_t version);
-int relayd_flush_commands(struct consumer_relayd_sock_pair *relayd);
+
+int relayd_flush_commands(struct consumer_relayd_sock_pair *relayd, relayd_replies_handling handling);
+void relayd_reset_commands(struct consumer_relayd_sock_pair *relayd);
+int relayd_generic_reply_handling(struct consumer_relayd_sock_pair *relayd);
 
 #endif /* _RELAYD_H */
