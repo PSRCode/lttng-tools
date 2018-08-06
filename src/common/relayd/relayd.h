@@ -44,7 +44,7 @@ int relayd_start_data(struct lttcomm_relayd_sock *sock);
 int relayd_send_metadata(struct lttcomm_relayd_sock *sock, size_t len);
 int relayd_send_data_hdr(struct lttcomm_relayd_sock *sock,
 		struct lttcomm_relayd_data_hdr *hdr, size_t size);
-int relayd_data_pending(struct lttcomm_relayd_sock *sock, uint64_t stream_id,
+int relayd_data_pending_deferred(struct consumer_relayd_sock_pair *relayd, uint64_t stream_id,
 		uint64_t last_net_seq_num);
 int relayd_quiescent_control(struct lttcomm_relayd_sock *sock,
 		uint64_t metadata_stream_id);
@@ -67,5 +67,6 @@ int relayd_mkdir(struct lttcomm_relayd_sock *rsock, const char *path);
 int relayd_flush_commands(struct consumer_relayd_sock_pair *relayd, relayd_replies_handling handling);
 void relayd_reset_commands(struct consumer_relayd_sock_pair *relayd);
 int relayd_generic_reply_handling(struct consumer_relayd_sock_pair *relayd);
+int relayd_data_pending_reply_handling(struct consumer_relayd_sock_pair *relayd);
 
 #endif /* _RELAYD_H */
