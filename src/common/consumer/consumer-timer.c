@@ -451,7 +451,7 @@ static void live_timer(struct lttng_consumer_local_data *ctx,
 	}
 
 	if (relayd) {
-		ret = relayd_flush_commands(relayd);
+		ret = relayd_flush_commands(relayd, relayd_generic_reply_handling);
 		if (ret) {
 			ERR("relayd_flush_commands failed in live_timer()");
 		}

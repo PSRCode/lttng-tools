@@ -1391,30 +1391,13 @@ error:
 	return ret;
 }
 
-int relayd_flush_commands(struct consumer_relayd_sock_pair *relayd)
+int relayd_generic_reply_handling(struct consumer_relayd_sock_pair *relayd)
 {
-	int ret = 0, i;
+	int ret = 0;
 	bool got_error = false;
 
-	if (relayd->deferred_commands.count == 0) {
-		goto end;
-	}
-
-	DBG("relayd flushing commands, %i commands deferred", relayd->deferred_commands.count);
-	/*
-	 * TODO handle case where the command buffer can't be flushed in one
-	 * go.
-	 */
-	ret = send_buffer(&relayd->control_sock, &relayd->deferred_commands.buffer,
-			0);
-	DBG("send buffer returned %i", ret);
-	if (ret < 0 || ret != relayd->deferred_commands.buffer.size) {
-		ERR("Failed to flush deferred commands, send_buffer returned %i", ret);
-		goto error;
-	}
-
 	/* Consume the replies of all pending commands. */
-	for (i = 0; i < relayd->deferred_commands.count; i++) {
+	for (int i = 0; i < relayd->deferred_commands.count; i++) {
 		struct lttcomm_relayd_generic_reply reply;
 
 		ret = recv_reply(&relayd->control_sock, (void *) &reply,
@@ -1441,8 +1424,40 @@ int relayd_flush_commands(struct consumer_relayd_sock_pair *relayd)
 
 	ret = got_error ? -1 : 0;
 error:
-	relayd->deferred_commands.count = 0;
-	lttng_dynamic_buffer_set_size(&relayd->deferred_commands.buffer, 0);
+	return ret;
+}
+
+int relayd_flush_commands(struct consumer_relayd_sock_pair *relayd, relayd_replies_handling handling)
+{
+	int ret = 0;
+
+	if (relayd->deferred_commands.count == 0) {
+		goto end;
+	}
+
+	DBG("relayd flushing commands, %i commands deferred", relayd->deferred_commands.count);
+	/*
+	 * TODO handle case where the command buffer can't be flushed in one
+	 * go.
+	 */
+	ret = send_buffer(&relayd->control_sock, &relayd->deferred_commands.buffer,
+			0);
+	DBG("send buffer returned %i", ret);
+	if (ret < 0 || ret != relayd->deferred_commands.buffer.size) {
+		ERR("Failed to flush deferred commands, send_buffer returned %i", ret);
+		goto error;
+	}
+
+	ret = handling(relayd);
+
+error:
+	relayd_reset_commands(relayd);
 end:
 	return ret;
+}
+
+void relayd_reset_commands(struct consumer_relayd_sock_pair *relayd)
+{
+	relayd->deferred_commands.count = 0;
+	lttng_dynamic_buffer_set_size(&relayd->deferred_commands.buffer, 0);
 }
