@@ -1014,6 +1014,13 @@ void ust_registry_session_destroy(struct ust_registry_session *reg)
 		ht_cleanup_push(reg->channels);
 	}
 
+	ret = notification_thread_command_remove_channel(
+			notification_thread_handle, reg->metadata_key,
+			LTTNG_DOMAIN_UST);
+	if (ret != LTTNG_OK) {
+		ERR("Failed to remove metadata channel from notification thread");
+	}
+
 	free(reg->metadata);
 	if (reg->metadata_fd >= 0) {
 		ret = close(reg->metadata_fd);

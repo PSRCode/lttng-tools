@@ -524,32 +524,33 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 		} else {
 			ret = consumer_add_channel(new_channel, ctx);
 		}
-		if (msg.u.channel.type == CONSUMER_CHANNEL_TYPE_DATA && !ret) {
-			int monitor_start_ret;
-
-			DBG("Consumer starting monitor timer");
-			consumer_timer_live_start(new_channel,
-					msg.u.channel.live_timer_interval);
-			monitor_start_ret = consumer_timer_monitor_start(
-					new_channel,
-					msg.u.channel.monitor_timer_interval);
-			if (monitor_start_ret < 0) {
-				ERR("Starting channel monitoring timer failed");
-				goto end_nosignal;
-			}
-
-		}
-
-		health_code_update();
 
 		/* If we received an error in add_channel, we need to report it. */
 		if (ret < 0) {
+			health_code_update();
 			ret = consumer_send_status_msg(sock, ret);
 			if (ret < 0) {
 				goto error_fatal;
 			}
 			goto end_nosignal;
 		}
+
+		/* Live timer */
+		if (msg.u.channel.type == CONSUMER_CHANNEL_TYPE_DATA ) {
+			consumer_timer_live_start(new_channel,
+					msg.u.channel.live_timer_interval);
+		}
+
+		/* Monitor timer */
+		ret = consumer_timer_monitor_start(
+					new_channel,
+					msg.u.channel.monitor_timer_interval);
+		if (ret < 0) {
+			ERR("Starting channel monitoring timer failed");
+			goto end_nosignal;
+		}
+
+		health_code_update();
 
 		goto end_nosignal;
 	}

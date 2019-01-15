@@ -656,7 +656,16 @@ void trace_kernel_destroy_channel(struct ltt_kernel_channel *channel)
  */
 void trace_kernel_destroy_metadata(struct ltt_kernel_metadata *metadata)
 {
+	enum lttng_error_code status;
 	assert(metadata);
+
+	if (notification_thread_handle
+			&& metadata->published_to_notification_thread) {
+		status = notification_thread_command_remove_channel(
+				notification_thread_handle,
+				metadata->key, LTTNG_DOMAIN_KERNEL);
+		assert(status == LTTNG_OK);
+	}
 
 	DBG("[trace] Closing metadata fd %d", metadata->fd);
 	/* Close kernel fd */

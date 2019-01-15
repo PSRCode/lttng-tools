@@ -211,6 +211,7 @@ int kernel_consumer_add_metadata(struct consumer_socket *sock,
 	struct lttcomm_consumer_msg lkm;
 	struct consumer_output *consumer;
 	struct ltt_session *session = NULL;
+	enum lttng_error_code status;
 
 	rcu_read_lock();
 
@@ -255,7 +256,7 @@ int kernel_consumer_add_metadata(struct consumer_socket *sock,
 			DEFAULT_KERNEL_CHANNEL_OUTPUT,
 			CONSUMER_CHANNEL_TYPE_METADATA,
 			0, 0,
-			monitor, 0, 0);
+			monitor, 0, DEFAULT_METADATA_MONITOR_TIMER);
 
 	health_code_update();
 
@@ -283,6 +284,18 @@ int kernel_consumer_add_metadata(struct consumer_socket *sock,
 	}
 
 	health_code_update();
+
+	status = notification_thread_command_add_channel(
+			notification_thread_handle, session->name,
+			ksession->uid, ksession->gid,
+			ksession->metadata->conf->name, ksession->metadata->key,
+			LTTNG_DOMAIN_KERNEL,
+			ksession->metadata->conf->attr.subbuf_size * ksession->metadata->conf->attr.num_subbuf);
+	if (status != LTTNG_OK) {
+		ret = -1;
+		goto error;
+	}
+	ksession->metadata->published_to_notification_thread = true;
 
 error:
 	rcu_read_unlock();

@@ -3261,6 +3261,7 @@ static int create_ust_app_metadata(struct ust_app_session *ua_sess,
 	struct consumer_socket *socket;
 	struct ust_registry_session *registry;
 	struct ltt_session *session = NULL;
+	enum lttng_error_code status;
 
 	assert(ua_sess);
 	assert(app);
@@ -3287,6 +3288,9 @@ static int create_ust_app_metadata(struct ust_app_session *ua_sess,
 	}
 
 	memcpy(&metadata->attr, &ua_sess->metadata_attr, sizeof(metadata->attr));
+
+	/* Monitor the metadata channel by default */
+	metadata->monitor_timer_interval = DEFAULT_METADATA_MONITOR_TIMER;
 
 	/* Need one fd for the channel. */
 	ret = lttng_fd_get(LTTNG_FD_APPS, 1);
@@ -3340,6 +3344,19 @@ static int create_ust_app_metadata(struct ust_app_session *ua_sess,
 	if (ret < 0) {
 		/* Nullify the metadata key so we don't try to close it later on. */
 		registry->metadata_key = 0;
+		goto error_consumer;
+	}
+
+	status = notification_thread_command_add_channel(
+			notification_thread_handle, session->name,
+			ua_sess->euid, ua_sess->egid,
+			metadata->name,
+			metadata->key,
+			LTTNG_DOMAIN_UST,
+			metadata->attr.subbuf_size * metadata->attr.num_subbuf);
+	if (status != LTTNG_OK) {
+		ret = - (int) status;
+		ERR("Failed to add channel metadata to notification thread");
 		goto error_consumer;
 	}
 

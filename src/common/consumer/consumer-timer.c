@@ -583,6 +583,7 @@ int consumer_timer_monitor_start(struct lttng_consumer_channel *channel,
 	assert(channel->key);
 	assert(!channel->monitor_timer_enabled);
 
+	DBG3("Starting monitor timer for %s, interval = %u", channel->name, monitor_timer_interval_us);
 	ret = consumer_channel_timer_start(&channel->monitor_timer, channel,
 			monitor_timer_interval_us, LTTNG_CONSUMER_SIG_MONITOR);
 	channel->monitor_timer_enabled = !!(ret == 0);
@@ -727,6 +728,7 @@ void monitor_timer(struct lttng_consumer_channel *channel)
 	if (channel_monitor_pipe < 0) {
 		return;
 	}
+	DBG3("Monitor timer fired for channel %s", channel->name);
 
 	switch (consumer_data.type) {
 	case LTTNG_CONSUMER_KERNEL:
