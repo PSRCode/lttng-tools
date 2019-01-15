@@ -266,6 +266,8 @@ struct lttng_consumer_stream {
 	off_t out_fd_offset;
 	/* Amount of bytes written to the output */
 	uint64_t output_written;
+	/* Amount of bytes written to the index output */
+	uint64_t index_output_written;
 	enum lttng_consumer_stream_state state;
 	int shm_fd_is_copy;
 	int data_read;

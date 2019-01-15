@@ -692,7 +692,7 @@ int sample_channel_positions(struct lttng_consumer_channel *channel,
 		 *  - the consumed position is not the accurate representation of what
 		 *    was extracted from a buffer in overwrite mode.
 		 */
-		*_total_consumed += stream->output_written;
+		*_total_consumed += stream->output_written + stream->index_output_written;
 	next:
 		pthread_mutex_unlock(&stream->lock);
 	}

@@ -393,6 +393,8 @@ int consumer_stream_write_index(struct lttng_consumer_stream *stream,
 		goto error;
 	}
 
+	stream->index_output_written += stream->index_file->element_len;
+
 error:
 	rcu_read_unlock();
 	return ret;

@@ -579,6 +579,7 @@ struct lttng_consumer_stream *consumer_allocate_stream(uint64_t channel_key,
 	stream->out_fd = -1;
 	stream->out_fd_offset = 0;
 	stream->output_written = 0;
+	stream->index_output_written = 0;
 	stream->state = state;
 	stream->uid = uid;
 	stream->gid = gid;
