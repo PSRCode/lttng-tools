@@ -508,7 +508,7 @@ void consumer_timer_switch_start(struct lttng_consumer_channel *channel,
 
 	assert(channel);
 	assert(channel->key);
-
+	DBG3("Starting switch timer for %s, interval = %u", channel->name, switch_timer_interval_us);
 	ret = consumer_channel_timer_start(&channel->switch_timer, channel,
 			switch_timer_interval_us, LTTNG_CONSUMER_SIG_SWITCH);
 
@@ -634,7 +634,7 @@ int consumer_signal_init(void)
 
 static
 int sample_channel_positions(struct lttng_consumer_channel *channel,
-		uint64_t *_highest_use, uint64_t *_lowest_use, uint64_t *_total_consumed,
+		uint64_t *_highest_use, uint64_t *_lowest_use, uint64_t *_total_consumed, uint64_t *_total_usage,
 		sample_positions_cb sample, get_consumed_cb get_consumed,
 		get_produced_cb get_produced)
 {
@@ -646,9 +646,11 @@ int sample_channel_positions(struct lttng_consumer_channel *channel,
 	struct lttng_ht *ht = consumer_data.stream_per_chan_id_ht;
 
 	*_total_consumed = 0;
+	*_total_usage = 0;
 
 	rcu_read_lock();
 
+	DBG3("Sampling positions for channel %s", channel->name);
 	cds_lfht_for_each_entry_duplicate(ht->ht,
 			ht->hash_fct(&channel->key, lttng_ht_seed),
 			ht->match_fct, &channel->key,
@@ -686,6 +688,13 @@ int sample_channel_positions(struct lttng_consumer_channel *channel,
 		low = (usage < low) ? usage : low;
 
 		/*
+		 * "produced - consumed" is a valid value for current buffer
+		 * usage in both overwrite and discard mode.
+		 * TODO: why ??? check with mathieu to validate.
+		 */
+		*_total_usage += usage;
+
+		/*
 		 * We don't use consumed here for 2 reasons:
 		 *  - output_written takes into account the padding written in the
 		 *    tracefiles when we stop the session;
@@ -693,9 +702,13 @@ int sample_channel_positions(struct lttng_consumer_channel *channel,
 		 *    was extracted from a buffer in overwrite mode.
 		 */
 		*_total_consumed += stream->output_written + stream->index_output_written;
+		DBG3("Stream %s output_written %" PRIu64 " index_output_written %" PRIu64 " usage %" PRIu64, stream->name, stream->output_written, stream->index_output_written, usage);
 	next:
 		pthread_mutex_unlock(&stream->lock);
 	}
+
+	DBG3("Channel %s consumed = %" PRIu64 " usage = %" PRIu64, channel->name, *_total_consumed, *_total_usage);
+
 
 	*_highest_use = high;
 	*_lowest_use = low;
@@ -747,7 +760,7 @@ void monitor_timer(struct lttng_consumer_channel *channel)
 	}
 
 	ret = sample_channel_positions(channel, &msg.highest, &msg.lowest,
-			&msg.total_consumed, sample, get_consumed, get_produced);
+			&msg.total_consumed, &msg.total_usage, sample, get_consumed, get_produced);
 	if (ret) {
 		return;
 	}

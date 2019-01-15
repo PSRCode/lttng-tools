@@ -206,6 +206,7 @@ struct channel_state_sample {
 	uint64_t highest_usage;
 	uint64_t lowest_usage;
 	uint64_t channel_total_consumed;
+	uint64_t channel_total_usage;
 };
 
 static unsigned long hash_channel_key(struct channel_key *key);
@@ -3173,6 +3174,7 @@ int handle_notification_thread_channel_sample(
 	latest_sample.highest_usage = sample_msg.highest;
 	latest_sample.lowest_usage = sample_msg.lowest;
 	latest_sample.channel_total_consumed = sample_msg.total_consumed;
+	latest_sample.channel_total_usage = sample_msg.total_usage;
 
 	rcu_read_lock();
 
@@ -3198,13 +3200,14 @@ int handle_notification_thread_channel_sample(
 	}
 	channel_info = caa_container_of(node, struct channel_info,
 			channels_ht_node);
-	DBG("[notification-thread] Handling channel sample for channel %s (key = %" PRIu64 ") in session %s (highest usage = %" PRIu64 ", lowest usage = %" PRIu64", total consumed = %" PRIu64")",
+	DBG("[notification-thread] Handling channel sample for channel %s (key = %" PRIu64 ") in session %s (highest usage = %" PRIu64 ", lowest usage = %" PRIu64", total consumed = %" PRIu64", total usage = %" PRIu64 ")",
 			channel_info->name,
 			latest_sample.key.key,
 			channel_info->session_info->name,
 			latest_sample.highest_usage,
 			latest_sample.lowest_usage,
-			latest_sample.channel_total_consumed);
+			latest_sample.channel_total_consumed,
+			latest_sample.channel_total_usage);
 
 	previous_session_consumed_total =
 			channel_info->session_info->consumed_data_size;
@@ -3218,6 +3221,7 @@ int handle_notification_thread_channel_sample(
 	node = cds_lfht_iter_get_node(&iter);
 	if (caa_likely(node)) {
 		struct channel_state_sample *stored_sample;
+		uint64_t consumed_delta;
 
 		/* Update the sample stored. */
 		stored_sample = caa_container_of(node,
@@ -3229,11 +3233,21 @@ int handle_notification_thread_channel_sample(
 		stored_sample->highest_usage = latest_sample.highest_usage;
 		stored_sample->lowest_usage = latest_sample.lowest_usage;
 		stored_sample->channel_total_consumed = latest_sample.channel_total_consumed;
+		stored_sample->channel_total_usage = latest_sample.channel_total_usage;
 		previous_sample_available = true;
 
-		latest_session_consumed_total =
-				previous_session_consumed_total +
-				(latest_sample.channel_total_consumed - previous_sample.channel_total_consumed);
+		consumed_delta = (latest_sample.channel_total_consumed - previous_sample.channel_total_consumed);
+
+		/*
+		 * We must account for the in-buffer trace data since performing
+		 * a rotation (only action for now) will flush the buffers.
+		 * Buffers usage from the previous sample must be removed since
+		 * we MUST not accumulate it from sample to sample.
+		 * The buffers usage is an instantenous measure.
+		 */
+		latest_session_consumed_total = previous_session_consumed_total - previous_sample.channel_total_usage;
+		latest_session_consumed_total += latest_sample.channel_total_usage;
+		latest_session_consumed_total += consumed_delta;
 	} else {
 		/*
 		 * This is the channel's first sample, allocate space for and
@@ -3255,7 +3269,8 @@ int handle_notification_thread_channel_sample(
 
 		latest_session_consumed_total =
 				previous_session_consumed_total +
-				latest_sample.channel_total_consumed;
+				latest_sample.channel_total_consumed +
+				latest_sample.channel_total_usage;
 	}
 
 	channel_info->session_info->consumed_data_size =

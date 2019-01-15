@@ -642,6 +642,10 @@ struct lttcomm_consumer_channel_monitor_msg {
 	 * Sum of all the consumed positions for a channel.
 	 */
 	uint64_t total_consumed;
+	/*
+	 * Sum of all the buffer usage for a channel.
+	 */
+	uint64_t total_usage;
 } LTTNG_PACKED;
 
 /*

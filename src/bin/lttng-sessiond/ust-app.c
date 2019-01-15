@@ -3289,7 +3289,9 @@ static int create_ust_app_metadata(struct ust_app_session *ua_sess,
 
 	memcpy(&metadata->attr, &ua_sess->metadata_attr, sizeof(metadata->attr));
 
-	/* Monitor the metadata channel by default */
+	/* Switch on metadata channel by default */
+	metadata->attr.switch_timer_interval = DEFAULT_METADATA_SWITCH_TIMER;
+	/* Monitor the metadata channel by defaul */
 	metadata->monitor_timer_interval = DEFAULT_METADATA_MONITOR_TIMER;
 
 	/* Need one fd for the channel. */
