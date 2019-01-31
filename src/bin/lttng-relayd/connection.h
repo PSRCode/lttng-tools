@@ -137,6 +137,8 @@ struct relay_connection {
 			struct lttng_dynamic_buffer reception_buffer;
 		} ctrl;
 	} protocol;
+	/* TODO: joraj starving relayd data loop */
+	bool was_active;
 };
 
 struct relay_connection *connection_create(struct lttcomm_sock *sock,
