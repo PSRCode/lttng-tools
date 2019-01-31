@@ -3747,6 +3747,8 @@ static void *relay_thread_worker(void *data)
 	struct lttng_ht *relay_connections_ht;
 	struct lttng_ht_iter iter;
 	struct relay_connection *tmp_conn = NULL;
+	uint64_t relay_conn_pipe_activity_phase = 0;
+	uint64_t current_activity_phase = 1;
 
 	DBG("[thread] Relay worker started");
 
@@ -3780,7 +3782,6 @@ restart:
 	while (1) {
 		int i;
 		bool at_least_one_event_processed = false;
-		bool relay_conn_pipe_was_active = false;
 
 		health_code_update();
 
@@ -3833,12 +3834,12 @@ restart:
 				if (revents & LPOLLIN) {
 					struct relay_connection *conn;
 
-					if (relay_conn_pipe_was_active) {
+					if (relay_conn_pipe_activity_phase == current_activity_phase) {
 						/*
 						 * One consider once per
 						 * activity phase for fairness
 						 */
-						ERR("Joraj: already treated a new connection");
+						DBG("Skipping adding reception, already happened in activity phase %" PRIu64, current_activity_phase);
 						continue;
 					}
 
@@ -3846,11 +3847,18 @@ restart:
 					if (ret < 0) {
 						goto error;
 					}
+					/*
+					 * For now we prefer fairness over
+					 * "immediate" action of new
+					 * connection. Set activity phase to the
+					 * current one.
+					 */
+					conn->activity_phase = current_activity_phase;
 					lttng_poll_add(&events, conn->sock->fd,
 							LPOLLIN | LPOLLRDHUP);
 					connection_ht_add(relay_connections_ht, conn);
 					DBG("Connection socket %d added", conn->sock->fd);
-					relay_conn_pipe_was_active = true;
+					relay_conn_pipe_activity_phase = current_activity_phase;
 					at_least_one_event_processed = true;
 				} else if (revents & (LPOLLERR | LPOLLHUP | LPOLLRDHUP)) {
 					ERR("Relay connection pipe error");
@@ -3865,15 +3873,17 @@ restart:
 				connection = connection_get_by_sock(relay_connections_ht, pollfd);
 				/* If not found, there is a synchronization issue. */
 				assert(connection);
-				if (connection->was_active) {
-					ERR("Joraj: Connection was already active skipping");
+				if (connection->activity_phase == current_activity_phase) {
+					DBG3("Skipping connection %d, already happened in activity phase %" PRIu64, connection->sock->fd, current_activity_phase);
 					goto connection_put;
 				}
 
 				if (revents & LPOLLIN) {
 					enum relay_connection_status status;
+
 					at_least_one_event_processed = true;
-					connection->was_active = true;
+					connection->activity_phase = current_activity_phase;
+
 					if (connection->type == RELAY_DATA) {
 						status = relay_process_data(connection);
 					} else {
@@ -3909,7 +3919,7 @@ restart:
 					relay_thread_close_connection(&events,
 							pollfd, connection);
 				} else {
-					ERR("Unexpected poll events %u for sock TODO JORAJ PUT TYPE %d",
+					ERR("Unexpected poll events %u for sock %d",
 							revents, pollfd);
 					connection_put(connection);
 					goto error;
@@ -3918,23 +3928,11 @@ restart:
 				connection_put(connection);
 			}
 		}
+						
 
 		if (!at_least_one_event_processed) {
-			/* 
-			 * Reset activity phase state for each connection and
-			 * con pipe.
-			 * */
-			relay_conn_pipe_was_active = false;
-
-			rcu_read_lock();
-			cds_lfht_for_each_entry(relay_connections_ht->ht, &iter.iter,
-					tmp_conn,
-					sock_n.node) {
-				connection_get(tmp_conn);
-				tmp_conn->was_active = false;
-				connection_put(tmp_conn);
-			}
-			rcu_read_unlock();
+			current_activity_phase++;
+			ERR("Incrementing activity phase: %" PRIu64, current_activity_phase);
 		}
 	}
 

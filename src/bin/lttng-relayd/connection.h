@@ -137,8 +137,11 @@ struct relay_connection {
 			struct lttng_dynamic_buffer reception_buffer;
 		} ctrl;
 	} protocol;
-	/* TODO: joraj starving relayd data loop */
-	bool was_active;
+	/*
+	 * The activity phase for which the connection was last active.
+	 * This is used to ensure fairness across connections.
+	 */
+	uint64_t activity_phase;
 };
 
 struct relay_connection *connection_create(struct lttcomm_sock *sock,
