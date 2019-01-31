@@ -1,0 +1,238 @@
+From cd318fbb98a66573dd07dc326ddd556240815c34 Mon Sep 17 00:00:00 2001
+From: Jonathan Rajotte <jonathan.rajotte-julien@efficios.com>
+Date: Thu, 31 Jan 2019 16:52:06 -0500
+Subject: [PATCH lttng-tools] relayd: split control and data connections
+ handling in multiple thread
+
+Allows for concurrent handling of data and control messages.
+
+This is highly experimental.
+
+Signed-off-by: Jonathan Rajotte <jonathan.rajotte-julien@efficios.com>
+---
+ src/bin/lttng-relayd/main.c | 91 ++++++++++++++++++++++++++++---------
+ 1 file changed, 70 insertions(+), 21 deletions(-)
+
+diff --git a/src/bin/lttng-relayd/main.c b/src/bin/lttng-relayd/main.c
+index 1da631487..6d530ce5a 100644
+--- a/src/bin/lttng-relayd/main.c
++++ b/src/bin/lttng-relayd/main.c
+@@ -78,6 +78,11 @@
+ #include "tracefile-array.h"
+ #include "tcp_keep_alive.h"
+ 
++enum relay_thread_worker_type {
++	RELAYD_THREAD_WORKER_DATA,
++	RELAYD_THREAD_WORKER_CTRL,
++};
++
+ enum relay_connection_status {
+ 	RELAY_CONNECTION_STATUS_OK,
+ 	/* An error occured while processing an event on the connection. */
+@@ -126,14 +131,16 @@ int thread_quit_pipe[2] = { -1, -1 };
+  * This pipe is used to inform the worker thread that a command is queued and
+  * ready to be processed.
+  */
+-static int relay_conn_pipe[2] = { -1, -1 };
++static int relay_conn_pipe_data[2] = { -1, -1 };
++static int relay_conn_pipe_control[2] = { -1, -1 };
+ 
+ /* Shared between threads */
+ static int dispatch_thread_exit;
+ 
+ static pthread_t listener_thread;
+ static pthread_t dispatcher_thread;
+-static pthread_t worker_thread;
++static pthread_t worker_control_thread;
++static pthread_t worker_data_thread;
+ static pthread_t health_thread;
+ 
+ /*
+@@ -1206,6 +1213,7 @@ static void *relay_thread_dispatcher(void *data)
+ 	ssize_t ret;
+ 	struct cds_wfcq_node *node;
+ 	struct relay_connection *new_conn = NULL;
++	int pipe = -1;;
+ 
+ 	DBG("[thread] Relay dispatcher started");
+ 
+@@ -1243,12 +1251,18 @@ static void *relay_thread_dispatcher(void *data)
+ 			DBG("Dispatching request waiting on sock %d", new_conn->sock->fd);
+ 
+ 			/*
+-			 * Inform worker thread of the new request. This
++			 * Inform workers thread of the new request. This
+ 			 * call is blocking so we can be assured that
+ 			 * the data will be read at some point in time
+ 			 * or wait to the end of the world :)
+ 			 */
+-			ret = lttng_write(relay_conn_pipe[1], &new_conn, sizeof(new_conn));
++			if (new_conn->type == RELAY_DATA) {
++				pipe = relay_conn_pipe_data[1];
++			} else if (new_conn->type == RELAY_CONTROL){
++				pipe = relay_conn_pipe_control[1];
++
++			}
++			ret = lttng_write(pipe, &new_conn, sizeof(new_conn));
+ 			if (ret < 0) {
+ 				PERROR("write connection pipe");
+ 				connection_put(new_conn);
+@@ -3061,8 +3075,24 @@ static void *relay_thread_worker(void *data)
+ 	struct relay_connection *tmp_conn = NULL;
+ 	uint64_t relay_conn_pipe_activity_phase = 0;
+ 	uint64_t current_activity_phase = 1;
++	enum relay_thread_worker_type worker_type = (enum relay_thread_worker_type)(long) data;
++	const char *worker_type_string;
++	int *connection_pipe;
+ 
+-	DBG("[thread] Relay worker started");
++	switch (worker_type) {
++	case RELAYD_THREAD_WORKER_CTRL:
++		worker_type_string = "Control";
++		connection_pipe = relay_conn_pipe_control;
++		break;
++	case RELAYD_THREAD_WORKER_DATA:
++		worker_type_string = "Data";
++		connection_pipe = relay_conn_pipe_data;
++		break;
++	default:
++		assert(0);
++	}
++
++	DBG("[thread] Relay worker %s started", worker_type_string);
+ 
+ 	rcu_register_thread();
+ 
+@@ -3085,7 +3115,7 @@ static void *relay_thread_worker(void *data)
+ 		goto error_poll_create;
+ 	}
+ 
+-	ret = lttng_poll_add(&events, relay_conn_pipe[0], LPOLLIN | LPOLLRDHUP);
++	ret = lttng_poll_add(&events, connection_pipe[0], LPOLLIN | LPOLLRDHUP);
+ 	if (ret < 0) {
+ 		goto error;
+ 	}
+@@ -3098,7 +3128,7 @@ restart:
+ 		health_code_update();
+ 
+ 		/* Infinite blocking call, waiting for transmission */
+-		DBG3("Relayd worker thread polling...");
++		DBG3("Relayd worker %s thread polling...", worker_type_string);
+ 		health_poll_entry();
+ 		ret = lttng_poll_wait(&events, -1);
+ 		health_poll_exit();
+@@ -3144,7 +3174,7 @@ restart:
+ 			}
+ 
+ 			/* Inspect the relay conn pipe for new connection */
+-			if (pollfd == relay_conn_pipe[0]) {
++			if (pollfd == connection_pipe[0]) {
+ 				if (revents & LPOLLIN) {
+ 					struct relay_connection *conn;
+ 
+@@ -3157,7 +3187,7 @@ restart:
+ 						continue;
+ 					}
+ 
+-					ret = lttng_read(relay_conn_pipe[0], &conn, sizeof(conn));
++					ret = lttng_read(connection_pipe[0], &conn, sizeof(conn));
+ 					if (ret < 0) {
+ 						goto error;
+ 					}
+@@ -3188,7 +3218,7 @@ restart:
+ 				/* If not found, there is a synchronization issue. */
+ 				assert(connection);
+ 				if (connection->activity_phase == current_activity_phase) {
+-					DBG3("Skipping connection %d, already processed in activity phase %" PRIu64, connection->sock->fd, current_activity_phase);
++					DBG3("Skipping %s connection %d, already processed in activity phase %" PRIu64, worker_type_string, connection->sock->fd, current_activity_phase);
+ 					goto connection_put;
+ 				}
+ 
+@@ -3245,7 +3275,7 @@ restart:
+ 
+ 		if (!at_least_one_event_processed) {
+ 			current_activity_phase++;
+-			DBG3("Incrementing activity phase: %" PRIu64, current_activity_phase);
++			DBG3("Incrementing activity phase for %s worker: %" PRIu64, worker_type_string, current_activity_phase);
+ 		}
+ 	}
+ 
+@@ -3278,7 +3308,7 @@ error_poll_create:
+ relay_connections_ht_error:
+ 	/* Close relay conn pipes */
+ 	(void) fd_tracker_util_pipe_close(the_fd_tracker,
+-			relay_conn_pipe);
++			connection_pipe);
+ 	if (err) {
+ 		DBG("Thread exited with error");
+ 	}
+@@ -3300,8 +3330,10 @@ error_testpoint:
+  */
+ static int create_relay_conn_pipe(void)
+ {
+-	return fd_tracker_util_pipe_open_cloexec(the_fd_tracker,
+-			"Relayd connection pipe", relay_conn_pipe);
++	int ret;
++	ret = fd_tracker_util_pipe_open_cloexec(the_fd_tracker, "Relayd data connection pipe", relay_conn_pipe_data);
++	ret = fd_tracker_util_pipe_open_cloexec(the_fd_tracker, "Relayd data connection pipe", relay_conn_pipe_control);
++	return ret;
+ }
+ 
+ static
+@@ -3508,14 +3540,23 @@ int main(int argc, char **argv)
+ 		goto exit_dispatcher_thread;
+ 	}
+ 
+-	/* Setup the worker thread */
+-	ret = pthread_create(&worker_thread, default_pthread_attr(),
+-			relay_thread_worker, NULL);
++	/* Setup the control worker thread */
++	ret = pthread_create(&worker_control_thread, default_pthread_attr(),
++			relay_thread_worker, (void *)(long)RELAYD_THREAD_WORKER_CTRL);
+ 	if (ret) {
+ 		errno = ret;
+-		PERROR("pthread_create worker");
++		PERROR("pthread_create worker control");
+ 		retval = -1;
+-		goto exit_worker_thread;
++		goto exit_worker_control_thread;
++	}
++	/* Setup the data worker thread */
++	ret = pthread_create(&worker_data_thread, default_pthread_attr(),
++			relay_thread_worker, (void *)(long)RELAYD_THREAD_WORKER_DATA);
++	if (ret) {
++		errno = ret;
++		PERROR("pthread_create worker data");
++		retval = -1;
++		goto exit_worker_data_thread;
+ 	}
+ 
+ 	/* Setup the listener thread */
+@@ -3554,14 +3595,22 @@ exit_live:
+ 	}
+ 
+ exit_listener_thread:
+-	ret = pthread_join(worker_thread, &status);
++	ret = pthread_join(worker_data_thread, &status);
+ 	if (ret) {
+ 		errno = ret;
+ 		PERROR("pthread_join worker_thread");
+ 		retval = -1;
+ 	}
+ 
+-exit_worker_thread:
++exit_worker_data_thread:
++	ret = pthread_join(worker_control_thread, &status);
++	if (ret) {
++		errno = ret;
++		PERROR("pthread_join worker_thread");
++		retval = -1;
++	}
++
++exit_worker_control_thread:
+ 	ret = pthread_join(dispatcher_thread, &status);
+ 	if (ret) {
+ 		errno = ret;
+-- 
+2.17.1
+
