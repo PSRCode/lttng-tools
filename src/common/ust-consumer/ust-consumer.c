@@ -765,7 +765,7 @@ static int flush_channel(uint64_t chan_key)
 
 		pthread_mutex_lock(&stream->lock);
 		if (!stream->quiescent) {
-			ustctl_flush_buffer(stream->ustream, 0);
+			lttng_ustconsumer_flush_buffer(stream, 0);
 			stream->quiescent = true;
 		}
 		pthread_mutex_unlock(&stream->lock);
@@ -1137,7 +1137,7 @@ static int snapshot_channel(struct lttng_consumer_channel *channel,
 		 * Else, if quiescent, it has already been done by the prior stop.
 		 */
 		if (!stream->quiescent) {
-			ustctl_flush_buffer(stream->ustream, 0);
+			lttng_ustconsumer_flush_buffer(stream, 0);
 		}
 
 		ret = lttng_ustconsumer_take_snapshot(stream);
@@ -2189,15 +2189,6 @@ void *lttng_ustctl_get_mmap_base(struct lttng_consumer_stream *stream)
 	return ustctl_get_mmap_base(stream->ustream);
 }
 
-void lttng_ustctl_flush_buffer(struct lttng_consumer_stream *stream,
-		int producer_active)
-{
-	assert(stream);
-	assert(stream->ustream);
-
-	ustctl_flush_buffer(stream->ustream, producer_active);
-}
-
 /*
  * Take a snapshot for a specific stream.
  *
@@ -2294,7 +2285,7 @@ void lttng_ustconsumer_on_stream_hangup(struct lttng_consumer_stream *stream)
 
 	pthread_mutex_lock(&stream->lock);
 	if (!stream->quiescent) {
-		ustctl_flush_buffer(stream->ustream, 0);
+		lttng_ustconsumer_flush_buffer(stream, 0);
 		stream->quiescent = true;
 	}
 	pthread_mutex_unlock(&stream->lock);
@@ -2560,7 +2551,7 @@ int lttng_ustconsumer_sync_metadata(struct lttng_consumer_local_data *ctx,
 		retry = 1;
 	}
 
-	ustctl_flush_buffer(metadata->ustream, 1);
+	lttng_ustconsumer_flush_buffer(metadata, 1);
 	ret = ustctl_snapshot(metadata->ustream);
 	if (ret < 0) {
 		if (errno != EAGAIN) {
@@ -2764,7 +2755,7 @@ retry:
 			if (ret <= 0) {
 				goto error;
 			}
-			ustctl_flush_buffer(stream->ustream, 1);
+			lttng_ustconsumer_flush_buffer(stream, 1);
 			goto retry;
 		}
 
