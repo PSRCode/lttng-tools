@@ -1093,7 +1093,7 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 			/*
 			 * Sample the rotate position of all the streams in this channel.
 			 */
-			ret = lttng_consumer_rotate_channel(channel, key,
+			ret = lttng_consumer_rotate_sample_channel(channel, key,
 					msg.u.rotate_channel.pathname,
 					msg.u.rotate_channel.relayd_id,
 					msg.u.rotate_channel.metadata,

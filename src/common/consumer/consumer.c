@@ -3903,7 +3903,7 @@ end:
  *
  * Returns 0 on success, < 0 on error
  */
-int lttng_consumer_rotate_channel(struct lttng_consumer_channel *channel,
+int lttng_consumer_rotate_sample_channel(struct lttng_consumer_channel *channel,
 		uint64_t key, const char *path, uint64_t relayd_id,
 		uint32_t metadata, uint64_t new_chunk_id,
 		struct lttng_consumer_local_data *ctx)
