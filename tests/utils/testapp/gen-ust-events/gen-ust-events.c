@@ -48,6 +48,7 @@ int main(int argc, char **argv)
 	useconds_t nr_usec = 0;
 	char *after_first_event_file_path = NULL;
 	char *before_last_event_file_path = NULL;
+	char *before_last_event_file_path_touch = NULL;
 
 	if (set_signal_handler()) {
 		ret = -1;
@@ -73,6 +74,14 @@ int main(int argc, char **argv)
 	if (argc >= 5) {
 		before_last_event_file_path = argv[4];
 	}
+	if (argc >= 6) {
+		/*
+		 * Touch a file to indicate that all events except one were
+		 * generated.
+		 */
+		before_last_event_file_path_touch = argv[5];
+	}
+
 
 	for (i = 0; nr_iter < 0 || i < nr_iter; i++) {
 		if (nr_iter >= 0 && i == nr_iter - 1) {
@@ -80,6 +89,12 @@ int main(int argc, char **argv)
 			 * Wait on synchronization before writing last
 			 * event.
 			 */
+			if (before_last_event_file_path_touch) {
+				ret = create_file(before_last_event_file_path_touch);
+				if (ret != 0) {
+					goto end;
+				}
+			}
 			if (before_last_event_file_path) {
 				ret = wait_on_file(before_last_event_file_path);
 				if (ret != 0) {

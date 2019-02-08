@@ -31,7 +31,9 @@ TESTS = tools/filtering/test_invalid_filter \
 	tools/rotation/test_ust \
 	tools/rotation/test_kernel \
 	tools/rotation/test_save_load_mi \
-	tools/rotation/test_schedule_api
+	tools/rotation/test_schedule_api \
+	tools/clear/test_ust \
+	tools/clear/test_kernel
 
 if HAVE_LIBLTTNG_UST_CTL
 SUBDIRS += ust
