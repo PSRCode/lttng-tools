@@ -1476,7 +1476,7 @@ enum lttng_error_code kernel_clear_session(struct ltt_session *session)
 	assert(ksess);
 	assert(ksess->consumer);
 
-	DBG("Cleat kernel session %s (session %" PRIu64 ")",
+	DBG("Clear kernel session %s (session %" PRIu64 ")",
 			session->name, session->id);
 
 	rcu_read_lock();
@@ -1498,6 +1498,15 @@ enum lttng_error_code kernel_clear_session(struct ltt_session *session)
 			if (ret < 0) {
 				goto error;
 			}
+		}
+
+		if (!ksess->metadata) {
+			/*
+			 * Nothing to do for the metadata.
+			 * This is a snpashot session.
+			 * The metadata is genererated on the fly.
+			 */
+			continue;
 		}
 
 		/*
