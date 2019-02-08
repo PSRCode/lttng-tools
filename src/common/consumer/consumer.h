@@ -853,5 +853,6 @@ void lttng_consumer_reset_stream_rotate_state(struct lttng_consumer_stream *stre
 int lttng_consumer_mkdir(const char *path, uid_t uid, gid_t gid,
 		uint64_t relayd_id);
 void lttng_consumer_cleanup_relayd(struct consumer_relayd_sock_pair *relayd);
+int lttng_consumer_clear_channel(struct lttng_consumer_channel *channel);
 
 #endif /* LIB_CONSUMER_H */
