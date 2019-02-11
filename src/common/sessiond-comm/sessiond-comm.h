@@ -624,6 +624,9 @@ struct lttcomm_consumer_msg {
 			uint32_t uid;
 			uint32_t gid;
 		} LTTNG_PACKED mkdir;
+		struct {
+			uint64_t key;
+		} LTTNG_PACKED clear_channel;
 	} u;
 } LTTNG_PACKED;
 
