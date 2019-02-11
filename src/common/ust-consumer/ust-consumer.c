@@ -2121,7 +2121,7 @@ int lttng_ustconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 		} else {
 			ret = lttng_consumer_clear_channel(channel);
 			if (ret) {
-				ERR("Clear channel failed");
+				ERR("Clear channel failed key %" PRIu64, key);
 				ret_code = ret;
 			}
 
