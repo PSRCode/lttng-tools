@@ -313,4 +313,7 @@ int consumer_mkdir(struct consumer_socket *socket, uint64_t session_id,
 		const struct consumer_output *output, const char *path,
 		uid_t uid, gid_t gid);
 
+/* Clear command */
+int consumer_clear_channel(struct consumer_socket *socket, uint64_t key,
+		struct consumer_output *output);
 #endif /* _CONSUMER_H */

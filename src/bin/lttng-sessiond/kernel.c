@@ -1459,3 +1459,70 @@ error:
 	rcu_read_unlock();
 	return status;
 }
+
+/*
+ *  Clear a kernel session.
+ *
+ * Return LTTNG_OK on success or else an LTTng error code.
+ */
+enum lttng_error_code kernel_clear_session(struct ltt_session *session)
+{
+	int ret;
+	enum lttng_error_code status = LTTNG_OK;
+	struct consumer_socket *socket;
+	struct lttng_ht_iter iter;
+	struct ltt_kernel_session *ksess = session->kernel_session;
+
+	assert(ksess);
+	assert(ksess->consumer);
+
+	DBG("Cleat kernel session %s (session %" PRIu64 ")",
+			session->name, session->id);
+
+	rcu_read_lock();
+
+	/*
+	 * Note that this loop will end after one iteration given that there is
+	 * only one kernel consumer.
+	 */
+	cds_lfht_for_each_entry(ksess->consumer->socks->ht, &iter.iter,
+			socket, node.node) {
+		struct ltt_kernel_channel *chan;
+
+		/* For each channel, ask the consumer to clear it. */
+		cds_list_for_each_entry(chan, &ksess->channel_list.head, list) {
+			DBG("Clear kernel channel %" PRIu64 ", session %s",
+					chan->key, session->name);
+			ret = consumer_clear_channel(socket, chan->key,
+					ksess->consumer);
+			if (ret < 0) {
+				goto error;
+			}
+		}
+
+		/*
+		 * Clear the metadata channel.
+		 * Metadata channel is not cleared per se but we still need to
+		 * perform rotation operation on it behind the scene.
+		 */
+		ret = consumer_clear_channel(socket, ksess->metadata->key,
+				ksess->consumer);
+		if (ret < 0) {
+			goto error;
+		}
+	}
+
+	goto end;
+error:
+	switch (-ret) {
+	case LTTCOMM_CONSUMERD_RELAYD_DISALLOW_CLEAR:
+	      status = LTTNG_ERR_CLEAR_RELAY_DISALLOW;
+	      break;
+	default:
+	      status = LTTNG_ERR_CLEAR_FAIL_CONSUMER;
+	      break;
+	}
+end:
+	rcu_read_unlock();
+	return status;
+}

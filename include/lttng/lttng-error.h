@@ -167,7 +167,10 @@ enum lttng_error_code {
 	LTTNG_ERR_ROTATION_PENDING_RELAY_FAIL_CONSUMER = 144, /* Rotation pending check (relay) failure on consumer */
 	LTTNG_ERR_MKDIR_FAIL_CONSUMER    = 145, /* mkdir failure on consumer */
 	LTTNG_ERR_CHAN_NOT_FOUND         = 146, /* Channel not found */
-
+	LTTNG_ERR_CLEAR_RELAY_DISALLOW   = 147, /* LTTng-relayd peer does not allow lttng clear command. */
+	LTTNG_ERR_CLEAR_NOT_AVAILABLE    = 148, /* Clear feature not available. */
+	LTTNG_ERR_CLEAR_NOT_AVAILABLE_RELAY = 149, /* Clear feature not available on the relay. */
+	LTTNG_ERR_CLEAR_FAIL_CONSUMER    = 150, /* Clear failure on consumer */
 
 	/* MUST be last element */
 	LTTNG_ERR_NR,                           /* Last element */
