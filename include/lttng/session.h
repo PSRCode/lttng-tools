@@ -85,6 +85,41 @@ extern int lttng_create_session_live(const char *name, const char *url,
 		unsigned int timer_interval);
 
 /*
+ * Clear a tracing session.
+ *
+ * Clear the data buffers and trace data.
+ *
+ * For sessions saving trace data to disk and streaming over the network to a
+ * relay daemon, the buffers content and existing stream files are cleared when
+ * the clear command is issued.
+ *
+ * For snapshot sessions (flight recorder), only the buffer content is cleared.
+ * Prior snapshots are individually recorded to disk, and are therefore
+ * untouched by this "clear" command.
+ *
+ * For live sessions streaming over network to a relay daemon, the buffers
+ * will be cleared, and the files on the relay daemon side will be cleared as
+ * well. However, any active live trace viewer currently reading an existing
+ * trace packet will be able to proceed to read that packet entirely before
+ * skipping over cleared stream data.
+ *
+ * The clear command guarantees that no trace data preceding the instant it is
+ * called will be in the resulting trace.
+ *
+ * Trace data produced from the moment it is called and when the
+ * function returned might be present in the resulting trace.
+ *
+ * Return 0 on success else a negative LTTng error code.
+ *
+ * Important error codes:
+ *    LTTNG_ERR_CLEAR_DISALLOWED_RELAY
+ *    LTTNG_ERR_CLEAR_NOT_AVAILABLE
+ *    LTTNG_ERR_CLEAR_NOT_AVAILABLE_RELAY
+ *    LTTNG_ERR_CLEAR_FAIL_CONSUMER
+*/
+extern int lttng_clear_session(const char *name);
+
+/*
  * Destroy a tracing session.
  *
  * The session will not be usable, tracing will be stopped thus buffers will be
