@@ -26,6 +26,7 @@ lttng_SOURCES = command.h conf.c conf.h commands/start.c \
 				commands/rotate.c \
 				commands/enable_rotation.c \
 				commands/disable_rotation.c \
+				commands/clear.c \
 				utils.c utils.h lttng.c
 
 lttng_LDADD = $(top_builddir)/src/lib/lttng-ctl/liblttng-ctl.la \
