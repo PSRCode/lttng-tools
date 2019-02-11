@@ -112,7 +112,7 @@ extern int lttng_create_session_live(const char *name, const char *url,
  * Return 0 on success else a negative LTTng error code.
  *
  * Important error codes:
- *    LTTNG_ERR_CLEAR_DISALLOWED_RELAY
+ *    LTTNG_ERR_CLEAR_RELAY_DISALLOW
  *    LTTNG_ERR_CLEAR_NOT_AVAILABLE
  *    LTTNG_ERR_CLEAR_NOT_AVAILABLE_RELAY
  *    LTTNG_ERR_CLEAR_FAIL_CONSUMER
