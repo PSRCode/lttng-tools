@@ -1899,3 +1899,36 @@ error:
 	health_code_update();
 	return ret;
 }
+
+int consumer_clear_channel(struct consumer_socket *socket, uint64_t key,
+		struct consumer_output *output)
+{
+	int ret;
+	struct lttcomm_consumer_msg msg;
+
+	assert(socket);
+
+	DBG("Consumer clear channel %" PRIu64, key);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.cmd_type = LTTNG_CONSUMER_CLEAR_CHANNEL;
+	msg.u.clear_channel.key = key;
+
+	if (output->type == CONSUMER_DST_NET) {
+		ERR("Relayd clear is not supported for now");
+		ret = -LTTNG_ERR_INVALID;
+		goto error;
+	}
+	health_code_update();
+
+	pthread_mutex_lock(socket->lock);
+	ret = consumer_send_msg(socket, &msg);
+	if (ret < 0) {
+		goto error;
+	}
+	pthread_mutex_unlock(socket->lock);
+
+error:
+	health_code_update();
+	return ret;
+}

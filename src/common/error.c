@@ -208,6 +208,10 @@ static const char *error_string_array[] = {
 	[ ERROR_INDEX(LTTNG_ERR_ROTATION_PENDING_RELAY_FAIL_CONSUMER) ] = "Rotation pending check (relay) failure on consumer",
 	[ ERROR_INDEX(LTTNG_ERR_MKDIR_FAIL_CONSUMER) ] = "mkdir failure on consumer",
 	[ ERROR_INDEX(LTTNG_ERR_CHAN_NOT_FOUND) ] = "Channel not found",
+	[ ERROR_INDEX(LTTNG_ERR_CLEAR_RELAY_DISALLOW) ] = "Relayd daemon peer does not allow lttng clear command",
+	[ ERROR_INDEX(LTTNG_ERR_CLEAR_NOT_AVAILABLE) ] = "Clear feature is not available for the session type",
+	[ ERROR_INDEX(LTTNG_ERR_CLEAR_NOT_AVAILABLE_RELAY) ] = "Clear feature is not available on the relay",
+	[ ERROR_INDEX(LTTNG_ERR_CLEAR_FAIL_CONSUMER) ] = "Clear failure on the consumer",
 
 	/* Last element */
 	[ ERROR_INDEX(LTTNG_ERR_NR) ] = "Unknown error code"

@@ -170,6 +170,7 @@ enum lttcomm_return_code {
 	LTTCOMM_CONSUMERD_ROTATION_PENDING_RELAY_FAILED, /* Rotation pending relay failed. */
 	LTTCOMM_CONSUMERD_MKDIR_FAILED,             /* mkdir has failed. */
 	LTTCOMM_CONSUMERD_SNAPSHOT_FAILED,          /* snapshot has failed. */
+	LTTCOMM_CONSUMERD_RELAYD_DISALLOW_CLEAR,    /* Relayd does not accept clear command. */
 
 	/* MUST be last element */
 	LTTCOMM_NR,						/* Last element */
