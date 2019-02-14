@@ -25,7 +25,7 @@ TESTAPP_PATH="$TESTDIR/utils/testapp"
 TESTAPP_NAME="gen-ust-events"
 TESTAPP_BIN="$TESTAPP_PATH/$TESTAPP_NAME/$TESTAPP_NAME"
 
-NUM_TESTS=69
+NUM_TESTS=74
 
 TRACE_PATH=$(mktemp -d)
 
@@ -145,6 +145,8 @@ function test_ust_local_snapshot_per_pid ()
 	local channel_name="channel0"
 	local file_sync_before_last=$(mktemp -u)
 	local file_sync_before_last_touch=$(mktemp -u)
+	local file_sync_before_exit=$(mktemp -u)
+	local file_sync_before_exit_touch=$(mktemp -u)
 
 	create_lttng_session_ok $SESSION_NAME $TRACE_PATH "--snapshot"
 	enable_ust_lttng_channel_ok $SESSION_NAME $channel_name --buffers-pid
@@ -154,7 +156,9 @@ function test_ust_local_snapshot_per_pid ()
 	# Generate 10 events that will sit in the buffers.
 	$TESTAPP_BIN -i 10 -w 0 \
 		--sync-before-last-event ${file_sync_before_last} \
-		--sync-before-last-event-touch ${file_sync_before_last_touch} >/dev/null 2>&1 &
+		--sync-before-last-event-touch ${file_sync_before_last_touch} \
+		--sync-before-exit ${file_sync_before_exit} \
+		--sync-before-exit-touch ${file_sync_before_exit_touch} >/dev/null 2>&1 &
 
 	# Continue only when there is only the last event remaining.
 	while [ ! -f "${file_sync_before_last_touch}" ]; do
@@ -177,12 +181,34 @@ function test_ust_local_snapshot_per_pid ()
 	stop_lttng_tracing_ok $SESSION_NAME
 	validate_trace_empty $TRACE_PATH
 
+	# Validate that tracing still works and subsequent snapshots are valid.
+	# Clean the output path.
+	clean_path $TRACE_PATH
+	start_lttng_tracing_ok $SESSION_NAME
+
+	# Continue over the last event.
 	touch ${file_sync_before_last}
+
+	# Wait for the before exit sync point. This ensure that we went over the
+	# last tracepoint.
+	while [ ! -f "${file_sync_before_exit_touch}" ]; do
+		sleep 0.5
+	done
+
+	# Make sure the snapshot contains the last event.
+	lttng_snapshot_record $SESSION_NAME
+	stop_lttng_tracing_ok $SESSION_NAME
+	validate_trace_count $EVENT_NAME $TRACE_PATH 1
+
+	# Release the application.
+	touch ${file_sync_before_exit}
 	wait
 	destroy_lttng_session_ok $SESSION_NAME
 
 	rm -f ${file_sync_before_last}
 	rm -f ${file_sync_before_last_touch}
+	rm -f ${file_sync_before_exit}
+	rm -f ${file_sync_before_exit_touch}
 }
 
 plan_tests $NUM_TESTS
