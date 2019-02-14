@@ -1,0 +1,171 @@
+#!/bin/bash
+#
+# Copyright (C) - 2019 Jonathan Rajotte-Julien <jonathan.rajotte-julien@efficios.com>
+#
+# This library is free software; you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the Free
+# Software Foundation; version 2.1 of the License.
+#
+# This library is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this library; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
+
+TEST_DESC="Clear - Kernel tracing"
+
+CURDIR=$(dirname $0)/
+TESTDIR=$CURDIR/../../..
+EVENT_NAME="lttng_test_filter_event"
+
+TRACE_PATH=$(mktemp -d)
+
+NUM_TESTS=55
+
+source $TESTDIR/utils/utils.sh
+
+function clean_path ()
+{
+	local trace_path=$1
+	set -u
+	rm -rf $trace_path/*
+	set +u
+}
+
+function test_kernel_streaming ()
+{
+	diag "Test kernel streaming clear"
+	create_lttng_session_uri $SESSION_NAME net://localhost
+	lttng_enable_kernel_event $SESSION_NAME $EVENT_NAME
+	start_lttng_tracing_ok $SESSION_NAME
+	# TODO: place holder, support for streaming MUST be implemented
+	# This validate that for now we fail correctly
+	lttng_clear_session_fail $SESSION_NAME
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_kernel_streaming_live ()
+{
+	diag "Test kernel streaming live clear"
+	create_lttng_session_uri $SESSION_NAME net://localhost "--live"
+	lttng_enable_kernel_event $SESSION_NAME $EVENT_NAME
+	start_lttng_tracing_ok $SESSION_NAME
+	# TODO: place holder, support for streaming MUST be implemented
+	# This validate that for now we fail correctly
+	lttng_clear_session_fail $SESSION_NAME
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_kernel_local ()
+{
+	diag "Test kernel local"
+	create_lttng_session_ok $SESSION_NAME $TRACE_PATH
+	lttng_enable_kernel_event $SESSION_NAME $EVENT_NAME
+	start_lttng_tracing_ok $SESSION_NAME
+	# TODO: place holder, support for local MUST be implemented
+	lttng_clear_session_fail $SESSION_NAME
+	# TODO: validate that the previous chunk IS no more present
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function do_kernel_snapshot ()
+{
+	local session_name=$1
+	local trace_path=$2
+
+	lttng_enable_kernel_event $session_name $EVENT_NAME
+	start_lttng_tracing_ok $session_name
+
+	# Generate 10 events that will sit in the buffers.
+	echo -n "10" > /proc/lttng-test-filter-event
+
+	# Take a first snapshot and validate that the events are present.
+	lttng_snapshot_record $session_name
+	stop_lttng_tracing_ok $session_name
+	validate_trace_count $EVENT_NAME $trace_path 10
+
+	# Clean the output path
+	clean_path $trace_path
+	start_lttng_tracing_ok $session_name
+
+	lttng_clear_session_ok $session_name
+
+	# Make sure the subsequent snapshot is empty and valid.
+	lttng_snapshot_record $session_name
+	stop_lttng_tracing_ok $session_name
+	validate_trace_empty $trace_path
+
+	# Clean the output path
+	clean_path $trace_path
+	start_lttng_tracing_ok $session_name
+
+	# Make sure that everything still works, generate events and take a
+	# snapshot.
+	echo -n "10" > /proc/lttng-test-filter-event
+	lttng_snapshot_record $session_name
+	stop_lttng_tracing_ok $session_name
+	validate_trace_count $EVENT_NAME $trace_path 10
+}
+
+function test_kernel_streaming_snapshot ()
+{
+	diag "Test kernel streaming snapshot clear"
+
+	create_lttng_session_uri $SESSION_NAME net://localhost "--snapshot"
+	do_kernel_snapshot $SESSION_NAME $TRACE_PATH
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_kernel_local_snapshot ()
+{
+	diag "Test kernel local snapshot clear"
+
+	create_lttng_session_ok $SESSION_NAME $TRACE_PATH "--snapshot"
+	do_kernel_snapshot $SESSION_NAME $TRACE_PATH
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+plan_tests $NUM_TESTS
+
+print_test_banner "$TEST_DESC"
+
+if [ "$(id -u)" == "0" ]; then
+	isroot=1
+else
+	isroot=0
+fi
+
+tests=( test_kernel_streaming
+	test_kernel_streaming_live
+	test_kernel_local
+	test_kernel_streaming_snapshot
+	test_kernel_local_snapshot
+)
+
+skip $isroot "Root access is needed. Skipping all kernel streaming tests." $NUM_TESTS ||
+{
+	validate_lttng_modules_present
+
+	start_lttng_relayd "-o $TRACE_PATH"
+	start_lttng_sessiond
+	modprobe lttng-test
+
+	for fct_test in ${tests[@]};
+	do
+		SESSION_NAME=$(randstring 16 0)
+		${fct_test}
+		clean_path $TRACE_PATH
+	done
+
+	rmmod lttng-test
+	stop_lttng_sessiond
+	stop_lttng_relayd
+}
+
+clean_path $TRACE_PATH

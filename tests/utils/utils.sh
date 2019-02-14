@@ -1285,7 +1285,6 @@ function lttng_snapshot_del_output_fail ()
 function lttng_snapshot_record ()
 {
 	local sess_name=$1
-	local trace_path=$2
 
 	$TESTDIR/../src/bin/lttng/$LTTNG_BIN snapshot record -s $sess_name 1> $OUTPUT_DEST 2> $ERROR_OUTPUT_DEST
 	ok $? "Snapshot recorded"
@@ -1768,4 +1767,29 @@ function lttng_enable_rotation_size_ok ()
 function lttng_enable_rotation_size_fail ()
 {
 	lttng_enable_rotation_size 1 $@
+}
+
+function lttng_clear_session ()
+{
+	local expected_to_fail=$1
+	local sess_name=$2
+
+	$TESTDIR/../src/bin/lttng/$LTTNG_BIN clear $sess_name 1> $OUTPUT_DEST 2> $ERROR_OUTPUT_DEST
+	ret=$?
+	if [[ $expected_to_fail -eq "1" ]]; then
+		test "$ret" -ne "0"
+		ok $? "Expected fail on clear session $sess_name"
+	else
+		ok $ret "Clear session $sess_name"
+	fi
+}
+
+function lttng_clear_session_ok ()
+{
+	lttng_clear_session 0 $@
+}
+
+function lttng_clear_session_fail ()
+{
+	lttng_clear_session 1 $@
 }
