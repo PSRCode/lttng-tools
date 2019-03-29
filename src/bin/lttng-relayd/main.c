@@ -1331,7 +1331,9 @@ static int relay_close_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 	 *     3) We have received all of the stream's data _after_ a close
 	 *        request.
 	 */
+	pthread_mutex_lock(&stream->trace->session->lock);
 	try_stream_close(stream);
+	pthread_mutex_unlock(&stream->trace->session->lock);
 	if (stream->is_metadata) {
 		struct relay_viewer_stream *vstream;
 
@@ -3661,7 +3663,9 @@ end_stream_unlock:
 	close_requested = stream->close_requested;
 	pthread_mutex_unlock(&stream->lock);
 	if (close_requested && left_to_receive == 0) {
+		pthread_mutex_lock(&session->lock);
 		try_stream_close(stream);
+		pthread_mutex_unlock(&session->lock);
 	}
 
 	if (new_stream) {

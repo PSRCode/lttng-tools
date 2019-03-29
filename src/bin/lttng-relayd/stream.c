@@ -326,6 +326,9 @@ void stream_put(struct relay_stream *stream)
 	rcu_read_unlock();
 }
 
+/*
+ * The stream's session must be locked when calling this function.
+ */
 void try_stream_close(struct relay_stream *stream)
 {
 	bool session_aborted;
@@ -333,9 +336,7 @@ void try_stream_close(struct relay_stream *stream)
 
 	DBG("Trying to close stream %" PRIu64, stream->stream_handle);
 
-//	pthread_mutex_lock(&session->lock);
 	session_aborted = session->aborted;
-//	pthread_mutex_unlock(&session->lock);
 
 	pthread_mutex_lock(&stream->lock);
 	/*

@@ -183,14 +183,13 @@ int session_close(struct relay_session *session)
 	DBG("closing session %" PRIu64 ": is conn already closed %d",
 			session->id, session->connection_closed);
 	session->connection_closed = true;
-	pthread_mutex_unlock(&session->lock);
 
 	rcu_read_lock();
 	cds_lfht_for_each_entry(session->ctf_traces_ht->ht,
 			&iter.iter, trace, node.node) {
 		ret = ctf_trace_close(trace);
 		if (ret) {
-			goto rcu_unlock;
+			goto unlock;
 		}
 	}
 	cds_list_for_each_entry_rcu(stream, &session->recv_list,
@@ -198,7 +197,8 @@ int session_close(struct relay_session *session)
 		/* Close streams which have not been published yet. */
 		try_stream_close(stream);
 	}
-rcu_unlock:
+unlock:
+	pthread_mutex_unlock(&session->lock);
 	rcu_read_unlock();
 	if (ret) {
 		return ret;

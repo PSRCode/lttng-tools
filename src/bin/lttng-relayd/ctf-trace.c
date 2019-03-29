@@ -161,6 +161,7 @@ void ctf_trace_put(struct ctf_trace *trace)
 	rcu_read_unlock();
 }
 
+/* Caller must hold the trace's session lock for try_stream_close */
 int ctf_trace_close(struct ctf_trace *trace)
 {
 	struct relay_stream *stream;

@@ -40,6 +40,7 @@ static void viewer_stream_destroy_rcu(struct rcu_head *head)
 	viewer_stream_destroy(vstream);
 }
 
+/* Must hold the stream's session lock due to try_stream_close */
 struct relay_viewer_stream *viewer_stream_create(struct relay_stream *stream,
 		enum lttng_viewer_seek seek_t)
 {
