@@ -44,6 +44,7 @@ struct relay_viewer_stream *viewer_stream_create(struct relay_stream *stream,
 		enum lttng_viewer_seek seek_t)
 {
 	struct relay_viewer_stream *vstream;
+	bool stream_close_requested;
 
 	vstream = zmalloc(sizeof(*vstream));
 	if (!vstream) {
@@ -139,7 +140,17 @@ struct relay_viewer_stream *viewer_stream_create(struct relay_stream *stream,
 		rcu_assign_pointer(stream->trace->viewer_metadata_stream,
 				vstream);
 	}
+
+	stream->viewer_has_ref = true;
+	stream_close_requested = stream->close_requested;
 	pthread_mutex_unlock(&stream->lock);
+	/*
+	 * Since we modified a close condition (viewer_has_ref) call
+	 * try_stream_close.
+	 * */
+	if (stream_close_requested) {
+		try_stream_close(stream);
+	}
 
 	/* Globally visible after the add unique. */
 	lttng_ht_node_init_u64(&vstream->stream_n, stream->stream_handle);

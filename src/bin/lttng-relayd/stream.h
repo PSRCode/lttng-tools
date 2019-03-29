@@ -186,6 +186,8 @@ struct relay_stream {
 	 * consumer.
 	 */
 	struct relay_stream_chunk_id current_chunk_id;
+
+	bool viewer_has_ref;
 };
 
 struct relay_stream *stream_create(struct ctf_trace *trace,

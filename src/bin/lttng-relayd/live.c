@@ -951,7 +951,12 @@ int viewer_get_new_streams(struct relay_connection *conn)
 	send_streams = 1;
 	response.status = htobe32(LTTNG_VIEWER_NEW_STREAMS_OK);
 
-	ret = make_viewer_streams(session, LTTNG_VIEWER_SEEK_LAST, &nb_total, &nb_unsent,
+	/*
+	 * Seek to the beginning of the stream since the stream is "new" and the
+	 * viewer was already attached at this point. Otherwise we might miss
+	 * data from inbetween viewer request (per-pid, new uid).
+	 */
+	ret = make_viewer_streams(session, LTTNG_VIEWER_SEEK_BEGINNING, &nb_total, &nb_unsent,
 			&nb_created, &closed);
 	if (ret < 0) {
 		goto end_put_session;

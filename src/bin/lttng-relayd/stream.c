@@ -98,6 +98,7 @@ struct relay_stream *stream_create(struct ctf_trace *trace,
 	ctf_trace_get(trace);
 	stream->trace = trace;
 	stream->current_chunk_id = *chunk_id;
+	stream->viewer_has_ref = false;
 
 	stream->indexes_ht = lttng_ht_new(0, LTTNG_HT_TYPE_U64);
 	if (!stream->indexes_ht) {
@@ -332,9 +333,9 @@ void try_stream_close(struct relay_stream *stream)
 
 	DBG("Trying to close stream %" PRIu64, stream->stream_handle);
 
-	pthread_mutex_lock(&session->lock);
+//	pthread_mutex_lock(&session->lock);
 	session_aborted = session->aborted;
-	pthread_mutex_unlock(&session->lock);
+//	pthread_mutex_unlock(&session->lock);
 
 	pthread_mutex_lock(&stream->lock);
 	/*
@@ -399,6 +400,12 @@ void try_stream_close(struct relay_stream *stream)
 		 */
 		pthread_mutex_unlock(&stream->lock);
 		DBG("closing stream %" PRIu64 " aborted since it still has data pending", stream->stream_handle);
+		return;
+	}
+
+	if (session->viewer_attached && !stream->viewer_has_ref && !session_aborted) {
+		pthread_mutex_unlock(&stream->lock);
+		DBG("closing stream %" PRIu64 " aborted since it was not viewed yet by a viewer", stream->stream_handle);
 		return;
 	}
 	/*
