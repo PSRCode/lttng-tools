@@ -449,10 +449,10 @@ int run_as(enum run_as_cmd cmd, struct run_as_data *data, uid_t uid, gid_t gid)
 
 	if (use_clone()) {
 		DBG("Using run_as worker");
-		pthread_mutex_lock(&worker_lock);
+		LTTNG_LOCK(&worker_lock);
 		assert(global_worker);
 		ret = run_as_cmd(global_worker, cmd, data, uid, gid);
-		pthread_mutex_unlock(&worker_lock);
+		LTTNG_UNLOCK(&worker_lock);
 
 	} else {
 		DBG("Using run_as without worker");
@@ -613,7 +613,7 @@ int run_as_create_worker(char *procname)
 	struct run_as_ret recvret;
 	struct run_as_worker *worker;
 
-	pthread_mutex_lock(&worker_lock);
+	LTTNG_LOCK(&worker_lock);
 	assert(!global_worker);
 	if (!use_clone()) {
 		/*
@@ -648,7 +648,7 @@ int run_as_create_worker(char *procname)
 		set_worker_sighandlers();
 
 		/* The child has no use for this lock. */
-		pthread_mutex_unlock(&worker_lock);
+		LTTNG_UNLOCK(&worker_lock);
 		/* Just close, no shutdown. */
 		if (close(worker->sockpair[0])) {
 			PERROR("close");
@@ -686,7 +686,7 @@ int run_as_create_worker(char *procname)
 		global_worker = worker;
 	}
 end:
-	pthread_mutex_unlock(&worker_lock);
+	LTTNG_UNLOCK(&worker_lock);
 	return ret;
 
 	/* Error handling. */
@@ -702,7 +702,7 @@ error_fork:
 	}
 error_sock:
 	free(worker);
-	pthread_mutex_unlock(&worker_lock);
+	LTTNG_UNLOCK(&worker_lock);
 	return ret;
 }
 
@@ -712,7 +712,7 @@ void run_as_destroy_worker(void)
 	struct run_as_worker *worker = global_worker;
 
 	DBG("Destroying run_as worker");
-	pthread_mutex_lock(&worker_lock);
+	LTTNG_LOCK(&worker_lock);
 	if (!worker) {
 		goto end;
 	}
@@ -750,5 +750,5 @@ void run_as_destroy_worker(void)
 	free(worker);
 	global_worker = NULL;
 end:
-	pthread_mutex_unlock(&worker_lock);
+	LTTNG_UNLOCK(&worker_lock);
 }

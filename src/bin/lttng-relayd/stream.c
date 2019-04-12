@@ -34,12 +34,12 @@ bool stream_get(struct relay_stream *stream)
 {
 	bool has_ref = false;
 
-	pthread_mutex_lock(&stream->reflock);
+	LTTNG_LOCK(&stream->reflock);
 	if (stream->ref.refcount != 0) {
 		has_ref = true;
 		urcu_ref_get(&stream->ref);
 	}
-	pthread_mutex_unlock(&stream->reflock);
+	LTTNG_UNLOCK(&stream->reflock);
 
 	return has_ref;
 }
@@ -153,10 +153,10 @@ struct relay_stream *stream_create(struct ctf_trace *trace,
 	 * Add the stream in the recv list of the session. Once the end stream
 	 * message is received, all session streams are published.
 	 */
-	pthread_mutex_lock(&session->recv_list_lock);
+	LTTNG_LOCK(&session->recv_list_lock);
 	cds_list_add_rcu(&stream->recv_node, &session->recv_list);
 	session->stream_count++;
-	pthread_mutex_unlock(&session->recv_list_lock);
+	LTTNG_UNLOCK(&session->recv_list_lock);
 
 	/*
 	 * Both in the ctf_trace object and the global stream ht since the data
@@ -197,27 +197,27 @@ void stream_publish(struct relay_stream *stream)
 {
 	struct relay_session *session;
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	if (stream->published) {
 		goto unlock;
 	}
 
 	session = stream->trace->session;
 
-	pthread_mutex_lock(&session->recv_list_lock);
+	LTTNG_LOCK(&session->recv_list_lock);
 	if (stream->in_recv_list) {
 		cds_list_del_rcu(&stream->recv_node);
 		stream->in_recv_list = false;
 	}
-	pthread_mutex_unlock(&session->recv_list_lock);
+	LTTNG_UNLOCK(&session->recv_list_lock);
 
-	pthread_mutex_lock(&stream->trace->stream_list_lock);
+	LTTNG_LOCK(&stream->trace->stream_list_lock);
 	cds_list_add_rcu(&stream->stream_node, &stream->trace->stream_list);
-	pthread_mutex_unlock(&stream->trace->stream_list_lock);
+	LTTNG_UNLOCK(&stream->trace->stream_list_lock);
 
 	stream->published = true;
 unlock:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 }
 
 /*
@@ -237,9 +237,9 @@ static void stream_unpublish(struct relay_stream *stream)
 		stream->in_stream_ht = false;
 	}
 	if (stream->published) {
-		pthread_mutex_lock(&stream->trace->stream_list_lock);
+		LTTNG_LOCK(&stream->trace->stream_list_lock);
 		cds_list_del_rcu(&stream->stream_node);
-		pthread_mutex_unlock(&stream->trace->stream_list_lock);
+		LTTNG_UNLOCK(&stream->trace->stream_list_lock);
 		stream->published = false;
 	}
 }
@@ -287,13 +287,13 @@ static void stream_release(struct urcu_ref *ref)
 
 	DBG("Releasing stream id %" PRIu64, stream->stream_handle);
 
-	pthread_mutex_lock(&session->recv_list_lock);
+	LTTNG_LOCK(&session->recv_list_lock);
 	session->stream_count--;
 	if (stream->in_recv_list) {
 		cds_list_del_rcu(&stream->recv_node);
 		stream->in_recv_list = false;
 	}
-	pthread_mutex_unlock(&session->recv_list_lock);
+	LTTNG_UNLOCK(&session->recv_list_lock);
 
 	stream_unpublish(stream);
 
@@ -324,7 +324,7 @@ void stream_put(struct relay_stream *stream)
 	 * Stream reflock ensures that concurrent test and update of
 	 * stream ref is atomic.
 	 */
-	pthread_mutex_lock(&stream->reflock);
+	LTTNG_LOCK(&stream->reflock);
 	assert(stream->ref.refcount != 0);
 	/*
 	 * Wait until we have processed all the stream packets before
@@ -334,7 +334,7 @@ void stream_put(struct relay_stream *stream)
 			stream->stream_handle,
 			(int) stream->ref.refcount);
 	urcu_ref_put(&stream->ref, stream_release);
-	pthread_mutex_unlock(&stream->reflock);
+	LTTNG_UNLOCK(&stream->reflock);
 	rcu_read_unlock();
 }
 
@@ -345,17 +345,17 @@ void try_stream_close(struct relay_stream *stream)
 
 	DBG("Trying to close stream %" PRIu64, stream->stream_handle);
 
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	session_aborted = session->aborted;
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	/*
 	 * Can be called concurently by connection close and reception of last
 	 * pending data.
 	 */
 	if (stream->closed) {
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 		DBG("closing stream %" PRIu64 " aborted since it is already marked as closed", stream->stream_handle);
 		return;
 	}
@@ -410,7 +410,7 @@ void try_stream_close(struct relay_stream *stream)
 		 * consumerd implementation that would not match this
 		 * expected behavior.
 		 */
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 		DBG("closing stream %" PRIu64 " aborted since it still has data pending", stream->stream_handle);
 		return;
 	}
@@ -421,7 +421,7 @@ void try_stream_close(struct relay_stream *stream)
 	stream->closed = true;
 	/* Relay indexes are only used by the "consumer/sessiond" end. */
 	relay_index_close_all(stream);
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 	DBG("Succeeded in closing stream %" PRIu64, stream->stream_handle);
 	stream_put(stream);
 }

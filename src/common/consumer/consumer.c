@@ -360,8 +360,8 @@ void consumer_del_channel(struct lttng_consumer_channel *channel)
 
 	DBG("Consumer delete channel key %" PRIu64, channel->key);
 
-	pthread_mutex_lock(&consumer_data.lock);
-	pthread_mutex_lock(&channel->lock);
+	LTTNG_LOCK(&consumer_data.lock);
+	LTTNG_LOCK(&channel->lock);
 
 	/* Destroy streams that might have been left in the stream list. */
 	clean_channel_stream_list(channel);
@@ -391,8 +391,8 @@ void consumer_del_channel(struct lttng_consumer_channel *channel)
 
 	call_rcu(&channel->node.head, free_channel_rcu);
 end:
-	pthread_mutex_unlock(&channel->lock);
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&channel->lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 }
 
 /*
@@ -632,10 +632,10 @@ int consumer_add_data_stream(struct lttng_consumer_stream *stream)
 
 	DBG3("Adding consumer stream %" PRIu64, stream->key);
 
-	pthread_mutex_lock(&consumer_data.lock);
-	pthread_mutex_lock(&stream->chan->lock);
-	pthread_mutex_lock(&stream->chan->timer_lock);
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&consumer_data.lock);
+	LTTNG_LOCK(&stream->chan->lock);
+	LTTNG_LOCK(&stream->chan->timer_lock);
+	LTTNG_LOCK(&stream->lock);
 	rcu_read_lock();
 
 	/* Steal stream identifier to avoid having streams with the same key */
@@ -671,10 +671,10 @@ int consumer_add_data_stream(struct lttng_consumer_stream *stream)
 	consumer_data.need_update = 1;
 
 	rcu_read_unlock();
-	pthread_mutex_unlock(&stream->lock);
-	pthread_mutex_unlock(&stream->chan->timer_lock);
-	pthread_mutex_unlock(&stream->chan->lock);
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&stream->lock);
+	LTTNG_UNLOCK(&stream->chan->timer_lock);
+	LTTNG_UNLOCK(&stream->chan->lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 
 	return ret;
 }
@@ -788,11 +788,11 @@ int consumer_send_relayd_stream(struct lttng_consumer_stream *stream,
 	relayd = consumer_find_relayd(stream->net_seq_idx);
 	if (relayd != NULL) {
 		/* Add stream on the relayd */
-		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+		LTTNG_LOCK(&relayd->ctrl_sock_mutex);
 		ret = relayd_add_stream(&relayd->control_sock, stream->name,
 				path, &stream->relayd_stream_id,
 				stream->chan->tracefile_size, stream->chan->tracefile_count);
-		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+		LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 		if (ret < 0) {
 			ERR("Relayd add stream failed. Cleaning up relayd %" PRIu64".", relayd->net_seq_idx);
 			lttng_consumer_cleanup_relayd(relayd);
@@ -833,9 +833,9 @@ int consumer_send_relayd_streams_sent(uint64_t net_seq_idx)
 	relayd = consumer_find_relayd(net_seq_idx);
 	if (relayd != NULL) {
 		/* Add stream on the relayd */
-		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+		LTTNG_LOCK(&relayd->ctrl_sock_mutex);
 		ret = relayd_streams_sent(&relayd->control_sock);
-		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+		LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 		if (ret < 0) {
 			ERR("Relayd streams sent failed. Cleaning up relayd %" PRIu64".", relayd->net_seq_idx);
 			lttng_consumer_cleanup_relayd(relayd);
@@ -1038,9 +1038,9 @@ end:
 int consumer_add_channel(struct lttng_consumer_channel *channel,
 		struct lttng_consumer_local_data *ctx)
 {
-	pthread_mutex_lock(&consumer_data.lock);
-	pthread_mutex_lock(&channel->lock);
-	pthread_mutex_lock(&channel->timer_lock);
+	LTTNG_LOCK(&consumer_data.lock);
+	LTTNG_LOCK(&channel->lock);
+	LTTNG_LOCK(&channel->timer_lock);
 
 	/*
 	 * This gives us a guarantee that the channel we are about to add to the
@@ -1053,9 +1053,9 @@ int consumer_add_channel(struct lttng_consumer_channel *channel,
 	lttng_ht_add_unique_u64(consumer_data.channel_ht, &channel->node);
 	rcu_read_unlock();
 
-	pthread_mutex_unlock(&channel->timer_lock);
-	pthread_mutex_unlock(&channel->lock);
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&channel->timer_lock);
+	LTTNG_UNLOCK(&channel->lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 
 	if (channel->wait_fd != -1 && channel->type == CONSUMER_CHANNEL_TYPE_DATA) {
 		notify_channel_pipe(ctx, channel, -1, CONSUMER_CHANNEL_ADD);
@@ -1573,7 +1573,7 @@ ssize_t lttng_consumer_on_read_subbuffer_mmap(
 		 */
 		if (stream->metadata_flag) {
 			/* Metadata requires the control socket. */
-			pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+			LTTNG_LOCK(&relayd->ctrl_sock_mutex);
 			if (stream->reset_metadata_flag) {
 				ret = relayd_reset_metadata(&relayd->control_sock,
 						stream->relayd_stream_id,
@@ -1711,7 +1711,7 @@ write_error:
 end:
 	/* Unlock only if ctrl socket used */
 	if (relayd && stream->metadata_flag) {
-		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+		LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 	}
 
 	rcu_read_unlock();
@@ -1775,7 +1775,7 @@ ssize_t lttng_consumer_on_read_subbuffer_splice(
 			 * Lock the control socket for the complete duration of the function
 			 * since from this point on we will use the socket.
 			 */
-			pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+			LTTNG_LOCK(&relayd->ctrl_sock_mutex);
 
 			if (stream->reset_metadata_flag) {
 				ret = relayd_reset_metadata(&relayd->control_sock,
@@ -1953,7 +1953,7 @@ splice_error:
 
 end:
 	if (relayd && stream->metadata_flag) {
-		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+		LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 	}
 
 	rcu_read_unlock();
@@ -2060,12 +2060,12 @@ void consumer_del_metadata_stream(struct lttng_consumer_stream *stream,
 
 	DBG3("Consumer delete metadata stream %d", stream->wait_fd);
 
-	pthread_mutex_lock(&consumer_data.lock);
-	pthread_mutex_lock(&stream->chan->lock);
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&consumer_data.lock);
+	LTTNG_LOCK(&stream->chan->lock);
+	LTTNG_LOCK(&stream->lock);
 	if (stream->chan->metadata_cache) {
 		/* Only applicable to userspace consumers. */
-		pthread_mutex_lock(&stream->chan->metadata_cache->lock);
+		LTTNG_LOCK(&stream->chan->metadata_cache->lock);
 	}
 
 	/* Remove any reference to that stream. */
@@ -2091,11 +2091,11 @@ void consumer_del_metadata_stream(struct lttng_consumer_stream *stream,
 	stream->chan->metadata_stream = NULL;
 
 	if (stream->chan->metadata_cache) {
-		pthread_mutex_unlock(&stream->chan->metadata_cache->lock);
+		LTTNG_UNLOCK(&stream->chan->metadata_cache->lock);
 	}
-	pthread_mutex_unlock(&stream->lock);
-	pthread_mutex_unlock(&stream->chan->lock);
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&stream->lock);
+	LTTNG_UNLOCK(&stream->chan->lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 
 	if (free_chan) {
 		consumer_del_channel(free_chan);
@@ -2120,10 +2120,10 @@ int consumer_add_metadata_stream(struct lttng_consumer_stream *stream)
 
 	DBG3("Adding metadata stream %" PRIu64 " to hash table", stream->key);
 
-	pthread_mutex_lock(&consumer_data.lock);
-	pthread_mutex_lock(&stream->chan->lock);
-	pthread_mutex_lock(&stream->chan->timer_lock);
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&consumer_data.lock);
+	LTTNG_LOCK(&stream->chan->lock);
+	LTTNG_LOCK(&stream->chan->timer_lock);
+	LTTNG_LOCK(&stream->lock);
 
 	/*
 	 * From here, refcounts are updated so be _careful_ when returning an error
@@ -2167,10 +2167,10 @@ int consumer_add_metadata_stream(struct lttng_consumer_stream *stream)
 
 	rcu_read_unlock();
 
-	pthread_mutex_unlock(&stream->lock);
-	pthread_mutex_unlock(&stream->chan->lock);
-	pthread_mutex_unlock(&stream->chan->timer_lock);
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&stream->lock);
+	LTTNG_UNLOCK(&stream->chan->lock);
+	LTTNG_UNLOCK(&stream->chan->timer_lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 	return ret;
 }
 
@@ -2490,7 +2490,7 @@ void *consumer_thread_data_poll(void *data)
 		 * the fds set has been updated, we need to update our
 		 * local array as well
 		 */
-		pthread_mutex_lock(&consumer_data.lock);
+		LTTNG_LOCK(&consumer_data.lock);
 		if (consumer_data.need_update) {
 			free(pollfd);
 			pollfd = NULL;
@@ -2505,7 +2505,7 @@ void *consumer_thread_data_poll(void *data)
 			pollfd = zmalloc((consumer_data.stream_count + 2) * sizeof(struct pollfd));
 			if (pollfd == NULL) {
 				PERROR("pollfd malloc");
-				pthread_mutex_unlock(&consumer_data.lock);
+				LTTNG_UNLOCK(&consumer_data.lock);
 				goto end;
 			}
 
@@ -2513,7 +2513,7 @@ void *consumer_thread_data_poll(void *data)
 					sizeof(struct lttng_consumer_stream *));
 			if (local_stream == NULL) {
 				PERROR("local_stream malloc");
-				pthread_mutex_unlock(&consumer_data.lock);
+				LTTNG_UNLOCK(&consumer_data.lock);
 				goto end;
 			}
 			ret = update_poll_array(ctx, &pollfd, local_stream,
@@ -2521,13 +2521,13 @@ void *consumer_thread_data_poll(void *data)
 			if (ret < 0) {
 				ERR("Error in allocating pollfd or local_outfds");
 				lttng_consumer_send_error(ctx, LTTCOMM_CONSUMERD_POLL_ERROR);
-				pthread_mutex_unlock(&consumer_data.lock);
+				LTTNG_UNLOCK(&consumer_data.lock);
 				goto end;
 			}
 			nb_fd = ret;
 			consumer_data.need_update = 0;
 		}
-		pthread_mutex_unlock(&consumer_data.lock);
+		LTTNG_UNLOCK(&consumer_data.lock);
 
 		/* No FDs and consumer_quit, consumer_cleanup the thread */
 		if (nb_fd == 0 && consumer_quit == 1 && nb_inactive_fd == 0) {
@@ -2753,7 +2753,7 @@ void consumer_close_channel_streams(struct lttng_consumer_channel *channel)
 		/*
 		 * Protect against teardown with mutex.
 		 */
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 		if (cds_lfht_is_node_deleted(&stream->node.node)) {
 			goto next;
 		}
@@ -2779,7 +2779,7 @@ void consumer_close_channel_streams(struct lttng_consumer_channel *channel)
 			assert(0);
 		}
 	next:
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 	}
 	rcu_read_unlock();
 }
@@ -3265,9 +3265,9 @@ ssize_t lttng_consumer_read_subbuffer(struct lttng_consumer_stream *stream,
 {
 	ssize_t ret;
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	if (stream->metadata_flag) {
-		pthread_mutex_lock(&stream->metadata_rdv_lock);
+		LTTNG_LOCK(&stream->metadata_rdv_lock);
 	}
 
 	switch (consumer_data.type) {
@@ -3287,9 +3287,9 @@ ssize_t lttng_consumer_read_subbuffer(struct lttng_consumer_stream *stream,
 
 	if (stream->metadata_flag) {
 		pthread_cond_broadcast(&stream->metadata_rdv);
-		pthread_mutex_unlock(&stream->metadata_rdv_lock);
+		LTTNG_UNLOCK(&stream->metadata_rdv_lock);
 	}
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 	return ret;
 }
 
@@ -3586,7 +3586,7 @@ int consumer_data_pending(uint64_t id)
 	DBG("Consumer data pending command on session id %" PRIu64, id);
 
 	rcu_read_lock();
-	pthread_mutex_lock(&consumer_data.lock);
+	LTTNG_LOCK(&consumer_data.lock);
 
 	switch (consumer_data.type) {
 	case LTTNG_CONSUMER_KERNEL:
@@ -3608,7 +3608,7 @@ int consumer_data_pending(uint64_t id)
 			ht->hash_fct(&id, lttng_ht_seed),
 			ht->match_fct, &id,
 			&iter.iter, stream, node_session_id.node) {
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 
 		/*
 		 * A removed node from the hash table indicates that the stream has
@@ -3621,12 +3621,12 @@ int consumer_data_pending(uint64_t id)
 			/* Check the stream if there is data in the buffers. */
 			ret = data_pending(stream);
 			if (ret == 1) {
-				pthread_mutex_unlock(&stream->lock);
+				LTTNG_UNLOCK(&stream->lock);
 				goto data_pending;
 			}
 		}
 
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 	}
 
 	relayd = find_relayd_by_session_id(id);
@@ -3634,12 +3634,12 @@ int consumer_data_pending(uint64_t id)
 		unsigned int is_data_inflight = 0;
 
 		/* Send init command for data pending. */
-		pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+		LTTNG_LOCK(&relayd->ctrl_sock_mutex);
 		ret = relayd_begin_data_pending(&relayd->control_sock,
 				relayd->relayd_session_id);
 		if (ret < 0) {
 			/* Communication error thus the relayd so no data pending. */
-			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+			LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 			ERR("Relayd begin data pending failed. Cleaning up relayd %" PRIu64".", relayd->net_seq_idx);
 			lttng_consumer_cleanup_relayd(relayd);
 			goto data_not_pending;
@@ -3658,15 +3658,15 @@ int consumer_data_pending(uint64_t id)
 						stream->next_net_seq_num - 1);
 			}
 			if (ret == 1) {
-				pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
-				pthread_mutex_unlock(&stream->lock);
+				LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
+				LTTNG_UNLOCK(&stream->lock);
 				goto data_pending;
 			}
 			if (ret < 0) {
 				ERR("Relayd data pending failed. Cleaning up relayd %" PRIu64".", relayd->net_seq_idx);
 				lttng_consumer_cleanup_relayd(relayd);
-				pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
-				pthread_mutex_unlock(&stream->lock);
+				LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
+				LTTNG_UNLOCK(&stream->lock);
 				goto data_not_pending;
 			}
 		}
@@ -3674,7 +3674,7 @@ int consumer_data_pending(uint64_t id)
 		/* Send end command for data pending. */
 		ret = relayd_end_data_pending(&relayd->control_sock,
 				relayd->relayd_session_id, &is_data_inflight);
-		pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+		LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 		if (ret < 0) {
 			ERR("Relayd end data pending failed. Cleaning up relayd %" PRIu64".", relayd->net_seq_idx);
 			lttng_consumer_cleanup_relayd(relayd);
@@ -3693,13 +3693,13 @@ int consumer_data_pending(uint64_t id)
 
 data_not_pending:
 	/* Data is available to be read by a viewer. */
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 	rcu_read_unlock();
 	return 0;
 
 data_pending:
 	/* Data is still being extracted from buffers. */
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 	rcu_read_unlock();
 	return 1;
 }

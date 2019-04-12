@@ -60,9 +60,9 @@ static uint64_t get_next_channel_key(void)
 {
 	uint64_t ret;
 
-	pthread_mutex_lock(&next_channel_key_lock);
+	LTTNG_LOCK(&next_channel_key_lock);
 	ret = ++_next_channel_key;
-	pthread_mutex_unlock(&next_channel_key_lock);
+	LTTNG_UNLOCK(&next_channel_key_lock);
 	return ret;
 }
 
@@ -73,9 +73,9 @@ static uint64_t get_next_session_id(void)
 {
 	uint64_t ret;
 
-	pthread_mutex_lock(&next_session_id_lock);
+	LTTNG_LOCK(&next_session_id_lock);
 	ret = ++_next_session_id;
-	pthread_mutex_unlock(&next_session_id_lock);
+	LTTNG_UNLOCK(&next_session_id_lock);
 	return ret;
 }
 
@@ -274,9 +274,9 @@ void delete_ust_app_ctx(int sock, struct ust_app_ctx *ua_ctx,
 	assert(ua_ctx);
 
 	if (ua_ctx->obj) {
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		ret = ustctl_release_object(sock, ua_ctx->obj);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app sock %d release ctx obj handle %d failed with ret %d",
 					sock, ua_ctx->obj->handle, ret);
@@ -302,9 +302,9 @@ void delete_ust_app_event(int sock, struct ust_app_event *ua_event,
 	if (ua_event->exclusion != NULL)
 		free(ua_event->exclusion);
 	if (ua_event->obj != NULL) {
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		ret = ustctl_release_object(sock, ua_event->obj);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app sock %d release event obj failed with ret %d",
 					sock, ret);
@@ -327,9 +327,9 @@ static int release_ust_app_stream(int sock, struct ust_app_stream *stream,
 	assert(stream);
 
 	if (stream->obj) {
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		ret = ustctl_release_object(sock, stream->obj);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app sock %d release stream obj failed with ret %d",
 					sock, ret);
@@ -492,9 +492,9 @@ void delete_ust_app_channel(int sock, struct ust_app_channel *ua_chan,
 		iter.iter.node = &ua_chan->ust_objd_node.node;
 		ret = lttng_ht_del(app->ust_objd, &iter);
 		assert(!ret);
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		ret = ustctl_release_object(sock, ua_chan->obj);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app sock %d release channel obj failed with ret %d",
 					sock, ret);
@@ -509,9 +509,9 @@ int ust_app_register_done(struct ust_app *app)
 {
 	int ret;
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_register_done(app->sock);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	return ret;
 }
 
@@ -520,14 +520,14 @@ int ust_app_release_object(struct ust_app *app, struct lttng_ust_object_data *da
 	int ret, sock;
 
 	if (app) {
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		sock = app->sock;
 	} else {
 		sock = -1;
 	}
 	ret = ustctl_release_object(sock, data);
 	if (app) {
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 	}
 	return ret;
 }
@@ -592,7 +592,7 @@ ssize_t ust_app_push_metadata(struct ust_registry_session *registry,
 	memcpy(metadata_str, registry->metadata + offset, len);
 
 push_data:
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 	/*
 	 * We need to unlock the registry while we push metadata to
 	 * break a circular dependency between the consumerd metadata
@@ -607,7 +607,7 @@ push_data:
 	 */
 	ret = consumer_push_metadata(socket, metadata_key,
 			metadata_str, len, offset, metadata_version);
-	pthread_mutex_lock(&registry->lock);
+	LTTNG_LOCK(&registry->lock);
 	if (ret < 0) {
 		/*
 		 * There is an acceptable race here between the registry
@@ -692,7 +692,7 @@ static int push_metadata(struct ust_registry_session *registry,
 	assert(registry);
 	assert(consumer);
 
-	pthread_mutex_lock(&registry->lock);
+	LTTNG_LOCK(&registry->lock);
 	if (registry->metadata_closed) {
 		ret_val = -EPIPE;
 		goto error;
@@ -711,11 +711,11 @@ static int push_metadata(struct ust_registry_session *registry,
 		ret_val = ret;
 		goto error;
 	}
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 	return 0;
 
 error:
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 	return ret_val;
 }
 
@@ -738,7 +738,7 @@ static int close_metadata(struct ust_registry_session *registry,
 
 	rcu_read_lock();
 
-	pthread_mutex_lock(&registry->lock);
+	LTTNG_LOCK(&registry->lock);
 
 	if (!registry->metadata_key || registry->metadata_closed) {
 		ret = 0;
@@ -766,7 +766,7 @@ error:
 	 */
 	registry->metadata_closed = 1;
 end:
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 	rcu_read_unlock();
 	return ret;
 }
@@ -804,7 +804,7 @@ void delete_ust_app_session(int sock, struct ust_app_session *ua_sess,
 
 	assert(ua_sess);
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	assert(!ua_sess->deleted);
 	ua_sess->deleted = true;
@@ -848,9 +848,9 @@ void delete_ust_app_session(int sock, struct ust_app_session *ua_sess,
 	}
 
 	if (ua_sess->handle != -1) {
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		ret = ustctl_release_handle(sock, ua_sess->handle);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app sock %d release session handle failed with ret %d",
 					sock, ret);
@@ -861,7 +861,7 @@ void delete_ust_app_session(int sock, struct ust_app_session *ua_sess,
 		assert(!ret);
 	}
 
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 
 	consumer_output_put(ua_sess->consumer);
 
@@ -1290,10 +1290,10 @@ int create_ust_channel_context(struct ust_app_channel *ua_chan,
 
 	health_code_update();
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_add_context(app->sock, &ua_ctx->ctx,
 			ua_chan->obj, &ua_ctx->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app create channel context failed for app (pid: %d) "
@@ -1342,10 +1342,10 @@ int set_ust_event_filter(struct ust_app_event *ua_event,
 		ret = -LTTNG_ERR_NOMEM;
 		goto error;
 	}
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_set_filter(app->sock, ust_bytecode,
 			ua_event->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app event %s filter failed for app (pid: %d) "
@@ -1414,9 +1414,9 @@ int set_ust_event_exclusion(struct ust_app_event *ua_event,
 		ret = -LTTNG_ERR_NOMEM;
 		goto error;
 	}
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_set_exclusion(app->sock, ust_exclusion, ua_event->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app event %s exclusions failed for app (pid: %d) "
@@ -1451,9 +1451,9 @@ static int disable_ust_event(struct ust_app *app,
 
 	health_code_update();
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_disable(app->sock, ua_event->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app event %s disable failed for app (pid: %d) "
@@ -1489,9 +1489,9 @@ static int disable_ust_channel(struct ust_app *app,
 
 	health_code_update();
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_disable(app->sock, ua_chan->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app channel %s disable failed for app (pid: %d) "
@@ -1527,9 +1527,9 @@ static int enable_ust_channel(struct ust_app *app,
 
 	health_code_update();
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_enable(app->sock, ua_chan->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app channel %s enable failed for app (pid: %d) "
@@ -1567,9 +1567,9 @@ static int enable_ust_event(struct ust_app *app,
 
 	health_code_update();
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_enable(app->sock, ua_event->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("UST app event %s enable failed for app (pid: %d) "
@@ -1661,10 +1661,10 @@ int create_ust_event(struct ust_app *app, struct ust_app_session *ua_sess,
 	health_code_update();
 
 	/* Create UST event on tracer */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_create_event(app->sock, &ua_event->attr, ua_chan->obj,
 			&ua_event->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("Error ustctl create event %s for app pid: %d with ret %d",
@@ -2198,9 +2198,9 @@ static int create_ust_app_session(struct ltt_ust_session *usess,
 	health_code_update();
 
 	if (ua_sess->handle == -1) {
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		ret = ustctl_create_session(app->sock);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0) {
 			if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 				ERR("Creating session for app pid %d with ret %d",
@@ -2802,7 +2802,7 @@ static int send_channel_uid_to_ust(struct buffer_reg_channel *reg_chan,
 	health_code_update();
 
 	/* Send all streams to application. */
-	pthread_mutex_lock(&reg_chan->stream_list_lock);
+	LTTNG_LOCK(&reg_chan->stream_list_lock);
 	cds_list_for_each_entry(reg_stream, &reg_chan->streams, lnode) {
 		struct ust_app_stream stream;
 
@@ -2829,7 +2829,7 @@ static int send_channel_uid_to_ust(struct buffer_reg_channel *reg_chan,
 	ua_chan->is_sent = 1;
 
 error_stream_unlock:
-	pthread_mutex_unlock(&reg_chan->stream_list_lock);
+	LTTNG_UNLOCK(&reg_chan->stream_list_lock);
 error:
 	return ret;
 }
@@ -3175,7 +3175,7 @@ static int create_ust_app_metadata(struct ust_app_session *ua_sess,
 	/* The UST app session is held registry shall not be null. */
 	assert(registry);
 
-	pthread_mutex_lock(&registry->lock);
+	LTTNG_LOCK(&registry->lock);
 
 	/* Metadata already exists for this registry or it was closed previously */
 	if (registry->metadata_key || registry->metadata_closed) {
@@ -3249,7 +3249,7 @@ error_consumer:
 	lttng_fd_put(LTTNG_FD_APPS, 1);
 	delete_ust_app_channel(-1, metadata, app);
 error:
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 	return ret;
 }
 
@@ -3398,9 +3398,9 @@ int ust_app_version(struct ust_app *app)
 
 	assert(app);
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_tracer_version(app->sock, &app->version);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -LTTNG_UST_ERR_EXITING && ret != -EPIPE) {
 			ERR("UST app %d version failed with ret %d", app->sock, ret);
@@ -3461,10 +3461,10 @@ void ust_app_unregister(int sock)
 		 * Add session to list for teardown. This is safe since at this point we
 		 * are the only one using this list.
 		 */
-		pthread_mutex_lock(&ua_sess->lock);
+		LTTNG_LOCK(&ua_sess->lock);
 
 		if (ua_sess->deleted) {
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			continue;
 		}
 
@@ -3497,7 +3497,7 @@ void ust_app_unregister(int sock)
 		}
 		cds_list_add(&ua_sess->teardown_node, &lta->teardown_head);
 
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 	}
 
 	/* Remove application from PID hash table */
@@ -3565,14 +3565,14 @@ int ust_app_list_events(struct lttng_event **events)
 			 */
 			continue;
 		}
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		handle = ustctl_tracepoint_list(app->sock);
 		if (handle < 0) {
 			if (handle != -EPIPE && handle != -LTTNG_UST_ERR_EXITING) {
 				ERR("UST app list events getting handle failed for app pid %d",
 						app->pid);
 			}
-			pthread_mutex_unlock(&app->sock_lock);
+			LTTNG_UNLOCK(&app->sock_lock);
 			continue;
 		}
 
@@ -3601,7 +3601,7 @@ int ust_app_list_events(struct lttng_event **events)
 						release_ret != -EPIPE) {
 					ERR("Error releasing app handle for app %d with ret %d", app->sock, release_ret);
 				}
-				pthread_mutex_unlock(&app->sock_lock);
+				LTTNG_UNLOCK(&app->sock_lock);
 				goto rcu_error;
 			}
 
@@ -3628,7 +3628,7 @@ int ust_app_list_events(struct lttng_event **events)
 							release_ret != -EPIPE) {
 						ERR("Error releasing app handle for app %d with ret %d", app->sock, release_ret);
 					}
-					pthread_mutex_unlock(&app->sock_lock);
+					LTTNG_UNLOCK(&app->sock_lock);
 					goto rcu_error;
 				}
 				/* Zero the new memory */
@@ -3645,7 +3645,7 @@ int ust_app_list_events(struct lttng_event **events)
 			count++;
 		}
 		ret = ustctl_release_handle(app->sock, handle);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0 && ret != -LTTNG_UST_ERR_EXITING && ret != -EPIPE) {
 			ERR("Error releasing app handle for app %d with ret %d", app->sock, ret);
 		}
@@ -3696,14 +3696,14 @@ int ust_app_list_event_fields(struct lttng_event_field **fields)
 			 */
 			continue;
 		}
-		pthread_mutex_lock(&app->sock_lock);
+		LTTNG_LOCK(&app->sock_lock);
 		handle = ustctl_tracepoint_field_list(app->sock);
 		if (handle < 0) {
 			if (handle != -EPIPE && handle != -LTTNG_UST_ERR_EXITING) {
 				ERR("UST app list field getting handle failed for app pid %d",
 						app->pid);
 			}
-			pthread_mutex_unlock(&app->sock_lock);
+			LTTNG_UNLOCK(&app->sock_lock);
 			continue;
 		}
 
@@ -3727,7 +3727,7 @@ int ust_app_list_event_fields(struct lttng_event_field **fields)
 				}
 				free(tmp_event);
 				release_ret = ustctl_release_handle(app->sock, handle);
-				pthread_mutex_unlock(&app->sock_lock);
+				LTTNG_UNLOCK(&app->sock_lock);
 				if (release_ret < 0 &&
 						release_ret != -LTTNG_UST_ERR_EXITING &&
 						release_ret != -EPIPE) {
@@ -3754,7 +3754,7 @@ int ust_app_list_event_fields(struct lttng_event_field **fields)
 					free(tmp_event);
 					ret = -ENOMEM;
 					release_ret = ustctl_release_handle(app->sock, handle);
-					pthread_mutex_unlock(&app->sock_lock);
+					LTTNG_UNLOCK(&app->sock_lock);
 					if (release_ret &&
 							release_ret != -LTTNG_UST_ERR_EXITING &&
 							release_ret != -EPIPE) {
@@ -3782,7 +3782,7 @@ int ust_app_list_event_fields(struct lttng_event_field **fields)
 			count++;
 		}
 		ret = ustctl_release_handle(app->sock, handle);
-		pthread_mutex_unlock(&app->sock_lock);
+		LTTNG_UNLOCK(&app->sock_lock);
 		if (ret < 0 &&
 				ret != -LTTNG_UST_ERR_EXITING &&
 				ret != -EPIPE) {
@@ -4114,10 +4114,10 @@ int ust_app_create_channel_glb(struct ltt_ust_session *usess,
 		}
 		assert(ua_sess);
 
-		pthread_mutex_lock(&ua_sess->lock);
+		LTTNG_LOCK(&ua_sess->lock);
 
 		if (ua_sess->deleted) {
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			continue;
 		}
 
@@ -4130,7 +4130,7 @@ int ust_app_create_channel_glb(struct ltt_ust_session *usess,
 			ret = create_ust_app_channel(ua_sess, uchan, app,
 					LTTNG_UST_CHAN_PER_CPU, usess, NULL);
 		}
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 		if (ret < 0) {
 			/* Cleanup the created session if it's the case. */
 			if (created) {
@@ -4197,10 +4197,10 @@ int ust_app_enable_event_glb(struct ltt_ust_session *usess,
 			continue;
 		}
 
-		pthread_mutex_lock(&ua_sess->lock);
+		LTTNG_LOCK(&ua_sess->lock);
 
 		if (ua_sess->deleted) {
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			continue;
 		}
 
@@ -4213,7 +4213,7 @@ int ust_app_enable_event_glb(struct ltt_ust_session *usess,
 		 * an application exit.
 		 */
 		if (!ua_chan_node) {
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			continue;
 		}
 
@@ -4230,11 +4230,11 @@ int ust_app_enable_event_glb(struct ltt_ust_session *usess,
 
 		ret = enable_ust_app_event(ua_sess, ua_event, app);
 		if (ret < 0) {
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			goto error;
 		}
 	next_app:
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 	}
 
 error:
@@ -4276,10 +4276,10 @@ int ust_app_create_event_glb(struct ltt_ust_session *usess,
 			continue;
 		}
 
-		pthread_mutex_lock(&ua_sess->lock);
+		LTTNG_LOCK(&ua_sess->lock);
 
 		if (ua_sess->deleted) {
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			continue;
 		}
 
@@ -4292,7 +4292,7 @@ int ust_app_create_event_glb(struct ltt_ust_session *usess,
 		ua_chan = caa_container_of(ua_chan_node, struct ust_app_channel, node);
 
 		ret = create_ust_app_event(ua_sess, ua_chan, uevent, app);
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 		if (ret < 0) {
 			if (ret != -LTTNG_UST_ERR_EXIST) {
 				/* Possible value at this point: -ENOMEM. If so, we stop! */
@@ -4335,10 +4335,10 @@ int ust_app_start_trace(struct ltt_ust_session *usess, struct ust_app *app)
 		goto end;
 	}
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	if (ua_sess->deleted) {
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 		goto end;
 	}
 
@@ -4373,9 +4373,9 @@ int ust_app_start_trace(struct ltt_ust_session *usess, struct ust_app *app)
 
 skip_setup:
 	/* This start the UST tracing */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_start_session(app->sock, ua_sess->handle);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("Error starting tracing for app pid: %d (ret: %d)",
@@ -4387,7 +4387,7 @@ skip_setup:
 			 * creation process. Don't report an error so the execution can
 			 * continue normally.
 			 */
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			goto end;
 		}
 		goto error_unlock;
@@ -4396,14 +4396,14 @@ skip_setup:
 	/* Indicate that the session has been started once */
 	ua_sess->started = 1;
 
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 
 	health_code_update();
 
 	/* Quiescent wait after starting trace */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_wait_quiescent(app->sock);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 		ERR("UST app wait quiescent failed for app pid %d ret %d",
 				app->pid, ret);
@@ -4415,7 +4415,7 @@ end:
 	return 0;
 
 error_unlock:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 	rcu_read_unlock();
 	health_code_update();
 	return -1;
@@ -4444,10 +4444,10 @@ int ust_app_stop_trace(struct ltt_ust_session *usess, struct ust_app *app)
 		goto end_no_session;
 	}
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	if (ua_sess->deleted) {
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 		goto end_no_session;
 	}
 
@@ -4464,9 +4464,9 @@ int ust_app_stop_trace(struct ltt_ust_session *usess, struct ust_app *app)
 	health_code_update();
 
 	/* This inhibits UST tracing */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_stop_session(app->sock, ua_sess->handle);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("Error stopping tracing for app pid: %d (ret: %d)",
@@ -4486,9 +4486,9 @@ int ust_app_stop_trace(struct ltt_ust_session *usess, struct ust_app *app)
 	health_code_update();
 
 	/* Quiescent wait after stopping trace */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_wait_quiescent(app->sock);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 		ERR("UST app wait quiescent failed for app pid %d ret %d",
 				app->pid, ret);
@@ -4505,14 +4505,14 @@ int ust_app_stop_trace(struct ltt_ust_session *usess, struct ust_app *app)
 	(void) push_metadata(registry, ua_sess->consumer);
 
 end_unlock:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 end_no_session:
 	rcu_read_unlock();
 	health_code_update();
 	return 0;
 
 error_rcu_unlock:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 	rcu_read_unlock();
 	health_code_update();
 	return -1;
@@ -4535,7 +4535,7 @@ int ust_app_flush_app_session(struct ust_app *app,
 		goto end_not_compatible;
 	}
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	if (ua_sess->deleted) {
 		goto end_deleted;
@@ -4570,7 +4570,7 @@ int ust_app_flush_app_session(struct ust_app *app,
 	health_code_update();
 
 end_deleted:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 
 end_not_compatible:
 	rcu_read_unlock();
@@ -4672,7 +4672,7 @@ int ust_app_clear_quiescent_app_session(struct ust_app *app,
 		goto end_not_compatible;
 	}
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	if (ua_sess->deleted) {
 		goto end_unlock;
@@ -4714,7 +4714,7 @@ int ust_app_clear_quiescent_app_session(struct ust_app *app,
 	health_code_update();
 
 end_unlock:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 
 end_not_compatible:
 	rcu_read_unlock();
@@ -4836,9 +4836,9 @@ static int destroy_trace(struct ltt_ust_session *usess, struct ust_app *app)
 	health_code_update();
 
 	/* Quiescent wait after stopping trace */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_wait_quiescent(app->sock);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 		ERR("UST app wait quiescent failed for app pid %d ret %d",
 				app->pid, ret);
@@ -4960,10 +4960,10 @@ void ust_app_global_create(struct ltt_ust_session *usess, struct ust_app *app)
 	}
 	assert(ua_sess);
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	if (ua_sess->deleted) {
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 		goto end;
 	}
 
@@ -5009,7 +5009,7 @@ void ust_app_global_create(struct ltt_ust_session *usess, struct ust_app *app)
 		}
 	}
 
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 
 	if (usess->active) {
 		ret = ust_app_start_trace(usess, app);
@@ -5024,7 +5024,7 @@ end:
 	return;
 
 error_unlock:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 error:
 	if (ua_sess) {
 		destroy_app_session(app, ua_sess);
@@ -5113,10 +5113,10 @@ int ust_app_add_ctx_channel_glb(struct ltt_ust_session *usess,
 			continue;
 		}
 
-		pthread_mutex_lock(&ua_sess->lock);
+		LTTNG_LOCK(&ua_sess->lock);
 
 		if (ua_sess->deleted) {
-			pthread_mutex_unlock(&ua_sess->lock);
+			LTTNG_UNLOCK(&ua_sess->lock);
 			continue;
 		}
 
@@ -5133,7 +5133,7 @@ int ust_app_add_ctx_channel_glb(struct ltt_ust_session *usess,
 			goto next_app;
 		}
 	next_app:
-		pthread_mutex_unlock(&ua_sess->lock);
+		LTTNG_UNLOCK(&ua_sess->lock);
 	}
 
 	rcu_read_unlock();
@@ -5177,7 +5177,7 @@ int ust_app_enable_event_pid(struct ltt_ust_session *usess,
 		goto end;
 	}
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	if (ua_sess->deleted) {
 		ret = 0;
@@ -5207,7 +5207,7 @@ int ust_app_enable_event_pid(struct ltt_ust_session *usess,
 	}
 
 end_unlock:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 end:
 	rcu_read_unlock();
 	return ret;
@@ -5374,7 +5374,7 @@ static int reply_ust_register_channel(int sock, int sobjd, int cobjd,
 		chan_reg_key = ua_chan->key;
 	}
 
-	pthread_mutex_lock(&registry->lock);
+	LTTNG_LOCK(&registry->lock);
 
 	chan_reg = ust_registry_channel_find(registry, chan_reg_key);
 	assert(chan_reg);
@@ -5426,7 +5426,7 @@ reply:
 	chan_reg->register_done = 1;
 
 error:
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 error_rcu_unlock:
 	rcu_read_unlock();
 	free(fields);
@@ -5489,7 +5489,7 @@ static int add_event_ust_registry(int sock, int sobjd, int cobjd, char *name,
 		chan_reg_key = ua_chan->key;
 	}
 
-	pthread_mutex_lock(&registry->lock);
+	LTTNG_LOCK(&registry->lock);
 
 	/*
 	 * From this point on, this call acquires the ownership of the sig, fields
@@ -5527,7 +5527,7 @@ static int add_event_ust_registry(int sock, int sobjd, int cobjd, char *name,
 			name, event_id);
 
 error:
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 error_rcu_unlock:
 	rcu_read_unlock();
 	free(sig);
@@ -5581,7 +5581,7 @@ static int add_enum_ust_registry(int sock, int sobjd, char *name,
 		goto error_rcu_unlock;
 	}
 
-	pthread_mutex_lock(&registry->lock);
+	LTTNG_LOCK(&registry->lock);
 
 	/*
 	 * From this point on, the callee acquires the ownership of
@@ -5614,7 +5614,7 @@ static int add_enum_ust_registry(int sock, int sobjd, char *name,
 	DBG3("UST registry enum %s added successfully or already found", name);
 
 error:
-	pthread_mutex_unlock(&registry->lock);
+	LTTNG_UNLOCK(&registry->lock);
 error_rcu_unlock:
 	rcu_read_unlock();
 	return ret;
@@ -6156,18 +6156,18 @@ int ust_app_regenerate_statedump(struct ltt_ust_session *usess,
 		goto end;
 	}
 
-	pthread_mutex_lock(&ua_sess->lock);
+	LTTNG_LOCK(&ua_sess->lock);
 
 	if (ua_sess->deleted) {
 		goto end_unlock;
 	}
 
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_regenerate_statedump(app->sock, ua_sess->handle);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 
 end_unlock:
-	pthread_mutex_unlock(&ua_sess->lock);
+	LTTNG_UNLOCK(&ua_sess->lock);
 
 end:
 	rcu_read_unlock();

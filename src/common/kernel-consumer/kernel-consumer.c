@@ -148,7 +148,7 @@ int lttng_kconsumer_snapshot_channel(uint64_t key, char *path,
 		/*
 		 * Lock stream because we are about to change its state.
 		 */
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 
 		/*
 		 * Assign the received relayd ID so we can use it for streaming. The streams
@@ -307,7 +307,7 @@ int lttng_kconsumer_snapshot_channel(uint64_t key, char *path,
 			close_relayd_stream(stream);
 			stream->net_seq_idx = (uint64_t) -1ULL;
 		}
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 	}
 
 	/* All good! */
@@ -320,7 +320,7 @@ error_put_subbuf:
 		ERR("Snapshot kernctl_put_subbuf error path");
 	}
 end_unlock:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 end:
 	rcu_read_unlock();
 	return ret;
@@ -355,7 +355,7 @@ static int lttng_kconsumer_snapshot_metadata(uint64_t key, char *path,
 
 	metadata_stream = metadata_channel->metadata_stream;
 	assert(metadata_stream);
-	pthread_mutex_lock(&metadata_stream->lock);
+	LTTNG_LOCK(&metadata_stream->lock);
 
 	/* Flag once that we have a valid relayd for the stream. */
 	if (relayd_id != (uint64_t) -1ULL) {
@@ -413,7 +413,7 @@ static int lttng_kconsumer_snapshot_metadata(uint64_t key, char *path,
 
 	ret = 0;
 error_snapshot:
-	pthread_mutex_unlock(&metadata_stream->lock);
+	LTTNG_UNLOCK(&metadata_stream->lock);
 	cds_list_del(&metadata_stream->send_node);
 	consumer_stream_destroy(metadata_stream, NULL);
 	metadata_channel->metadata_stream = NULL;
@@ -1458,21 +1458,21 @@ ssize_t lttng_kconsumer_read_subbuffer(struct lttng_consumer_stream *stream,
 		/*
 		 * In live, block until all the metadata is sent.
 		 */
-		pthread_mutex_lock(&stream->metadata_timer_lock);
+		LTTNG_LOCK(&stream->metadata_timer_lock);
 		assert(!stream->missed_metadata_flush);
 		stream->waiting_on_metadata = true;
-		pthread_mutex_unlock(&stream->metadata_timer_lock);
+		LTTNG_UNLOCK(&stream->metadata_timer_lock);
 
 		err = consumer_stream_sync_metadata(ctx, stream->session_id);
 
-		pthread_mutex_lock(&stream->metadata_timer_lock);
+		LTTNG_LOCK(&stream->metadata_timer_lock);
 		stream->waiting_on_metadata = false;
 		if (stream->missed_metadata_flush) {
 			stream->missed_metadata_flush = false;
-			pthread_mutex_unlock(&stream->metadata_timer_lock);
+			LTTNG_UNLOCK(&stream->metadata_timer_lock);
 			(void) consumer_flush_kernel_index(stream);
 		} else {
-			pthread_mutex_unlock(&stream->metadata_timer_lock);
+			LTTNG_UNLOCK(&stream->metadata_timer_lock);
 		}
 		if (err < 0) {
 			goto end;

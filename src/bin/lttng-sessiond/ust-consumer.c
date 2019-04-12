@@ -243,9 +243,9 @@ int ust_consumer_ask_channel(struct ust_app_session *ua_sess,
 		goto error;
 	}
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	ret = ask_channel_creation(ua_sess, ua_chan, consumer, socket, registry);
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	if (ret < 0) {
 		goto error;
 	}
@@ -273,7 +273,7 @@ int ust_consumer_get_channel(struct consumer_socket *socket,
 	msg.cmd_type = LTTNG_CONSUMER_GET_CHANNEL;
 	msg.u.get_channel.key = ua_chan->key;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	/* Send command and wait for OK reply. */
@@ -341,7 +341,7 @@ int ust_consumer_get_channel(struct consumer_socket *socket,
 
 error:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }
 
@@ -368,7 +368,7 @@ int ust_consumer_destroy_channel(struct consumer_socket *socket,
 	msg.cmd_type = LTTNG_CONSUMER_DESTROY_CHANNEL;
 	msg.u.destroy_channel.key = ua_chan->key;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	ret = consumer_send_msg(socket, &msg);
@@ -378,7 +378,7 @@ int ust_consumer_destroy_channel(struct consumer_socket *socket,
 
 error:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }
 
@@ -399,9 +399,9 @@ int ust_consumer_send_stream_to_ust(struct ust_app *app,
 	DBG2("UST consumer send stream to app %d", app->sock);
 
 	/* Relay stream to application. */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_send_stream_to_ust(app->sock, channel->obj, stream->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("ustctl send stream handle %d to app pid: %d with ret %d",
@@ -436,9 +436,9 @@ int ust_consumer_send_channel_to_ust(struct ust_app *app,
 			app->sock, app->pid, channel->name, channel->tracing_channel_id);
 
 	/* Send stream to application. */
-	pthread_mutex_lock(&app->sock_lock);
+	LTTNG_LOCK(&app->sock_lock);
 	ret = ustctl_send_channel_to_ust(app->sock, ua_sess->handle, channel->obj);
-	pthread_mutex_unlock(&app->sock_lock);
+	LTTNG_UNLOCK(&app->sock_lock);
 	if (ret < 0) {
 		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 			ERR("Error ustctl send channel %s to app pid: %d with ret %d",
@@ -473,9 +473,9 @@ int ust_consumer_metadata_request(struct consumer_socket *socket)
 	health_code_update();
 
 	/* Wait for a metadata request */
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	ret = consumer_socket_recv(socket, &request, sizeof(request));
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	if (ret < 0) {
 		goto end;
 	}
@@ -496,9 +496,9 @@ int ust_consumer_metadata_request(struct consumer_socket *socket)
 
 			memset(&msg, 0, sizeof(msg));
 			msg.cmd_type = LTTNG_ERR_UND;
-			pthread_mutex_lock(socket->lock);
+			LTTNG_LOCK(socket->lock);
 			(void) consumer_send_msg(socket, &msg);
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			/*
 			 * This is possible since the session might have been destroyed
 			 * during a consumer metadata request. So here, return gracefully
@@ -512,9 +512,9 @@ int ust_consumer_metadata_request(struct consumer_socket *socket)
 	}
 	assert(ust_reg);
 
-	pthread_mutex_lock(&ust_reg->lock);
+	LTTNG_LOCK(&ust_reg->lock);
 	ret_push = ust_app_push_metadata(ust_reg, socket, 1);
-	pthread_mutex_unlock(&ust_reg->lock);
+	LTTNG_UNLOCK(&ust_reg->lock);
 	if (ret_push == -EPIPE) {
 		DBG("Application or relay closed while pushing metadata");
 	} else if (ret_push < 0) {

@@ -130,7 +130,7 @@ struct ltt_session_list *session_get_list(void)
  */
 void session_lock_list(void)
 {
-	pthread_mutex_lock(&ltt_session_list.lock);
+	LTTNG_LOCK(&ltt_session_list.lock);
 }
 
 /*
@@ -138,7 +138,7 @@ void session_lock_list(void)
  */
 void session_unlock_list(void)
 {
-	pthread_mutex_unlock(&ltt_session_list.lock);
+	LTTNG_UNLOCK(&ltt_session_list.lock);
 }
 
 /*
@@ -249,7 +249,7 @@ void session_lock(struct ltt_session *session)
 {
 	assert(session);
 
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 }
 
 /*
@@ -259,7 +259,7 @@ void session_unlock(struct ltt_session *session)
 {
 	assert(session);
 
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 }
 
 /*

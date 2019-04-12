@@ -271,12 +271,12 @@ struct lttng_inode_registry *lttng_inode_registry_create(void)
 		goto end;
 	}
 
-	pthread_mutex_lock(&seed.lock);
+	LTTNG_LOCK(&seed.lock);
 	if (!seed.initialized) {
 		seed.value = (unsigned long) time(NULL);
 		seed.initialized = true;
 	}
-	pthread_mutex_unlock(&seed.lock);
+	LTTNG_UNLOCK(&seed.lock);
 
 	registry->inodes = cds_lfht_new(DEFAULT_HT_SIZE, 1, 0,
 			CDS_LFHT_AUTO_RESIZE | CDS_LFHT_ACCOUNTING, NULL);

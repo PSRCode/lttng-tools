@@ -194,14 +194,14 @@ static int check_kernel_stream(struct lttng_consumer_stream *stream)
 		case 0:
 			break;	/* We have the lock. */
 		case EBUSY:
-			pthread_mutex_lock(&stream->metadata_timer_lock);
+			LTTNG_LOCK(&stream->metadata_timer_lock);
 			if (stream->waiting_on_metadata) {
 				ret = 0;
 				stream->missed_metadata_flush = true;
-				pthread_mutex_unlock(&stream->metadata_timer_lock);
+				LTTNG_UNLOCK(&stream->metadata_timer_lock);
 				goto end;	/* Bail out. */
 			}
-			pthread_mutex_unlock(&stream->metadata_timer_lock);
+			LTTNG_UNLOCK(&stream->metadata_timer_lock);
 			/* Try again. */
 			caa_cpu_relax();
 			continue;
@@ -213,7 +213,7 @@ static int check_kernel_stream(struct lttng_consumer_stream *stream)
 		break;
 	}
 	ret = consumer_flush_kernel_index(stream);
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 end:
 	return ret;
 }
@@ -280,14 +280,14 @@ static int check_ust_stream(struct lttng_consumer_stream *stream)
 		case 0:
 			break;	/* We have the lock. */
 		case EBUSY:
-			pthread_mutex_lock(&stream->metadata_timer_lock);
+			LTTNG_LOCK(&stream->metadata_timer_lock);
 			if (stream->waiting_on_metadata) {
 				ret = 0;
 				stream->missed_metadata_flush = true;
-				pthread_mutex_unlock(&stream->metadata_timer_lock);
+				LTTNG_UNLOCK(&stream->metadata_timer_lock);
 				goto end;	/* Bail out. */
 			}
-			pthread_mutex_unlock(&stream->metadata_timer_lock);
+			LTTNG_UNLOCK(&stream->metadata_timer_lock);
 			/* Try again. */
 			caa_cpu_relax();
 			continue;
@@ -299,7 +299,7 @@ static int check_ust_stream(struct lttng_consumer_stream *stream)
 		break;
 	}
 	ret = consumer_flush_ust_index(stream);
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 end:
 	return ret;
 }
@@ -373,7 +373,7 @@ void consumer_timer_signal_thread_qs(unsigned int signr)
 	 * We need to be the only thread interacting with the thread
 	 * that manages signals for teardown synchronization.
 	 */
-	pthread_mutex_lock(&timer_signal.lock);
+	LTTNG_LOCK(&timer_signal.lock);
 
 	/* Ensure we don't have any signal queued for this channel. */
 	for (;;) {
@@ -411,7 +411,7 @@ void consumer_timer_signal_thread_qs(unsigned int signr)
 	}
 	cmm_smp_mb();
 
-	pthread_mutex_unlock(&timer_signal.lock);
+	LTTNG_UNLOCK(&timer_signal.lock);
 }
 
 /*

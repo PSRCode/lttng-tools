@@ -236,4 +236,17 @@ const char *error_get_str(int32_t code);
  */
 const char *log_add_time();
 
+#define LTTNG_LOCK(lock) \
+	do { \
+		DBG3("Attempting to lock %s %p", #lock, lock); \
+		pthread_mutex_lock(lock); \
+		DBG3("Holding lock %s %p", #lock, lock); \
+	} while(0);
+
+#define LTTNG_UNLOCK(lock) \
+	do { \
+		DBG3("Unlocked %s %p", #lock, lock); \
+		pthread_mutex_unlock(lock); \
+	} while(0);
+
 #endif /* _ERROR_H */

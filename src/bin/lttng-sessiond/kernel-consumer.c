@@ -441,7 +441,7 @@ int kernel_consumer_destroy_channel(struct consumer_socket *socket,
 	msg.cmd_type = LTTNG_CONSUMER_DESTROY_CHANNEL;
 	msg.u.destroy_channel.key = channel->fd;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	ret = consumer_send_msg(socket, &msg);
@@ -451,7 +451,7 @@ int kernel_consumer_destroy_channel(struct consumer_socket *socket,
 
 error:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }
 
@@ -470,7 +470,7 @@ int kernel_consumer_destroy_metadata(struct consumer_socket *socket,
 	msg.cmd_type = LTTNG_CONSUMER_DESTROY_CHANNEL;
 	msg.u.destroy_channel.key = metadata->fd;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	ret = consumer_send_msg(socket, &msg);
@@ -480,6 +480,6 @@ int kernel_consumer_destroy_metadata(struct consumer_socket *socket,
 
 error:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }

@@ -217,11 +217,11 @@ ssize_t send_viewer_streams(struct lttcomm_sock *sock,
 			continue;
 		}
 
-		pthread_mutex_lock(&vstream->stream->lock);
+		LTTNG_LOCK(&vstream->stream->lock);
 		/* Ignore if not the same session. */
 		if (vstream->stream->trace->session->id != session->id ||
 				(!ignore_sent_flag && vstream->sent_flag)) {
-			pthread_mutex_unlock(&vstream->stream->lock);
+			LTTNG_UNLOCK(&vstream->stream->lock);
 			viewer_stream_put(vstream);
 			continue;
 		}
@@ -233,7 +233,7 @@ ssize_t send_viewer_streams(struct lttcomm_sock *sock,
 				vstream->stream->is_metadata);
 		if (lttng_strncpy(send_stream.path_name, vstream->path_name,
 				sizeof(send_stream.path_name))) {
-			pthread_mutex_unlock(&vstream->stream->lock);
+			LTTNG_UNLOCK(&vstream->stream->lock);
 			viewer_stream_put(vstream);
 			ret = -1;	/* Error. */
 			goto end_unlock;
@@ -241,7 +241,7 @@ ssize_t send_viewer_streams(struct lttcomm_sock *sock,
 		if (lttng_strncpy(send_stream.channel_name,
 				vstream->channel_name,
 				sizeof(send_stream.channel_name))) {
-			pthread_mutex_unlock(&vstream->stream->lock);
+			LTTNG_UNLOCK(&vstream->stream->lock);
 			viewer_stream_put(vstream);
 			ret = -1;	/* Error. */
 			goto end_unlock;
@@ -250,7 +250,7 @@ ssize_t send_viewer_streams(struct lttcomm_sock *sock,
 		DBG("Sending stream %" PRIu64 " to viewer",
 				vstream->stream->stream_handle);
 		vstream->sent_flag = 1;
-		pthread_mutex_unlock(&vstream->stream->lock);
+		LTTNG_UNLOCK(&vstream->stream->lock);
 
 		ret = send_response(sock, &send_stream, sizeof(send_stream));
 		viewer_stream_put(vstream);
@@ -289,7 +289,7 @@ int make_viewer_streams(struct relay_session *session,
 	 * Hold the session lock to ensure that we see either none or
 	 * all initial streams for a session, but no intermediate state.
 	 */
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 
 	if (session->connection_closed) {
 		*closed = true;
@@ -377,7 +377,7 @@ int make_viewer_streams(struct relay_session *session,
 
 error_unlock:
 	rcu_read_unlock();
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 	return ret;
 }
 
@@ -861,9 +861,9 @@ int viewer_connect(struct relay_connection *conn)
 		 * be used more than once within the macro, and thus the
 		 * operation may be undefined.
 		 */
-		pthread_mutex_lock(&last_relay_viewer_session_id_lock);
+		LTTNG_LOCK(&last_relay_viewer_session_id_lock);
 		last_relay_viewer_session_id++;
-		pthread_mutex_unlock(&last_relay_viewer_session_id_lock);
+		LTTNG_UNLOCK(&last_relay_viewer_session_id_lock);
 		reply.viewer_session_id = htobe64(last_relay_viewer_session_id);
 	}
 
@@ -1397,7 +1397,7 @@ int viewer_get_next_index(struct relay_connection *conn)
 	metadata_viewer_stream =
 			ctf_trace_get_viewer_metadata_stream(ctf_trace);
 
-	pthread_mutex_lock(&rstream->lock);
+	LTTNG_LOCK(&rstream->lock);
 
 	/*
 	 * The viewer should not ask for index on metadata stream.
@@ -1504,11 +1504,11 @@ int viewer_get_next_index(struct relay_connection *conn)
 
 send_reply:
 	if (rstream) {
-		pthread_mutex_unlock(&rstream->lock);
+		LTTNG_UNLOCK(&rstream->lock);
 	}
 
 	if (metadata_viewer_stream) {
-		pthread_mutex_lock(&metadata_viewer_stream->stream->lock);
+		LTTNG_LOCK(&metadata_viewer_stream->stream->lock);
 		DBG("get next index metadata check: recv %" PRIu64
 				" sent %" PRIu64,
 			metadata_viewer_stream->stream->metadata_received,
@@ -1518,7 +1518,7 @@ send_reply:
 					metadata_viewer_stream->metadata_sent) {
 			viewer_index.flags |= LTTNG_VIEWER_FLAG_NEW_METADATA;
 		}
-		pthread_mutex_unlock(&metadata_viewer_stream->stream->lock);
+		LTTNG_UNLOCK(&metadata_viewer_stream->stream->lock);
 	}
 
 	viewer_index.flags = htobe32(viewer_index.flags);
@@ -1545,7 +1545,7 @@ end:
 	return ret;
 
 error_put:
-	pthread_mutex_unlock(&rstream->lock);
+	LTTNG_UNLOCK(&rstream->lock);
 	if (metadata_viewer_stream) {
 		viewer_stream_put(metadata_viewer_stream);
 	}
@@ -1603,7 +1603,7 @@ int viewer_get_packet(struct relay_connection *conn)
 		goto error;
 	}
 
-	pthread_mutex_lock(&vstream->stream->lock);
+	LTTNG_LOCK(&vstream->stream->lock);
 	stream_fd = stream_fd_get_fd(vstream->stream_fd);
 	if (stream_fd < 0) {
 		ERR("Failed to get viewer stream file descriptor");
@@ -1633,7 +1633,7 @@ error:
 
 send_reply:
 	if (vstream) {
-		pthread_mutex_unlock(&vstream->stream->lock);
+		LTTNG_UNLOCK(&vstream->stream->lock);
 	}
 send_reply_nolock:
 
@@ -1714,7 +1714,7 @@ int viewer_get_metadata(struct relay_connection *conn)
 		reply.status = htobe32(LTTNG_VIEWER_METADATA_ERR);
 		goto send_reply;
 	}
-	pthread_mutex_lock(&vstream->stream->lock);
+	LTTNG_LOCK(&vstream->stream->lock);
 	if (!vstream->stream->is_metadata) {
 		ERR("Invalid metadata stream");
 		goto error;
@@ -1776,7 +1776,7 @@ error:
 send_reply:
 	health_code_update();
 	if (vstream) {
-		pthread_mutex_unlock(&vstream->stream->lock);
+		LTTNG_UNLOCK(&vstream->stream->lock);
 	}
 	ret = send_response(conn->sock, &reply, sizeof(reply));
 	if (ret < 0) {

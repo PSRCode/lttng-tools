@@ -98,12 +98,12 @@ struct lttng_ht *lttng_ht_new(unsigned long size, int type)
 	if (!size)
 		size = DEFAULT_HT_SIZE;
 
-	pthread_mutex_lock(&seed_lock);
+	LTTNG_LOCK(&seed_lock);
 	if (!seed_init) {
 		lttng_ht_seed = (unsigned long) time(NULL);
 		seed_init = true;
 	}
-	pthread_mutex_unlock(&seed_lock);
+	LTTNG_UNLOCK(&seed_lock);
 
 	ht = zmalloc(sizeof(*ht));
 	if (ht == NULL) {

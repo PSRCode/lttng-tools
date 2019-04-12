@@ -220,7 +220,7 @@ void fs_handle_log(struct fs_handle *handle)
 {
 	const char *path;
 
-	pthread_mutex_lock(&handle->lock);
+	LTTNG_LOCK(&handle->lock);
 	path = lttng_inode_get_path(handle->inode);
 
 	if (handle->fd >= 0) {
@@ -231,7 +231,7 @@ void fs_handle_log(struct fs_handle *handle)
 	} else {
 		DBG_NO_LOC("    %s [suspended]", path);
 	}
-	pthread_mutex_unlock(&handle->lock);
+	LTTNG_UNLOCK(&handle->lock);
 }
 
 /* Tracker lock must be held by the caller. */
@@ -242,7 +242,7 @@ int fs_handle_suspend(struct fs_handle *handle)
 	struct stat fs_stat;
 	const char *path;
 
-	pthread_mutex_lock(&handle->lock);
+	LTTNG_LOCK(&handle->lock);
 	path = lttng_inode_get_path(handle->inode);
 	assert(handle->fd >= 0);
 	if (handle->in_use) {
@@ -289,7 +289,7 @@ end:
 	if (ret) {
 		handle->tracker->stats.errors++;
 	}
-	pthread_mutex_unlock(&handle->lock);
+	LTTNG_UNLOCK(&handle->lock);
 	return ret;
 }
 
@@ -375,12 +375,12 @@ struct fd_tracker *fd_tracker_create(unsigned int capacity)
 		goto end;
 	}
 
-	pthread_mutex_lock(&seed.lock);
+	LTTNG_LOCK(&seed.lock);
 	if (!seed.initialized) {
 		seed.value = (unsigned long) time(NULL);
 		seed.initialized = true;
 	}
-	pthread_mutex_unlock(&seed.lock);
+	LTTNG_UNLOCK(&seed.lock);
 
 	CDS_INIT_LIST_HEAD(&tracker->active_handles);
 	CDS_INIT_LIST_HEAD(&tracker->suspended_handles);
@@ -411,7 +411,7 @@ void fd_tracker_log(struct fd_tracker *tracker)
 	struct unsuspendable_fd *unsuspendable_fd;
 	struct cds_lfht_iter iter;
 
-	pthread_mutex_lock(&tracker->lock);
+	LTTNG_LOCK(&tracker->lock);
 	DBG_NO_LOC("File descriptor tracker");
 	DBG_NO_LOC("  Stats:");
 	DBG_NO_LOC("    uses:            %" PRIu64, tracker->stats.uses);
@@ -449,7 +449,7 @@ void fd_tracker_log(struct fd_tracker *tracker)
 		DBG_NO_LOC("    None");
 	}
 
-	pthread_mutex_unlock(&tracker->lock);
+	LTTNG_UNLOCK(&tracker->lock);
 }
 
 int fd_tracker_destroy(struct fd_tracker *tracker)
@@ -460,16 +460,16 @@ int fd_tracker_destroy(struct fd_tracker *tracker)
 	 * Refuse to destroy the tracker as fs_handles may still old
 	 * weak references to the tracker.
 	 */
-	pthread_mutex_lock(&tracker->lock);
+	LTTNG_LOCK(&tracker->lock);
 	if (TRACKED_COUNT(tracker)) {
 		ERR("A file descriptor leak has been detected: %u tracked file descriptors are still being tracked",
 				TRACKED_COUNT(tracker));
-		pthread_mutex_unlock(&tracker->lock);
+		LTTNG_UNLOCK(&tracker->lock);
 		fd_tracker_log(tracker);
 		ret = -1;
 		goto end;
 	}
-	pthread_mutex_unlock(&tracker->lock);
+	LTTNG_UNLOCK(&tracker->lock);
 
 	if (tracker->unsuspendable_fds) {
 		ret = cds_lfht_destroy(tracker->unsuspendable_fds, NULL);
@@ -498,7 +498,7 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 		.mode.value = mode ? *mode : 0,
 	};
 
-	pthread_mutex_lock(&tracker->lock);
+	LTTNG_LOCK(&tracker->lock);
 	if (ACTIVE_COUNT(tracker) == tracker->capacity) {
 		if (tracker->count.suspendable.active > 0) {
 			ret = fd_tracker_suspend_handles(tracker, 1);
@@ -561,7 +561,7 @@ struct fs_handle *fd_tracker_open_fs_handle(struct fd_tracker *tracker,
 
 	fd_tracker_track(tracker, handle);
 end:
-	pthread_mutex_unlock(&tracker->lock);
+	LTTNG_UNLOCK(&tracker->lock);
 	errno = ret;
 	return handle;
 error:
@@ -611,7 +611,7 @@ int fd_tracker_open_unsuspendable_fd(struct fd_tracker *tracker,
 
 	memset(entries, 0, sizeof(entries));
 
-	pthread_mutex_lock(&tracker->lock);
+	LTTNG_LOCK(&tracker->lock);
 
 	active_fds = ACTIVE_COUNT(tracker);
 	fds_to_suspend = (int) active_fds + (int) fd_count - (int) tracker->capacity;
@@ -680,7 +680,7 @@ int fd_tracker_open_unsuspendable_fd(struct fd_tracker *tracker,
 	rcu_read_unlock();
 	ret = user_ret;
 end:
-	pthread_mutex_unlock(&tracker->lock);
+	LTTNG_UNLOCK(&tracker->lock);
 	return ret;
 end_free_entries:
 	for (i = 0; i < fd_count; i++) {
@@ -702,7 +702,7 @@ int fd_tracker_close_unsuspendable_fd(struct fd_tracker *tracker,
 	 */
 	memcpy(fds, fds_in, sizeof(*fds) * fd_count);
 
-	pthread_mutex_lock(&tracker->lock);
+	LTTNG_LOCK(&tracker->lock);
 	rcu_read_lock();
 
 	/* Let the user close the file descriptors. */
@@ -745,7 +745,7 @@ int fd_tracker_close_unsuspendable_fd(struct fd_tracker *tracker,
 	ret = 0;
 end:
 	rcu_read_unlock();
-	pthread_mutex_unlock(&tracker->lock);
+	LTTNG_UNLOCK(&tracker->lock);
 	return ret;
 }
 
@@ -811,8 +811,8 @@ int fs_handle_get_fd(struct fs_handle *handle)
 	 * Note that the lock's nesting order must still be respected here.
 	 * The handle's lock nests inside the tracker's lock.
 	 */
-	pthread_mutex_lock(&handle->tracker->lock);
-	pthread_mutex_lock(&handle->lock);
+	LTTNG_LOCK(&handle->tracker->lock);
+	LTTNG_LOCK(&handle->lock);
 	assert(!handle->in_use);
 
 	handle->tracker->stats.uses++;
@@ -831,27 +831,27 @@ int fs_handle_get_fd(struct fs_handle *handle)
 	}
 	handle->in_use = true;
 end:
-	pthread_mutex_unlock(&handle->lock);
-	pthread_mutex_unlock(&handle->tracker->lock);
+	LTTNG_UNLOCK(&handle->lock);
+	LTTNG_UNLOCK(&handle->tracker->lock);
 	return ret;
 }
 
 void fs_handle_put_fd(struct fs_handle *handle)
 {
-	pthread_mutex_lock(&handle->lock);
+	LTTNG_LOCK(&handle->lock);
 	handle->in_use = false;
-	pthread_mutex_unlock(&handle->lock);
+	LTTNG_UNLOCK(&handle->lock);
 }
 
 int fs_handle_unlink(struct fs_handle *handle)
 {
 	int ret;
 
-	pthread_mutex_lock(&handle->tracker->lock);
-	pthread_mutex_lock(&handle->lock);
+	LTTNG_LOCK(&handle->tracker->lock);
+	LTTNG_LOCK(&handle->lock);
 	ret = lttng_inode_defer_unlink(handle->inode);
-	pthread_mutex_unlock(&handle->lock);
-	pthread_mutex_unlock(&handle->tracker->lock);
+	LTTNG_UNLOCK(&handle->lock);
+	LTTNG_UNLOCK(&handle->tracker->lock);
 	return ret;
 }
 
@@ -865,8 +865,8 @@ int fs_handle_close(struct fs_handle *handle)
 		goto end;
 	}
 
-	pthread_mutex_lock(&handle->tracker->lock);
-	pthread_mutex_lock(&handle->lock);
+	LTTNG_LOCK(&handle->tracker->lock);
+	LTTNG_LOCK(&handle->lock);
 	if (handle->inode) {
 		path = lttng_inode_get_path(handle->inode);
 	}
@@ -884,9 +884,9 @@ int fs_handle_close(struct fs_handle *handle)
 		handle->fd = -1;
 	}
 	lttng_inode_put(handle->inode);
-	pthread_mutex_unlock(&handle->lock);
+	LTTNG_UNLOCK(&handle->lock);
 	pthread_mutex_destroy(&handle->lock);
-	pthread_mutex_unlock(&handle->tracker->lock);
+	LTTNG_UNLOCK(&handle->tracker->lock);
 	free(handle);
 end:
 	return ret;
