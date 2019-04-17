@@ -238,6 +238,16 @@ int kernctl_session_regenerate_statedump(int fd)
 	return LTTNG_IOCTL_CHECK(fd, LTTNG_KERNEL_SESSION_STATEDUMP);
 }
 
+int kernctl_session_set_name(int fd, const char *name)
+{
+	struct lttng_kernel_session_name session_name;
+
+	strncpy(session_name.name, name, LTTNG_KERNEL_SESSION_NAME_LEN);
+
+	return LTTNG_IOCTL_CHECK(fd, LTTNG_KERNEL_SESSION_SET_NAME,
+			&session_name);
+}
+
 int kernctl_create_stream(int fd)
 {
 	return compat_ioctl_no_arg(fd, LTTNG_KERNEL_OLD_STREAM,

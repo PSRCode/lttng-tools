@@ -27,6 +27,7 @@
 
 #define LTTNG_KERNEL_SYM_NAME_LEN  256
 #define LTTNG_KERNEL_MAX_UPROBE_NUM  32
+#define LTTNG_KERNEL_SESSION_NAME_LEN	256
 
 /*
  * LTTng DebugFS ABI structures.
@@ -177,5 +178,13 @@ struct lttng_kernel_filter_bytecode {
 	uint64_t seqnum;
 	char data[0];
 } LTTNG_PACKED;
+
+/*
+ * kernel session
+ */
+struct lttng_kernel_session_name {
+	char name[LTTNG_KERNEL_SESSION_NAME_LEN];
+} LTTNG_PACKED;
+
 
 #endif /* _LTTNG_KERNEL_H */

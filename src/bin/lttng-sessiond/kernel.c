@@ -125,6 +125,11 @@ int kernel_create_session(struct ltt_session *session, int tracer_fd)
 
 	DBG("Kernel session created (fd: %d)", lks->fd);
 
+	ret = kernctl_session_set_name(lks->fd, session->name);
+	if (ret) {
+		WARN("Could not set kernel session name");
+	}
+
 	return 0;
 
 error:
