@@ -46,6 +46,9 @@ bool locale_supports_utf8(void);
 #define MIN_UNIT        "m"
 #define HR_UNIT         "h"
 
+#define ISO8601_FORMAT  "%Y%m%dT%H%M%S%z"
+#define ISO8601_LEN     21
+
 /*
  * timespec_to_ms: Convert timespec to milliseconds.
  *
@@ -60,5 +63,11 @@ int timespec_to_ms(struct timespec ts, unsigned long *ms);
  */
 LTTNG_HIDDEN
 struct timespec timespec_abs_diff(struct timespec ts_a, struct timespec ts_b);
+
+/*
+ * Format time_t to ISO8601 compatible format.
+ */
+LTTNG_HIDDEN
+int time_t_to_ISO8601(char *s, size_t s_size, time_t time);
 
 #endif /* LTTNG_TIME_H */

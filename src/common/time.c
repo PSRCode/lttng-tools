@@ -16,6 +16,7 @@
  */
 
 #include <common/time.h>
+#include <common/error.h>
 #include <common/macros.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -66,6 +67,37 @@ struct timespec timespec_abs_diff(struct timespec t1, struct timespec t2)
 	res.tv_sec = diff / (uint64_t) NSEC_PER_SEC;
 	res.tv_nsec = diff % (uint64_t) NSEC_PER_SEC;
 	return res;
+}
+
+LTTNG_HIDDEN
+int time_t_to_ISO8601(char *dest, size_t dest_size, time_t time)
+{
+	int ret;
+	struct tm tm, *timeinfo;
+
+	if (dest_size < ISO8601_LEN) {
+		ERR("Failed to format time to ISO8601 destination too small");
+		ret = -1;
+		goto end;
+	}
+
+	timeinfo = localtime_r(&time, &tm);
+	if (!timeinfo) {
+		PERROR("localtime");
+		ret = -1;
+		goto end;
+	}
+
+	ret = strftime(dest, dest_size, ISO8601_FORMAT, timeinfo);
+	if (ret == 0) {
+		ERR("Failed to format time to ISO8601");
+		ret = -1;
+		goto end;
+	}
+
+	ret = 0;
+end:
+	return ret;
 }
 
 static
