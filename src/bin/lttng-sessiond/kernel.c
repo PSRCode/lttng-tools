@@ -130,6 +130,11 @@ int kernel_create_session(struct ltt_session *session, int tracer_fd)
 		WARN("Could not set kernel session name");
 	}
 
+	ret = kernctl_session_set_creation_time(lks->fd, session->creation_time);
+	if (ret) {
+		WARN("Could not set kernel session creation time");
+	}
+
 	return 0;
 
 error:
