@@ -47,7 +47,7 @@ bool locale_supports_utf8(void);
 #define HR_UNIT         "h"
 
 #define ISO8601_FORMAT  "%Y%m%dT%H%M%S%z"
-#define ISO8601_LEN     21
+#define ISO8601_LEN     26
 
 /*
  * timespec_to_ms: Convert timespec to milliseconds.
