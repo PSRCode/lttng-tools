@@ -909,7 +909,7 @@ int print_metadata_session_information(struct ust_registry_session *registry)
 {
 	int ret;
 	struct ltt_session *session = NULL;
-	char creation_time[ISO8601_LEN];
+	char creation_datetime[ISO8601_LEN];
 
 	rcu_read_lock();
 	session = session_find_by_id(registry->tracing_id);
@@ -944,7 +944,7 @@ int print_metadata_session_information(struct ust_registry_session *registry)
 	}
 
 	/* Prepare creation time */
-	ret = time_t_to_ISO8601(creation_time, sizeof(creation_time),
+	ret = time_t_to_ISO8601(creation_datetime, sizeof(creation_datetime),
 			session->creation_time);
 
 	if (ret) {
@@ -953,9 +953,9 @@ int print_metadata_session_information(struct ust_registry_session *registry)
 
 	/* Output the reste of the information */
 	ret = lttng_metadata_printf(registry,
-		"	trace_creation_time = \"%s\";\n"
+		"	trace_creation_datetime = \"%s\";\n"
 		"	hostname = \"%s\";\n",
-		creation_time,
+		creation_datetime,
 		session->hostname);
 	if (ret) {
 		goto error;
