@@ -1074,7 +1074,7 @@ int ust_metadata_session_statedump(struct ust_registry_session *session,
 		major,
 		minor,
 		app ? "pid" : "uid",
-		app ? (int) app->uid : (int) session->tracing_uid,
+		app ? (int) app->pid : (int) session->tracing_uid,
 		session->bits_per_long
 		);
 	if (ret)
