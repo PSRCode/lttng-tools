@@ -969,6 +969,39 @@ error:
 	return ret;
 }
 
+static
+int print_metadata_app_information(struct ust_registry_session *registry,
+		struct ust_app *app)
+{
+	int ret;
+	char datetime[ISO8601_LEN];
+
+	if (!app) {
+		ret = 0;
+		goto end;
+	}
+
+	ret = time_t_to_ISO8601(datetime, sizeof(datetime),
+			app->registration_time);
+	if (ret) {
+		goto end;
+	}
+
+	ret = lttng_metadata_printf(registry,
+			"	tracer_patchlevel = %u;\n"
+			"	vpid = %d;\n"
+			"	procname = \"%s\";\n"
+			"	vpid_datetime = \"%s\";\n" ,
+			app->version.patchlevel,
+			(int) app->pid,
+			app->name,
+			datetime
+	);
+
+end:
+	return ret;
+}
+
 /*
  * Should be called with session registry mutex held.
  */
@@ -1055,18 +1088,10 @@ int ust_metadata_session_statedump(struct ust_registry_session *session,
 	 * If per-application registry, we can output extra information
 	 * about the application.
 	 */
-	if (app) {
-		ret = lttng_metadata_printf(session,
-			"	tracer_patchlevel = %u;\n"
-			"	vpid = %d;\n"
-			"	procname = \"%s\";\n",
-			app->version.patchlevel,
-			(int) app->pid,
-			app->name
-			);
-		if (ret)
-			goto end;
-	}
+	ret = print_metadata_app_information(session, app);
+	if (ret)
+		goto end;
+
 
 	ret = lttng_metadata_printf(session,
 		"};\n\n"
