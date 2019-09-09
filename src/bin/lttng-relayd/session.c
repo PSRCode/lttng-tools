@@ -37,7 +37,7 @@
 static uint64_t last_relay_session_id;
 static pthread_mutex_t last_relay_session_id_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static int init_session_output_path(struct relay_session *session)
+static int init_session_output_path_group_by_hostname(struct relay_session *session)
 {
 	/*
 	 * session_directory:
@@ -122,6 +122,111 @@ static int init_session_output_path(struct relay_session *session)
 
 end:
 	free(session_directory);
+	return ret;
+}
+
+static int init_session_output_path_group_by_session_name(struct relay_session *session)
+{
+	/*
+	 * session_directory:
+	 *
+	 * if base_path is \0'
+	 *   session_name/hostname-<creation_time>
+	 * else
+	 *   session_name/hostname-<creation_time>/base_path
+	 */
+	char *session_directory = NULL;
+	char *session_name = NULL;
+	char session_creation_datetime[16];
+	size_t strftime_ret;
+	struct tm *timeinfo;
+	time_t creation_time;
+	int ret = 0;
+
+	if (session->output_path[0] != '\0') {
+		goto end;
+	}
+
+	session_name = strdupa(session->session_name);
+	if (!session_name) {
+		PERROR("Failed to duplicate the session name");
+		goto end;
+	}
+
+	if (session->session_name_contains_creation_time) {
+		/*
+		 * Remove the datetime from session name.
+		 * TODO: joraj: discuss if we want to do
+		 * auto-<datetime>/hostname-datetime/...
+		 * for now comply with previous implementation.
+		 * */
+		session_name[strlen(session_name) - 15] = '\0';
+	}
+
+	creation_time = LTTNG_OPTIONAL_GET(session->creation_time);
+
+	timeinfo = localtime(&creation_time);
+	if (!timeinfo) {
+		ERR("Failed to get timeinfo while initializing session output directory handle");
+		ret = -1;
+		goto end;
+	}
+	strftime_ret = strftime(session_creation_datetime,
+			sizeof(session_creation_datetime),
+			"%Y%m%d-%H%M%S", timeinfo);
+	if (strftime_ret == 0) {
+		ERR("Failed to format session creation timestamp while initializing session output directory handle");
+		ret = -1;
+		goto end;
+	}
+
+	if (session->base_path[0] != '\0') {
+		ret = asprintf(&session_directory, "%s/%s-%s",
+				session->session_name, session->hostname,
+				session_creation_datetime);
+	} else {
+		/* Include the base_path */
+		ret = asprintf(&session_directory, "%s/%s-%s/%s",
+				session->session_name, session->hostname,
+				session_creation_datetime, session->base_path);
+	}
+	if (ret < 0) {
+		PERROR("Failed to format session directory name");
+		goto end;
+	}
+
+	if (strlen(session_directory) >= LTTNG_PATH_MAX) {
+		ERR("Session output directory exceeds maximal length");
+		ret = -1;
+		goto end;
+	}
+	strcpy(session->output_path, session_directory);
+	ret = 0;
+
+end:
+	free(session_name);
+	free(session_directory);
+	return ret;
+}
+
+
+static int init_session_output_path(struct relay_session *session)
+{
+	int ret;
+
+	switch (opt_group_output_by) {
+	case RELAYD_GROUP_OUTPUT_BY_HOSTNAME:
+		ret = init_session_output_path_group_by_hostname(session);
+		break;
+	case RELAYD_GROUP_OUTPUT_BY_SESSION_NAME:
+		ret = init_session_output_path_group_by_session_name(session);
+		break;
+	case RELAYD_GROUP_OUTPUT_BY_UNKNOWN:
+	default:
+		assert(0);
+		break;
+	}
+
 	return ret;
 }
 
