@@ -17,7 +17,7 @@
 
 TEST_DESC="LTTng relayd filesystem grouping - Userspace tracing"
 
-CURDIR=$(dirname $0)/
+CURDIR=$(dirname "$0")/
 TESTDIR=$CURDIR/../../..
 NR_ITER=10
 NR_USEC_WAIT=100
@@ -25,6 +25,7 @@ TESTAPP_PATH="$TESTDIR/utils/testapp"
 TESTAPP_NAME="gen-ust-events"
 TESTAPP_BIN="$TESTAPP_PATH/$TESTAPP_NAME/$TESTAPP_NAME"
 EVENT_NAME="tp:tptest"
+CHANNEL_NAME="my_channel"
 
 XSD_PATH=$TESTDIR/../src/common/mi-lttng-3.0.xsd
 
@@ -38,7 +39,7 @@ TRACE_PATH=$(mktemp -d)
 
 NUM_TESTS=292
 
-source $TESTDIR/utils/utils.sh
+source "$TESTDIR/utils/utils.sh"
 
 if [ ! -x "$TESTAPP_BIN" ]; then
 	BAIL_OUT "No UST events binary detected."
@@ -48,25 +49,27 @@ function get_auto_session_name ()
 {
 	local __result=$1
 
-	LTTNG_BIN="lttng --mi xml"
-	OUTPUT_DEST=$(mktemp -u)
+	local lttng_bin=$LTTNG_BIN
+
+	LTTNG_BIN="${lttng_bin} --mi xml"
+	OUTPUT_DEST=$(mktemp)
 
 	list_lttng_with_opts
-	$XML_VALIDATE ${OUTPUT_DEST}
+	$XML_VALIDATE "$OUTPUT_DEST"
 	ok $? "Valid lttng list XML"
 
-	value=$($XML_EXTRACT ${OUTPUT_DEST} ${XPATH_SESSION}/lttng:name/text\(\))
+	value=$($XML_EXTRACT "$OUTPUT_DEST" ${XPATH_SESSION}/lttng:name/text\(\))
 	ok $? "Extraction of session name"
 	OUTPUT_DEST=/dev/null
-	LTTNG_BIN="lttng"
+	LTTNG_BIN=$lttng_bin
 
-	eval $__result="'$value'"
+	# Transfer value to passed arguments
+	eval "$__result='$value'"
 }
 
 function test_ust_uid_live_automatic_name ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -81,29 +84,25 @@ function test_ust_uid_live_automatic_name ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME""--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
 
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
-	set +x
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
 }
 
 function test_ust_uid_live ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -117,27 +116,26 @@ function test_ust_uid_live ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME""--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
+
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_pid_live ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -151,27 +149,25 @@ function test_ust_pid_live ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-pid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME""--buffers-pid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_live_custom_output ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local custom_output="my_live_custom_output"
 	local is_automatic_session=false
 
@@ -186,27 +182,26 @@ function test_ust_uid_live_custom_output ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME" "--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/$custom_output
+
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*/$custom_output"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_streaming ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -220,27 +215,25 @@ function test_ust_uid_streaming ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME""--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_pid_streaming ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -254,27 +247,25 @@ function test_ust_pid_streaming ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-pid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME""--buffers-pid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_streaming_custom_output ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local custom_output="custom_second_token"
 	local is_automatic_session=false
 
@@ -289,27 +280,25 @@ function test_ust_uid_streaming_custom_output ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME""--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/$custom_output
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*/$custom_output"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_streaming_rotate ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -323,28 +312,26 @@ function test_ust_uid_streaming_rotate ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME" "--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
-	rotate_session_ok $session_name
+	rotate_session_ok "$session_name"
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_streaming_rotate_custom_output ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local custom_output="rotate_custom_path"
 	local is_automatic_session=false
 
@@ -359,29 +346,27 @@ function test_ust_uid_streaming_rotate_custom_output ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME" "--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
-	rotate_session_ok $session_name
+	rotate_session_ok "$session_name"
 
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/$custom_output
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*/$custom_output"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_pid_streaming_rotate ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -395,28 +380,26 @@ function test_ust_pid_streaming_rotate ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-pid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME" "--buffers-pid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
-	rotate_session_ok $session_name
+	rotate_session_ok "$session_name"
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_streaming_snapshot ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -430,31 +413,33 @@ function test_ust_uid_streaming_snapshot ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-uid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME" "--buffers-uid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
-	lttng_snapshot_record $session_name
+	lttng_snapshot_record "$session_name"
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_pid_streaming_snapshot ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
-	local file_sync_after_first=$(mktemp -u)
-	local file_sync_before_last=$(mktemp -u)
 	local is_automatic_session=false
+
+	local file_sync_after_first
+	local file_sync_before_last
+
+	file_sync_after_first=$(mktemp -u)
+	file_sync_before_last=$(mktemp -u)
 
 	if [ -z "$session_name" ]; then
 		is_automatic_session=true
@@ -467,39 +452,37 @@ function test_ust_pid_streaming_snapshot ()
 		get_auto_session_name session_name
 	fi
 
-	enable_ust_lttng_channel_ok $session_name $channel_name "--buffers-pid"
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_ust_lttng_channel_ok "$session_name" "$CHANNEL_NAME" "--buffers-pid"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
-	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT ${file_sync_after_first} ${file_sync_before_last} /dev/null 2>&1 &
+	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT "$file_sync_after_first" "$file_sync_before_last" /dev/null 2>&1 &
 
 	while [ ! -f "${file_sync_after_first}" ]; do
 		sleep 0.5
 	done
 
-	lttng_snapshot_record $session_name
+	lttng_snapshot_record "$session_name"
 
-	touch ${file_sync_before_last}
+	touch "$file_sync_before_last"
 	wait
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/snapshot-1*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*/snapshot-1*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 
-	rm -rf ${file_sync_after_first}
-	rm -rf ${file_sync_before_last}
+	rm -f "$file_sync_after_first"
+	rm -f "$file_sync_before_last"
 }
 
 function test_ust_uid_streaming_snapshot_add_output_default_name ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local is_automatic_session=false
 
 	if [ -z "$session_name" ]; then
@@ -513,30 +496,28 @@ function test_ust_uid_streaming_snapshot_add_output_default_name ()
 		get_auto_session_name session_name
 	fi
 
-	enable_lttng_mmap_overwrite_ust_channel $session_name $channel_name
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_lttng_mmap_overwrite_ust_channel "$session_name" "$CHANNEL_NAME"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	lttng_snapshot_add_output_ok $session_name "net://localhost"
-	lttng_snapshot_record $session_name
+	lttng_snapshot_add_output_ok "$session_name" "net://localhost"
+	lttng_snapshot_record "$session_name"
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/snapshot-1*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*/snapshot-1*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_streaming_snapshot_add_output_custom_name ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local snapshot_name="this_is_my_snapshot"
 	local is_automatic_session=false
 
@@ -551,30 +532,30 @@ function test_ust_uid_streaming_snapshot_add_output_custom_name ()
 		get_auto_session_name session_name
 	fi
 
-	enable_lttng_mmap_overwrite_ust_channel $session_name $channel_name
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_lttng_mmap_overwrite_ust_channel "$session_name" "$CHANNEL_NAME"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	lttng_snapshot_add_output_ok $session_name "net://localhost" "-n $snapshot_name"
-	lttng_snapshot_record $session_name
+	lttng_snapshot_add_output_ok "$session_name" "net://localhost" "-n $snapshot_name"
+	lttng_snapshot_record "$session_name"
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
 	# When session name is automatic, the actual directory is "auto", not
 	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/$snapshot_name*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*/$snapshot_name*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 function test_ust_uid_streaming_snapshot_add_output_custom_name_custom_output ()
 {
 	local session_name="$1"
-	local channel_name=$(randstring 8 0)
 	local snapshot_name="this_is_my_snapshot"
 	local custom_output="this/is/my/custom/path"
 	local is_automatic_session=false
@@ -590,24 +571,23 @@ function test_ust_uid_streaming_snapshot_add_output_custom_name_custom_output ()
 		get_auto_session_name session_name
 	fi
 
-	enable_lttng_mmap_overwrite_ust_channel $session_name $channel_name
-	enable_ust_lttng_event_ok $session_name $EVENT_NAME $channel_name
-	start_lttng_tracing_ok $session_name
+	enable_lttng_mmap_overwrite_ust_channel "$session_name" "$CHANNEL_NAME"
+	enable_ust_lttng_event_ok "$session_name" "$EVENT_NAME" "$CHANNEL_NAME"
+	start_lttng_tracing_ok "$session_name"
 
 	$TESTAPP_BIN $NR_ITER $NR_USEC_WAIT
 
-	lttng_snapshot_add_output_ok $session_name "net://localhost/$custom_output" "-n $snapshot_name"
-	lttng_snapshot_record $session_name
+	lttng_snapshot_add_output_ok "$session_name" "net://localhost/$custom_output" "-n $snapshot_name"
+	lttng_snapshot_record "$session_name"
 
-	stop_lttng_tracing_ok $session_name
-	destroy_lttng_session_ok $session_name
+	stop_lttng_tracing_ok "$session_name"
+	destroy_lttng_session_ok "$session_name"
 
-	# When session name is automatic, the actual directory is "auto", not
-	# auto-<datetime>.
 	if [ "$is_automatic_session" = true ]; then
-		session_name="auto"
+		session_name=${session_name::-16}
 	fi
-	validate_trace $EVENT_NAME $TRACE_PATH/$session_name/$HOSTNAME*/$custom_output/$snapshot_name*
+	validate_trace "$EVENT_NAME" "$TRACE_PATH/$session_name/$HOSTNAME*/$custom_output/$snapshot_name*"
+	rm -rf "${TRACE_PATH:?}/$session_name"
 }
 
 plan_tests $NUM_TESTS
@@ -637,25 +617,24 @@ tests=(
 
 name=""
 # Perform test when session name is generated by the client
-for fct_test in ${tests[@]};
+for fct_test in "${tests[@]}";
 do
 	${fct_test} "$name"
-	rm -rf $TRACE_PATH/auto/
-	count=$(ls -1 $TRACE_PATH/ | wc -l)
-	is $count "0" "LTTng-relayd output directory empty"
+	count=$(find "$TRACE_PATH/" -maxdepth 1 -mindepth 1 | wc -l)
+	
+	is "$count" "0" "LTTng-relayd output directory empty"
 done
 
 # Perform test when session name is given
-for fct_test in ${tests[@]};
+for fct_test in "${tests[@]}";
 do
-	name=$(randstring 16 0)
+	name="my-session"
 	${fct_test} "$name"
-	rm -rf $TRACE_PATH/$name/
-	count=$(ls -1 $TRACE_PATH/ | wc -l)
-	is $count "0" "LTTng-relayd output directory empty"
+	count=$(find "$TRACE_PATH/" -maxdepth 1 -mindepth 1 | wc -l)
+	is "$count" "0" "LTTng-relayd output directory empty"
 done
 
-rm -rf $TRACE_PATH
+rm -rf "$TRACE_PATH"
 
 stop_lttng_sessiond
 stop_lttng_relayd
