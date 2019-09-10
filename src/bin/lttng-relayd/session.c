@@ -147,7 +147,7 @@ static int init_session_output_path_group_by_session_name(struct relay_session *
 		goto end;
 	}
 
-	session_name = strdupa(session->session_name);
+	session_name = strdup(session->session_name);
 	if (!session_name) {
 		PERROR("Failed to duplicate the session name");
 		goto end;
@@ -160,7 +160,7 @@ static int init_session_output_path_group_by_session_name(struct relay_session *
 		 * auto-<datetime>/hostname-datetime/...
 		 * for now comply with previous implementation.
 		 * */
-		session_name[strlen(session_name) - 15] = '\0';
+		session_name[strlen(session_name) - 16] = '\0';
 	}
 
 	creation_time = LTTNG_OPTIONAL_GET(session->creation_time);
@@ -181,14 +181,13 @@ static int init_session_output_path_group_by_session_name(struct relay_session *
 	}
 
 	if (session->base_path[0] != '\0') {
-		ret = asprintf(&session_directory, "%s/%s-%s",
-				session->session_name, session->hostname,
-				session_creation_datetime);
-	} else {
-		/* Include the base_path */
 		ret = asprintf(&session_directory, "%s/%s-%s/%s",
-				session->session_name, session->hostname,
+				session_name, session->hostname,
 				session_creation_datetime, session->base_path);
+	} else {
+		ret = asprintf(&session_directory, "%s/%s-%s",
+				session_name, session->hostname,
+				session_creation_datetime);
 	}
 	if (ret < 0) {
 		PERROR("Failed to format session directory name");
