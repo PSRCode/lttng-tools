@@ -22,4 +22,7 @@
 
 char *create_output_path(const char *path_name);
 
+char *backward_compat_stream_group_by_session_name(const char *path,
+		const char *local_session_name);
+
 #endif /* RELAYD_UTILS_H */

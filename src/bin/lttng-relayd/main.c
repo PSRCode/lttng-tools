@@ -1317,12 +1317,35 @@ static int relay_add_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 		goto send_reply;
 	}
 
+	/*
+	 * Backward compatibility for --group-output-by-session.
+	 * Prior to lttng 2.11, the complete path is passed by the stream.
+	 * Starting at 2.11, lttng-relayd uses chunk. When dealing with producer
+	 * >=2.11 the chunk is responsible for the output path. When dealing
+	 * with producer < 2.11 the chunk output_path is the root output path
+	 * and the stream carry the complete path.
+	 * To support --group-output-by-session with older producer (<2.11), we
+	 * need to craft the path based on the stream path.
+	 */
+	if (session->minor < 11 &&
+			opt_group_output_by == RELAYD_GROUP_OUTPUT_BY_SESSION_NAME) {
+		char *group_by_session_path_name;
+		group_by_session_path_name = backward_compat_stream_group_by_session_name(path_name, session->session_name);
+		if (!group_by_session_path_name) {
+			ERR("Failed to apply group by session to stream");
+			goto send_reply;
+		}
+
+		free(path_name);
+		path_name = group_by_session_path_name;
+	}
+
 	trace = ctf_trace_get_by_path_or_create(session, path_name);
 	if (!trace) {
 		goto send_reply;
 	}
-	/* This stream here has one reference on the trace. */
 
+	/* This stream here has one reference on the trace. */
 	pthread_mutex_lock(&last_relay_stream_id_lock);
 	stream_handle = ++last_relay_stream_id;
 	pthread_mutex_unlock(&last_relay_stream_id_lock);
