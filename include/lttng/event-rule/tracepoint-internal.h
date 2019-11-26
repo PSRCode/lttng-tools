@@ -18,7 +18,7 @@
 #ifndef LTTNG_EVENT_RULE_TRACEPOINT_INTERNAL_H
 #define LTTNG_EVENT_RULE_TRACEPOINT_INTERNAL_H
 
-#include <lttng/event-rule/event-rule-tracepoint.h>
+#include <lttng/event-rule/tracepoint.h>
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/domain.h>
 #include <lttng/event.h>

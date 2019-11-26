@@ -18,7 +18,7 @@
 #ifndef LTTNG_EVENT_RULE_SYSCALL_INTERNAL_H
 #define LTTNG_EVENT_RULE_SYSCALL_INTERNAL_H
 
-#include <lttng/event-rule/event-rule-syscall.h>
+#include <lttng/event-rule/syscall.h>
 #include <lttng/event-rule/event-rule-internal.h>
 #include <common/buffer-view.h>
 #include <common/macros.h>

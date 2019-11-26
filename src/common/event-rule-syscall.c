@@ -16,7 +16,7 @@
  */
 
 #include <lttng/event-rule/event-rule-internal.h>
-#include <lttng/event-rule/event-rule-syscall-internal.h>
+#include <lttng/event-rule/syscall-internal.h>
 #include <common/macros.h>
 #include <common/error.h>
 #include <assert.h>

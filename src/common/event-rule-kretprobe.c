@@ -16,7 +16,7 @@
  */
 
 #include <lttng/event-rule/event-rule-internal.h>
-#include <lttng/event-rule/event-rule-kretprobe-internal.h>
+#include <lttng/event-rule/kretprobe-internal.h>
 #include <common/macros.h>
 #include <common/error.h>
 #include <assert.h>

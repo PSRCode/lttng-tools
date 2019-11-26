@@ -16,11 +16,11 @@
  */
 
 #include <lttng/event-rule/event-rule-internal.h>
-#include <lttng/event-rule/event-rule-kprobe-internal.h>
-#include <lttng/event-rule/event-rule-kretprobe-internal.h>
-#include <lttng/event-rule/event-rule-uprobe-internal.h>
-#include <lttng/event-rule/event-rule-syscall-internal.h>
-#include <lttng/event-rule/event-rule-tracepoint-internal.h>
+#include <lttng/event-rule/kprobe-internal.h>
+#include <lttng/event-rule/kretprobe-internal.h>
+#include <lttng/event-rule/uprobe-internal.h>
+#include <lttng/event-rule/syscall-internal.h>
+#include <lttng/event-rule/tracepoint-internal.h>
 #include <common/macros.h>
 #include <common/error.h>
 #include <common/dynamic-buffer.h>
