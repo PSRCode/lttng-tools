@@ -34,10 +34,12 @@ libcommon_la_SOURCES = \
 	actions/snapshot-session.c \
 	actions/start-session.c \
 	actions/stop-session.c \
-	buffer-usage.c \
 	buffer-view.h buffer-view.c \
 	common.h \
-	condition.c \
+	conditions/buffer-usage.c \
+	conditions/condition.c \
+	conditions/session-consumed-size.c \
+	conditions/session-rotation.c \
 	context.c context.h \
 	credentials.c credentials.h \
 	daemonize.c daemonize.h \
@@ -64,9 +66,7 @@ libcommon_la_SOURCES = \
 	pipe.c pipe.h \
 	readwrite.c readwrite.h \
 	runas.c runas.h \
-	session-consumed-size.c \
 	session-descriptor.c \
-	session-rotation.c \
 	spawn-viewer.c spawn-viewer.h \
 	time.c \
 	trace-chunk.c trace-chunk.h \
