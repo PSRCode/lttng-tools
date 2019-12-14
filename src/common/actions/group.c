@@ -36,7 +36,7 @@ static void destroy_lttng_action_group_element(void *ptr)
 }
 
 static struct lttng_action_group *action_group_from_action(
-		struct lttng_action *action)
+		const struct lttng_action *action)
 {
 	assert(action);
 
@@ -80,6 +80,43 @@ static bool lttng_action_group_validate(struct lttng_action *action)
 
 end:
 	return valid;
+}
+
+static bool lttng_action_group_is_equal(const struct lttng_action *_a, const struct lttng_action *_b)
+{
+	bool is_equal = false;
+	unsigned int i;
+	unsigned int a_count, b_count;
+
+	if (lttng_action_group_get_count(_a, &a_count) != LTTNG_ACTION_STATUS_OK) {
+		goto end;
+	}
+	if (lttng_action_group_get_count(_b, &b_count) != LTTNG_ACTION_STATUS_OK) {
+		goto end;
+	}
+
+
+	if (a_count != b_count) {
+		goto end;
+	}
+
+	for (i = 0; i < a_count; i++) {
+		const struct lttng_action *child_a =
+			lttng_action_group_get_at_index_const(_a, i);
+		const struct lttng_action *child_b =
+			lttng_action_group_get_at_index_const(_b, i);
+
+		assert(child_a);
+		assert(child_b);
+
+		if (!lttng_action_is_equal(child_a, child_b)) {
+			goto end;
+		}
+	}
+
+	is_equal = true;
+end:
+	return is_equal;
 }
 
 static int lttng_action_group_serialize(
@@ -210,6 +247,7 @@ struct lttng_action *lttng_action_group_create(void)
 	lttng_action_init(action, LTTNG_ACTION_TYPE_GROUP,
 			lttng_action_group_validate,
 			lttng_action_group_serialize,
+			lttng_action_group_is_equal,
 			lttng_action_group_destroy);
 
 	lttng_dynamic_pointer_array_init(&action_group->actions,
