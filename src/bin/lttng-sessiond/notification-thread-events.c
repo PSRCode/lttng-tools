@@ -116,6 +116,14 @@ struct lttng_trigger_ht_element {
 	struct rcu_head rcu_node;
 };
 
+struct lttng_trigger_tokens_ht_element {
+	uint64_t token;
+	struct lttng_trigger *trigger;
+	struct cds_lfht_node node;
+	/* call_rcu delayed reclaim. */
+	struct rcu_head rcu_node;
+};
+
 struct lttng_condition_list_element {
 	struct lttng_condition *condition;
 	struct cds_list_head node;
@@ -355,6 +363,17 @@ int match_trigger(struct cds_lfht_node *node, const void *key)
 	match = lttng_credentials_is_equal(creds_key, creds_node);
 end:
 	return !!match;
+}
+
+static
+int match_trigger_token(struct cds_lfht_node *node, const void *key)
+{
+	const uint64_t *_key = key;
+	struct lttng_trigger_tokens_ht_element *element;
+
+	element = caa_container_of(node, struct lttng_trigger_tokens_ht_element,
+			node);
+	return *_key == element->token ;
 }
 
 static
@@ -2426,6 +2445,7 @@ int handle_notification_thread_command_register_trigger(
 	struct lttng_condition *condition;
 	struct lttng_action *action;
 	struct lttng_trigger_ht_element *trigger_ht_element = NULL;
+	struct lttng_trigger_tokens_ht_element *trigger_tokens_ht_element = NULL;
 	struct cds_lfht_node *node;
 	const char* trigger_name;
 	bool free_trigger = true;
@@ -2504,10 +2524,36 @@ int handle_notification_thread_command_register_trigger(
 		goto error_free_ht_element;
 	}
 
+	if (lttng_condition_get_type(condition) == LTTNG_CONDITION_TYPE_EVENT_RULE_HIT) {
+		trigger_tokens_ht_element = zmalloc(sizeof(*trigger_tokens_ht_element));
+		if (!trigger_tokens_ht_element) {
+			ret = -1;
+			goto error;
+		}
+
+		/* Add trigger token to the trigger_tokens_ht. */
+		cds_lfht_node_init(&trigger_tokens_ht_element->node);
+		trigger_tokens_ht_element->token = trigger->key.value;
+		trigger_tokens_ht_element->trigger = trigger;
+
+		node = cds_lfht_add_unique(state->trigger_tokens_ht,
+				hash_key_u64(&trigger_tokens_ht_element->token, lttng_ht_seed),
+				match_trigger_token,
+				&trigger_tokens_ht_element->token,
+				&trigger_tokens_ht_element->node);
+		if (node != &trigger_tokens_ht_element->node) {
+			/* TODO: THIS IS A FATAL ERROR... should never happen */
+			/* Not a fatal error, simply report it to the client. */
+			*cmd_result = LTTNG_ERR_TRIGGER_EXISTS;
+			goto error_free_ht_element;
+		}
+	}
+
 	/*
 	 * Ownership of the trigger and of its wrapper was transfered to
-	 * the triggers_ht.
+	 * the triggers_ht. Same for token ht element if necessary.
 	 */
+	trigger_tokens_ht_element = NULL;
 	trigger_ht_element = NULL;
 	free_trigger = false;
 
@@ -2526,6 +2572,7 @@ int handle_notification_thread_command_register_trigger(
 
 error_free_ht_element:
 	free(trigger_ht_element);
+	free(trigger_tokens_ht_element);
 error:
 	if (free_trigger) {
 		lttng_trigger_destroy(trigger);
@@ -2545,6 +2592,13 @@ static
 void free_lttng_trigger_ht_element_rcu(struct rcu_head *node)
 {
 	free(caa_container_of(node, struct lttng_trigger_ht_element,
+			rcu_node));
+}
+
+static
+void free_notification_trigger_tokens_ht_element_rcu(struct rcu_head *node)
+{
+	free(caa_container_of(node, struct notification_trigger_tokens_ht_element,
 			rcu_node));
 }
 
@@ -2598,6 +2652,24 @@ int handle_notification_thread_command_unregister_trigger(
 			DBG("[notification-thread] Removed trigger from channel_triggers_ht");
 			cds_list_del(&trigger_element->node);
 			/* A trigger can only appear once per channel */
+			break;
+		}
+	}
+
+	if (lttng_condition_get_type(condition) == LTTNG_CONDITION_TYPE_EVENT_RULE_HIT) {
+		struct notification_trigger_tokens_ht_element *trigger_tokens_ht_element;
+		cds_lfht_for_each_entry(state->trigger_tokens_ht, &iter, trigger_tokens_ht_element,
+				node) {
+			if (!lttng_trigger_is_equal(trigger, trigger_tokens_ht_element->trigger)) {
+				continue;
+			}
+
+			/* TODO talk to all app and remove it */
+			DBG("[notification-thread] Removed trigger from tokens_ht");
+			cds_lfht_del(state->trigger_tokens_ht,
+					&trigger_tokens_ht_element->node);
+			call_rcu(&trigger_tokens_ht_element->rcu_node, free_notification_trigger_tokens_ht_element_rcu);
+
 			break;
 		}
 	}
