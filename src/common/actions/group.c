@@ -295,7 +295,6 @@ end:
 	return status;
 }
 
-LTTNG_HIDDEN
 enum lttng_action_status lttng_action_group_get_count(
 		const struct lttng_action *group, unsigned int *count)
 {
@@ -316,8 +315,7 @@ end:
 	return status;
 }
 
-LTTNG_HIDDEN
-const struct lttng_action *lttng_action_group_get_at_index(
+const struct lttng_action *lttng_action_group_get_at_index_const(
 		const struct lttng_action *group, unsigned int index)
 {
 	unsigned int count;
