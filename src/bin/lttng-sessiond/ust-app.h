@@ -468,6 +468,17 @@ static inline
 void ust_app_global_update(struct ltt_ust_session *usess, struct ust_app *app)
 {}
 static inline
+void ust_app_global_update_tokens(struct ust_app *app)
+{}
+static inline
+void ust_app_global_update_all_tokens(void)
+{}
+static inline
+int ust_app_setup_trigger_group(struct ust_app *app)
+{
+    return 0;
+}
+static inline
 int ust_app_disable_channel_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan)
 {
