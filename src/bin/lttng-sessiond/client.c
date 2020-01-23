@@ -745,6 +745,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	case LTTNG_ROTATION_SET_SCHEDULE:
 	case LTTNG_SESSION_LIST_ROTATION_SCHEDULES:
 	case LTTNG_CLEAR_SESSION:
+	case LTTNG_LIST_TRIGGERS:
 		need_domain = 0;
 		break;
 	default:
@@ -791,6 +792,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	case LTTNG_DATA_PENDING:
 	case LTTNG_ROTATE_SESSION:
 	case LTTNG_ROTATION_GET_INFO:
+	case LTTNG_LIST_TRIGGERS:
 		break;
 	default:
 		/* Setup lttng message with no payload */
@@ -811,6 +813,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	case LTTNG_SAVE_SESSION:
 	case LTTNG_REGISTER_TRIGGER:
 	case LTTNG_UNREGISTER_TRIGGER:
+	case LTTNG_LIST_TRIGGERS:
 		need_tracing_session = 0;
 		break;
 	default:
@@ -2105,6 +2108,37 @@ error_add_context:
 	case LTTNG_CLEAR_SESSION:
 	{
 		ret = cmd_clear_session(cmd_ctx->session, sock);
+		break;
+	}
+	case LTTNG_LIST_TRIGGERS:
+	{
+		struct lttng_dynamic_buffer payload;
+		struct lttng_triggers *return_triggers;
+
+		lttng_dynamic_buffer_init(&payload);
+		ret = cmd_list_triggers(cmd_ctx, *sock,
+				notification_thread_handle, &return_triggers);
+		if (ret != LTTNG_OK) {
+			goto error;
+		}
+
+		ret = lttng_triggers_serialize(return_triggers, &payload);
+		if (ret) {
+			ERR("Failed to serialize triggers in reply to \"list triggers\" command");
+			ret = LTTNG_ERR_NOMEM;
+			lttng_triggers_destroy(return_triggers);
+			goto error;
+		}
+		ret = setup_lttng_msg_no_cmd_header(cmd_ctx, payload.data,
+				payload.size);
+		if (ret) {
+			ret = LTTNG_ERR_NOMEM;
+			lttng_triggers_destroy(return_triggers);
+			goto error;
+		}
+		lttng_dynamic_buffer_reset(&payload);
+		lttng_triggers_destroy(return_triggers);
+		ret = LTTNG_OK;
 		break;
 	}
 	default:
