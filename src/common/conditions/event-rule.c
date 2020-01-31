@@ -43,7 +43,8 @@ bool lttng_condition_event_rule_validate(
 static
 int lttng_condition_event_rule_serialize(
 		const struct lttng_condition *condition,
-		struct lttng_dynamic_buffer *buf);
+		struct lttng_dynamic_buffer *buf,
+		int *fd_to_send);
 static
 bool lttng_condition_event_rule_is_equal(const struct lttng_condition *_a,
 		const struct lttng_condition *_b);
@@ -78,7 +79,8 @@ end:
 static
 int lttng_condition_event_rule_serialize(
 		const struct lttng_condition *condition,
-		struct lttng_dynamic_buffer *buf)
+		struct lttng_dynamic_buffer *buf,
+		int *fd_to_send)
 {
 	int ret;
 	size_t header_offset, size_before_payload;
@@ -103,7 +105,7 @@ int lttng_condition_event_rule_serialize(
 	}
 
 	size_before_payload = buf->size;
-	ret = lttng_event_rule_serialize(event_rule->rule, buf, NULL);
+	ret = lttng_event_rule_serialize(event_rule->rule, buf, fd_to_send);
 	if (ret) {
 		goto end;
 	}
