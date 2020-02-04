@@ -53,7 +53,7 @@ enum lttng_object_type {
 
 struct lttng_trigger_list_element {
 	/* No ownership of the trigger object is assumed. */
-	const struct lttng_trigger *trigger;
+	struct lttng_trigger *trigger;
 	struct cds_list_head node;
 };
 
@@ -275,7 +275,7 @@ void lttng_session_trigger_list_destroy(
 		struct lttng_session_trigger_list *list);
 static
 int lttng_session_trigger_list_add(struct lttng_session_trigger_list *list,
-		const struct lttng_trigger *trigger);
+		struct lttng_trigger *trigger);
 
 
 static
@@ -1454,7 +1454,7 @@ void lttng_session_trigger_list_destroy(struct lttng_session_trigger_list *list)
 
 static
 int lttng_session_trigger_list_add(struct lttng_session_trigger_list *list,
-		const struct lttng_trigger *trigger)
+		struct lttng_trigger *trigger)
 {
 	int ret = 0;
 	struct lttng_trigger_list_element *new_element =
@@ -2179,7 +2179,7 @@ int action_is_supported(struct lttng_action *action)
 
 /* Must be called with RCU read lock held. */
 static
-int bind_trigger_to_matching_session(const struct lttng_trigger *trigger,
+int bind_trigger_to_matching_session(struct lttng_trigger *trigger,
 		struct notification_thread_state *state)
 {
 	int ret = 0;
@@ -2225,7 +2225,7 @@ end:
 
 /* Must be called with RCU read lock held. */
 static
-int bind_trigger_to_matching_channels(const struct lttng_trigger *trigger,
+int bind_trigger_to_matching_channels(struct lttng_trigger *trigger,
 		struct notification_thread_state *state)
 {
 	int ret = 0;
@@ -3832,20 +3832,22 @@ int handle_notification_thread_event(struct notification_thread_state *state,
 			struct notification_trigger_tokens_ht_element,
 			node);
 
-	action = lttng_trigger_get_const_action(element->trigger);
-	action_type = lttng_action_get_type_const(action);
-	DBG("Message from event source %d value:%" PRIu64 " action type: %s", pipe,
-			notification.id, lttng_action_type_string(action_type));
-	/* Debugging only */
-	if (action_type == LTTNG_ACTION_TYPE_GROUP) {
-		unsigned int nb_action = 0;
-		(void) lttng_action_group_get_count(action, &nb_action);
-		for (int i = 0; i < nb_action; i++) {
-			const struct lttng_action *p_action = NULL;
-			p_action = lttng_action_group_get_at_index(action, i);
-			assert(p_action);
-			DBG("Message from event source %d value:%" PRIu64 " action type internal index: %d value: %s", pipe,
-					notification.id, i, lttng_action_type_string(lttng_action_get_type_const(p_action)));
+	if (lttng_trigger_is_ready_to_fire(element->trigger)) {
+		action = lttng_trigger_get_const_action(element->trigger);
+		action_type = lttng_action_get_type_const(action);
+		DBG("Message from event source %d value:%" PRIu64 " action type: %s", pipe,
+				notification.id, lttng_action_type_string(action_type));
+		/* Debugging only */
+		if (action_type == LTTNG_ACTION_TYPE_GROUP) {
+			unsigned int nb_action = 0;
+			(void) lttng_action_group_get_count(action, &nb_action);
+			for (int i = 0; i < nb_action; i++) {
+				const struct lttng_action *p_action = NULL;
+				p_action = lttng_action_group_get_at_index(action, i);
+				assert(p_action);
+				DBG("Message from event source %d value:%" PRIu64 " action type internal index: %d value: %s", pipe,
+						notification.id, i, lttng_action_type_string(lttng_action_get_type_const(p_action)));
+			}
 		}
 	}
 
@@ -3995,7 +3997,7 @@ int handle_notification_thread_channel_sample(
 		        node) {
 		const struct lttng_condition *condition;
 		const struct lttng_action *action;
-		const struct lttng_trigger *trigger;
+		struct lttng_trigger *trigger;
 		struct notification_client_list *client_list;
 		struct lttng_evaluation *evaluation = NULL;
 
@@ -4003,6 +4005,10 @@ int handle_notification_thread_channel_sample(
 		condition = lttng_trigger_get_const_condition(trigger);
 		assert(condition);
 		action = lttng_trigger_get_const_action(trigger);
+		
+		if (!lttng_trigger_is_ready_to_fire(trigger)) {
+			continue;
+		}
 
 		/* Notify actions are the only type currently supported. */
 		/* TODO support other type of action */
