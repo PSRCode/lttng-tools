@@ -15,8 +15,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <urcu/ref.h>
 
 struct lttng_trigger {
+	struct urcu_ref ref; /* internal use only */
+	bool owns_internal_objects; /* internal use only */
+
 	struct lttng_condition *condition;
 	struct lttng_action *action;
 };
@@ -50,5 +54,11 @@ bool lttng_trigger_validate(struct lttng_trigger *trigger);
 LTTNG_HIDDEN
 bool lttng_trigger_is_equal(const struct lttng_trigger *a,
 		const struct lttng_trigger *b);
+
+LTTNG_HIDDEN
+void lttng_trigger_get(struct lttng_trigger *trigger);
+
+LTTNG_HIDDEN
+void lttng_trigger_put(struct lttng_trigger *trigger);
 
 #endif /* LTTNG_TRIGGER_INTERNAL_H */

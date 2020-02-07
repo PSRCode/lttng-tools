@@ -4343,6 +4343,7 @@ end:
 	return ret;
 }
 
+/* Caller must call lttng_destroy_trigger on the returned trigger object */
 int cmd_register_trigger(struct command_ctx *cmd_ctx, int sock,
 		struct notification_thread_handle *notification_thread)
 {

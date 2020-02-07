@@ -11,6 +11,24 @@
 #include <common/error.h>
 #include <assert.h>
 
+static void lttng_trigger_set_internal_object_ownership(
+		struct lttng_trigger *trigger)
+{
+	/*
+	 * This is necessary to faciliate the object destroy phase. A trigger
+	 * created by a client does not OWN the internal objects (condition and
+	 * action) but when a trigger object is created on the sessiond side or
+	 * for listing triggers (mostly via create_from_buffer) the object is
+	 * the owner of the internal objects. Hence, we set the ownership bool
+	 * to true, in such case, to facilitate object lifetime management and
+	 * internal ownership.
+	 *
+	 * TODO: I'm open to any other solution
+	 */
+	assert(trigger);
+	trigger->owns_internal_objects = true;
+}
+
 LTTNG_HIDDEN
 bool lttng_trigger_validate(struct lttng_trigger *trigger)
 {
@@ -42,6 +60,8 @@ struct lttng_trigger *lttng_trigger_create(
 		goto end;
 	}
 
+	urcu_ref_init(&trigger->ref);
+	trigger->owns_internal_objects = false;
 	trigger->condition = condition;
 	trigger->action = action;
 end:
@@ -74,13 +94,28 @@ const struct lttng_action *lttng_trigger_get_const_action(
 	return trigger->action;
 }
 
-void lttng_trigger_destroy(struct lttng_trigger *trigger)
+static void trigger_destroy_ref(struct urcu_ref *ref)
 {
-	if (!trigger) {
-		return;
+	struct lttng_trigger *trigger =
+			container_of(ref, struct lttng_trigger, ref);
+
+	if (trigger->owns_internal_objects) {
+		struct lttng_action *action = lttng_trigger_get_action(trigger);
+		struct lttng_condition *condition =
+				lttng_trigger_get_condition(trigger);
+
+		assert(action);
+		assert(condition);
+		lttng_action_destroy(action);
+		lttng_condition_destroy(condition);
 	}
 
 	free(trigger);
+}
+
+void lttng_trigger_destroy(struct lttng_trigger *trigger)
+{
+	lttng_trigger_put(trigger);
 }
 
 LTTNG_HIDDEN
@@ -135,6 +170,12 @@ ssize_t lttng_trigger_create_from_buffer(
 		ret = -1;
 		goto error;
 	}
+
+	/* Take ownership of the internal object from there */
+	lttng_trigger_set_internal_object_ownership(*trigger);
+	condition = NULL;
+	action = NULL;
+
 	ret = offset;
 end:
 	return ret;
@@ -197,4 +238,20 @@ bool lttng_trigger_is_equal(
 	}
 
 	return true;
+}
+
+LTTNG_HIDDEN
+void lttng_trigger_get(struct lttng_trigger *trigger)
+{
+	urcu_ref_get(&trigger->ref);
+}
+
+LTTNG_HIDDEN
+void lttng_trigger_put(struct lttng_trigger *trigger)
+{
+	if (!trigger) {
+		return;
+	}
+
+	urcu_ref_put(&trigger->ref , trigger_destroy_ref);
 }
