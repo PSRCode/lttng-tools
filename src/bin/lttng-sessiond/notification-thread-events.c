@@ -4014,7 +4014,7 @@ int perform_event_action(struct notification_thread_state *state,
 	}
 
 	action_type = lttng_action_get_type_const(action);
-	ERR("Handling action %s for trigger id %s (%" PRIu64 ")",
+	DBG("Handling action %s for trigger id %s (%" PRIu64 ")",
 			lttng_action_type_string(action_type), trigger->name,
 			trigger->key.value);
 
