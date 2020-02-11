@@ -59,15 +59,16 @@ static enum lttng_error_code lttng_event_rule_kretprobe_populate(
 	return LTTNG_OK;
 }
 
-static char *lttng_event_rule_kretprobe_get_filter(
-		struct lttng_event_rule *rule)
+static const char *lttng_event_rule_kretprobe_get_filter(
+		const struct lttng_event_rule *rule)
 {
 	/* Not supported */
 	return NULL;
 }
 
-static struct lttng_filter_bytecode *
-lttng_event_rule_kretprobe_get_filter_bytecode(struct lttng_event_rule *rule)
+static const struct lttng_filter_bytecode *
+lttng_event_rule_kretprobe_get_filter_bytecode(
+		const struct lttng_event_rule *rule)
 {
 	/* Not supported */
 	return NULL;

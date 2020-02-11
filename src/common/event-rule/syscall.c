@@ -194,8 +194,8 @@ end:
 	return ret_code;
 }
 
-static char *lttng_event_rule_syscall_get_internal_filter(
-		struct lttng_event_rule *rule)
+static const char *lttng_event_rule_syscall_get_internal_filter(
+		const struct lttng_event_rule *rule)
 {
 	struct lttng_event_rule_syscall *syscall;
 	assert(rule);
@@ -204,9 +204,9 @@ static char *lttng_event_rule_syscall_get_internal_filter(
 	return syscall->internal_filter.filter;
 }
 
-static struct lttng_filter_bytecode *
+static const struct lttng_filter_bytecode *
 lttng_event_rule_syscall_get_internal_filter_bytecode(
-		struct lttng_event_rule *rule)
+		const struct lttng_event_rule *rule)
 {
 	struct lttng_event_rule_syscall *syscall;
 	assert(rule);
