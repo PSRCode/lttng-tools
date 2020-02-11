@@ -32,6 +32,7 @@ enum notification_thread_command_type {
 	NOTIFICATION_COMMAND_TYPE_GET_TOKENS,
 	NOTIFICATION_COMMAND_TYPE_LIST_TRIGGERS,
 	NOTIFICATION_COMMAND_TYPE_QUIT,
+	NOTIFICATION_COMMAND_TYPE_CLIENT_COMMUNICATION_UPDATE,
 };
 
 struct notification_thread_command {
@@ -77,6 +78,11 @@ struct notification_thread_command {
 			uid_t uid;
 			gid_t gid;
 		} list_triggers;
+		/* Client communication update. */
+		struct {
+			notification_client_id id;
+			enum client_transmission_status status;
+		} client_communication_update;
 
 	} parameters;
 

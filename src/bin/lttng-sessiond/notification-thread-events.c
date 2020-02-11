@@ -121,122 +121,6 @@ struct lttng_condition_list_element {
 	struct cds_list_head node;
 };
 
-struct notification_client_list_element {
-	struct notification_client *client;
-	struct cds_list_head node;
-};
-
-/*
- * Thread safety of notification_client and notification_client_list.
- *
- * The notification thread (main thread) and the action executor
- * interact through client lists. Hence, when the action executor
- * thread looks-up the list of clients subscribed to a given
- * condition, it will acquire a reference to the list and lock it
- * while attempting to communicate with the various clients.
- *
- * It is not necessary to reference-count clients as they are guaranteed
- * to be 'alive' if they are present in a list and that list is locked. Indeed,
- * removing references to the client from those subscription lists is part of
- * the work performed on destruction of a client.
- *
- * No provision for other access scenarios are taken into account;
- * this is the bare minimum to make these accesses safe and the
- * notification thread's state is _not_ "thread-safe" in any general
- * sense.
- */
-struct notification_client_list {
-	pthread_mutex_t lock;
-	struct urcu_ref ref;
-	const struct lttng_trigger *trigger;
-	struct cds_list_head list;
-	/* Weak reference to container. */
-	struct cds_lfht *notification_trigger_clients_ht;
-	struct cds_lfht_node notification_trigger_clients_ht_node;
-	/* call_rcu delayed reclaim. */
-	struct rcu_head rcu_node;
-};
-
-struct notification_client {
-	/* Nests within the notification_client_list lock. */
-	pthread_mutex_t lock;
-	notification_client_id id;
-	int socket;
-	/* Client protocol version. */
-	uint8_t major, minor;
-	uid_t uid;
-	gid_t gid;
-	/*
-	 * Indicates if the credentials and versions of the client have been
-	 * checked.
-	 */
-	bool validated;
-	/*
-	 * Conditions to which the client's notification channel is subscribed.
-	 * List of struct lttng_condition_list_node. The condition member is
-	 * owned by the client.
-	 */
-	struct cds_list_head condition_list;
-	struct cds_lfht_node client_socket_ht_node;
-	struct cds_lfht_node client_id_ht_node;
-	struct {
-		/*
-		 * If a client's communication is inactive, it means that a
-		 * fatal error has occurred (could be either a protocol error or
-		 * the socket API returned a fatal error). No further
-		 * communication should be attempted; the client is queued for
-		 * clean-up.
-		 */
-		bool active;
-		struct {
-			/*
-			 * During the reception of a message, the reception
-			 * buffers' "size" is set to contain the current
-			 * message's complete payload.
-			 */
-			struct lttng_dynamic_buffer buffer;
-			/* Bytes left to receive for the current message. */
-			size_t bytes_to_receive;
-			/* Type of the message being received. */
-			enum lttng_notification_channel_message_type msg_type;
-			/*
-			 * Indicates whether or not credentials are expected
-			 * from the client.
-			 */
-			bool expect_creds;
-			/*
-			 * Indicates whether or not credentials were received
-			 * from the client.
-			 */
-			bool creds_received;
-			/* Only used during credentials reception. */
-			lttng_sock_cred creds;
-		} inbound;
-		struct {
-			/*
-			 * Indicates whether or not a notification addressed to
-			 * this client was dropped because a command reply was
-			 * already buffered.
-			 *
-			 * A notification is dropped whenever the buffer is not
-			 * empty.
-			 */
-			bool dropped_notification;
-			/*
-			 * Indicates whether or not a command reply is already
-			 * buffered. In this case, it means that the client is
-			 * not consuming command replies before emitting a new
-			 * one. This could be caused by a protocol error or a
-			 * misbehaving/malicious client.
-			 */
-			bool queued_command_reply;
-			struct lttng_dynamic_buffer buffer;
-		} outbound;
-	} communication;
-	/* call_rcu delayed reclaim. */
-	struct rcu_head rcu_node;
-};
-
 /*
  * Facilities to carry the different notifications type in the action processing
  * code path.
@@ -312,6 +196,11 @@ static
 int lttng_session_trigger_list_add(struct lttng_session_trigger_list *list,
 		struct lttng_trigger *trigger);
 
+static
+int client_handle_transmission_status(
+		struct notification_client *client,
+		enum client_transmission_status transmission_status,
+		struct notification_thread_state *state);
 
 static
 int match_client_socket(struct cds_lfht_node *node, const void *key)
@@ -800,7 +689,7 @@ error:
 	return NULL;
 }
 
-static
+LTTNG_HIDDEN
 bool notification_client_list_get(struct notification_client_list *list)
 {
 	return urcu_ref_get_unless_zero(&list->ref);
@@ -874,7 +763,7 @@ void publish_notification_client_list(
 	rcu_read_unlock();
 }
 
-static
+LTTNG_HIDDEN
 void notification_client_list_put(struct notification_client_list *list)
 {
 	if (!list) {
@@ -1400,6 +1289,34 @@ struct notification_client *get_client_from_socket(int socket,
 
 	client = caa_container_of(node, struct notification_client,
 			client_socket_ht_node);
+end:
+	return client;
+}
+
+/*
+ * Call with rcu_read_lock held (and hold for the lifetime of the returned
+ * client pointer).
+ */
+static
+struct notification_client *get_client_from_id(notification_client_id id,
+		struct notification_thread_state *state)
+{
+	struct cds_lfht_iter iter;
+	struct cds_lfht_node *node;
+	struct notification_client *client = NULL;
+
+	cds_lfht_lookup(state->client_id_ht,
+			hash_client_id(id),
+			match_client_id,
+			&id,
+			&iter);
+	node = cds_lfht_iter_get_node(&iter);
+	if (!node) {
+		goto end;
+	}
+
+	client = caa_container_of(node, struct notification_client,
+			client_id_ht_node);
 end:
 	return client;
 }
@@ -3004,6 +2921,36 @@ int handle_notification_thread_command(
 		cmd->reply_code = LTTNG_OK;
 		ret = 1;
 		goto end;
+	case NOTIFICATION_COMMAND_TYPE_CLIENT_COMMUNICATION_UPDATE:
+	{
+		const enum client_transmission_status client_status =
+				cmd->parameters.client_communication_update
+						.status;
+		const notification_client_id client_id =
+				cmd->parameters.client_communication_update.id;
+		struct notification_client *client;
+
+		rcu_read_lock();
+		client = get_client_from_id(client_id, state);
+
+		if (!client) {
+			/*
+			 * Client error was probably already picked-up by the
+			 * notification thread or it has disconnected
+			 * gracefully while this command was queued.
+			 */
+			DBG("Failed to find notification client to update communication status, client id = %" PRIu64,
+					client_id);
+			ret = 0;
+		} else {
+			pthread_mutex_lock(&client->lock);
+			ret = client_handle_transmission_status(
+					client, client_status, state);
+			pthread_mutex_unlock(&client->lock);
+		}
+		rcu_read_unlock();
+		break;
+	}
 	default:
 		ERR("[notification-thread] Unknown internal command received");
 		goto error_unlock;
@@ -3310,14 +3257,18 @@ end:
 /* Client lock must be acquired by caller. */
 static
 enum client_transmission_status client_flush_outgoing_queue(
-		struct notification_client *client,
-		struct notification_thread_state *state)
+		struct notification_client *client)
 {
 	ssize_t ret;
 	size_t to_send_count;
 	enum client_transmission_status status;
 
 	ASSERT_LOCKED(client->lock);
+
+	if (!client->communication.active) {
+		status = CLIENT_TRANSMISSION_STATUS_FAIL;
+		goto end;
+	}
 
 	assert(client->communication.outbound.buffer.size != 0);
 	to_send_count = client->communication.outbound.buffer.size;
@@ -3341,7 +3292,6 @@ enum client_transmission_status client_flush_outgoing_queue(
 				&client->communication.outbound.buffer,
 				to_send_count);
 		if (ret) {
-			status = CLIENT_TRANSMISSION_STATUS_ERROR;
 			goto error;
 		}
 		status = CLIENT_TRANSMISSION_STATUS_QUEUED;
@@ -3355,20 +3305,14 @@ enum client_transmission_status client_flush_outgoing_queue(
 		ret = lttng_dynamic_buffer_set_size(
 				&client->communication.outbound.buffer, 0);
 		if (ret) {
-			status = CLIENT_TRANSMISSION_STATUS_ERROR;
 			goto error;
 		}
 		status = CLIENT_TRANSMISSION_STATUS_COMPLETE;
 	}
-
-	ret = client_handle_transmission_status(client, status, state);
-	if (ret) {
-		goto error;
-	}
-
-	return 0;
+end:
+	return status;
 error:
-	return -1;
+	return CLIENT_TRANSMISSION_STATUS_ERROR;
 }
 
 /* Client lock must be acquired by caller. */
@@ -3386,6 +3330,7 @@ int client_send_command_reply(struct notification_client *client,
 		.size = sizeof(reply),
 	};
 	char buffer[sizeof(msg) + sizeof(reply)];
+	enum client_transmission_status transmission_status;
 
 	ASSERT_LOCKED(client->lock);
 
@@ -3406,7 +3351,9 @@ int client_send_command_reply(struct notification_client *client,
 		goto error;
 	}
 
-	ret = client_flush_outgoing_queue(client, state);
+	transmission_status = client_flush_outgoing_queue(client);
+	ret = client_handle_transmission_status(
+			client, transmission_status, state);
 	if (ret) {
 		goto error;
 	}
@@ -3495,6 +3442,7 @@ int client_dispatch_message(struct notification_client *client,
 		enum lttng_notification_channel_status status =
 				LTTNG_NOTIFICATION_CHANNEL_STATUS_OK;
 		char send_buffer[sizeof(msg_header) + sizeof(handshake_reply)];
+		enum client_transmission_status transmission_status;
 
 		memcpy(send_buffer, &msg_header, sizeof(msg_header));
 		memcpy(send_buffer + sizeof(msg_header), &handshake_reply,
@@ -3530,7 +3478,9 @@ int client_dispatch_message(struct notification_client *client,
 			goto end;
 		}
 
-		ret = client_flush_outgoing_queue(client, state);
+		transmission_status = client_flush_outgoing_queue(client);
+		ret = client_handle_transmission_status(
+				client, transmission_status, state);
 		if (ret) {
 			goto end;
 		}
@@ -3670,6 +3620,7 @@ int handle_notification_thread_client_out(
 {
 	int ret;
 	struct notification_client *client;
+	enum client_transmission_status transmission_status;
 
 	client = get_client_from_socket(socket, state);
 	if (!client) {
@@ -3679,7 +3630,9 @@ int handle_notification_thread_client_out(
 	}
 
 	pthread_mutex_lock(&client->lock);
-	ret = client_flush_outgoing_queue(client, state);
+	transmission_status = client_flush_outgoing_queue(client);
+	ret = client_handle_transmission_status(
+			client, transmission_status, state);
 	pthread_mutex_unlock(&client->lock);
 	if (ret) {
 		goto end;
@@ -3851,20 +3804,45 @@ end:
 }
 
 static
-int client_enqueue_dropped_notification(struct notification_client *client)
+int client_notification_overflow(struct notification_client *client)
 {
-	int ret;
-	struct lttng_notification_channel_message msg = {
+	int ret = 0;
+	const struct lttng_notification_channel_message msg = {
 		.type = (int8_t) LTTNG_NOTIFICATION_CHANNEL_MESSAGE_TYPE_NOTIFICATION_DROPPED,
-		.size = 0,
 	};
 
 	ASSERT_LOCKED(client->lock);
 
+	DBG("Dropping notification addressed to client (socket fd = %i)",
+			client->socket);
+	if (client->communication.outbound.dropped_notification) {
+		/*
+		 * The client already has a "notification dropped" message
+		 * in its outgoing queue. Nothing to do since all
+		 * of those messages are coalesced.
+		 */
+		goto end;
+	}
+
+	client->communication.outbound.dropped_notification = true;
 	ret = lttng_dynamic_buffer_append(
 			&client->communication.outbound.buffer, &msg,
 			sizeof(msg));
+	if (ret) {
+		PERROR("Failed to enqueue \"dropped notification\" message in client's (socket fd = %i) outgoing queue",
+				client->socket);
+	}
+end:
 	return ret;
+}
+
+static int client_handle_transmission_status_wrapper(
+		struct notification_client *client,
+		enum client_transmission_status status,
+		void *user_data)
+{
+	return client_handle_transmission_status(client, status,
+			(struct notification_thread_state *) user_data);
 }
 
 static
@@ -3874,17 +3852,34 @@ int send_evaluation_to_clients(const struct lttng_trigger *trigger,
 		struct notification_thread_state *state,
 		uid_t object_uid, gid_t object_gid)
 {
+	return notification_client_list_send_evaluation(client_list,
+			lttng_trigger_get_const_condition(trigger), evaluation,
+			lttng_trigger_get_credentials(trigger),
+			&(struct lttng_credentials){
+					.uid = object_uid, .gid = object_gid},
+			client_handle_transmission_status_wrapper, state);
+}
+
+LTTNG_HIDDEN
+int notification_client_list_send_evaluation(
+		struct notification_client_list *client_list,
+		const struct lttng_condition *condition,
+		const struct lttng_evaluation *evaluation,
+		const struct lttng_credentials *trigger_creds,
+		const struct lttng_credentials *source_object_creds,
+		report_client_transmission_result_cb client_report,
+		void *user_data)
+{
 	int ret = 0;
 	struct lttng_dynamic_buffer msg_buffer;
 	struct notification_client_list_element *client_list_element, *tmp;
 	const struct lttng_notification notification = {
-		.condition = (struct lttng_condition *) lttng_trigger_get_const_condition(trigger),
+		.condition = (struct lttng_condition *) condition,
 		.evaluation = (struct lttng_evaluation *) evaluation,
 	};
 	struct lttng_notification_channel_message msg_header = {
 		.type = (int8_t) LTTNG_NOTIFICATION_CHANNEL_MESSAGE_TYPE_NOTIFICATION,
 	};
-	const struct lttng_credentials *trigger_creds = lttng_trigger_get_credentials(trigger);
 
 	lttng_dynamic_buffer_init(&msg_buffer);
 
@@ -3908,16 +3903,23 @@ int send_evaluation_to_clients(const struct lttng_trigger *trigger,
 	pthread_mutex_lock(&client_list->lock);
 	cds_list_for_each_entry_safe(client_list_element, tmp,
 			&client_list->list, node) {
+		enum client_transmission_status transmission_status;
 		struct notification_client *client =
 				client_list_element->client;
 
 		ret = 0;
 		pthread_mutex_lock(&client->lock);
-		if (client->uid != object_uid && client->gid != object_gid &&
-				client->uid != 0) {
-			/* Client is not allowed to monitor this channel. */
-			DBG("[notification-thread] Skipping client at it does not have the object permission to receive notification for this trigger");
-			goto unlock_client;
+		if (source_object_creds) {
+			if (client->uid != source_object_creds->uid &&
+					client->gid != source_object_creds->gid &&
+					client->uid != 0) {
+				/*
+				 * Client is not allowed to monitor this
+				 * object.
+				 */
+				DBG("[notification-thread] Skipping client at it does not have the object permission to receive notification for this trigger");
+				goto unlock_client;
+			}
 		}
 
 		/* TODO: what is the behavior for root client on non root
@@ -3944,17 +3946,10 @@ int send_evaluation_to_clients(const struct lttng_trigger *trigger,
 			 * notification since the socket spilled-over to the
 			 * queue.
 			 */
-			DBG("[notification-thread] Dropping notification addressed to client (socket fd = %i)",
-					client->socket);
-			if (!client->communication.outbound.dropped_notification) {
-				client->communication.outbound.dropped_notification = true;
-				ret = client_enqueue_dropped_notification(
-						client);
-				if (ret) {
-					goto unlock_client;
-				}
+			ret = client_notification_overflow(client);
+			if (ret) {
+				goto unlock_client;
 			}
-			goto unlock_client;
 		}
 
 		ret = lttng_dynamic_buffer_append_buffer(
@@ -3964,7 +3959,8 @@ int send_evaluation_to_clients(const struct lttng_trigger *trigger,
 			goto unlock_client;
 		}
 
-		ret = client_flush_outgoing_queue(client, state);
+		transmission_status = client_flush_outgoing_queue(client);
+		ret = client_report(client, transmission_status, user_data);
 		if (ret) {
 			goto unlock_client;
 		}
@@ -3983,106 +3979,6 @@ end:
 	return ret;
 }
 
-static
-int perform_event_action_notify(struct notification_thread_state *state,
-		const struct lttng_trigger *trigger,
-		const struct lttng_trigger_notification *notification,
-		const struct lttng_action *action)
-{
-	int ret;
-	struct notification_client_list *client_list;
-	struct lttng_evaluation *evaluation = NULL;
-	const struct lttng_credentials *creds = lttng_trigger_get_credentials(trigger);
-
-	/*
-	 * Check if any client is subscribed to the result of this
-	 * evaluation.
-	 */
-	client_list = get_client_list_from_condition(state, trigger->condition);
-	assert(client_list);
-	if (cds_list_empty(&client_list->list)) {
-		ret = 0;
-		goto end;
-	}
-
-	evaluation = lttng_evaluation_event_rule_create(trigger->name);
-	if (!evaluation) {
-		ERR("Failed to create event rule hit evaluation");
-		ret = -1;
-		goto end;
-	}
-
-	/* Dispatch evaluation result to all clients.
-	 * Note that here the passed credentials are the one from the trigger,
-	 * this is because there is no internal object binded to the trigger per
-	 * see and the credential validation is done at the registration level
-	 * for the event rule based trigger. For a channel the credential
-	 * validation can only be done on notify since the trigger can be
-	 * registered before the channel/session creation.
-	 */
-	ret = send_evaluation_to_clients(trigger,
-			evaluation, client_list, state,
-			creds->uid,
-			creds->gid);
-	lttng_evaluation_destroy(evaluation);
-	if (caa_unlikely(ret)) {
-		goto end;
-	}
-end:
-	return ret;
-
-}
-
-/* This can be called recursively, pass NULL for action on the first iteration */
-static
-int perform_event_action(struct notification_thread_state *state,
-		const struct lttng_trigger *trigger,
-		const struct lttng_trigger_notification *notification,
-		const struct lttng_action *action)
-{
-	int ret = 0;
-	enum lttng_action_type action_type;
-
-	assert(trigger);
-
-	if (!action) {
-		action = lttng_trigger_get_const_action(trigger);
-	}
-
-	action_type = lttng_action_get_type_const(action);
-	DBG("Handling action %s for trigger id %s (%" PRIu64 ")",
-			lttng_action_type_string(action_type), trigger->name,
-			trigger->key.value);
-
-	switch (action_type) {
-	case LTTNG_ACTION_TYPE_GROUP:
-	{
-		/* Recurse into the group */
-		const struct lttng_action *tmp = NULL;
-		unsigned int count = 0;
-		(void) lttng_action_group_get_count(action, &count);
-		for (int i = 0; i < count; i++) {
-			tmp = lttng_action_group_get_at_index_const(action, i);
-			assert(tmp);
-			ret = perform_event_action(state, trigger, notification, tmp);
-			if (ret < 0) {
-				goto end;
-			}
-		}
-		break;
-	}
-	case LTTNG_ACTION_TYPE_NOTIFY:
-	{
-		ret = perform_event_action_notify(state, trigger, notification, action);
-		break;
-	}
-	default:
-		break;
-	}
-end:
-	return ret;
-}
-
 int handle_notification_thread_event(struct notification_thread_state *state,
 		int pipe,
 		enum lttng_domain_type domain)
@@ -4096,6 +3992,8 @@ int handle_notification_thread_event(struct notification_thread_state *state,
 	struct lttng_trigger_notification notification;
 	void *reception_buffer;
 	size_t reception_size;
+	enum action_executor_status executor_status;
+	struct notification_client_list *client_list = NULL;
 
 	notification.type = domain;
 
@@ -4149,7 +4047,7 @@ int handle_notification_thread_event(struct notification_thread_state *state,
 			hash_key_u64(&notification.id, lttng_ht_seed), match_trigger_token,
 			&notification.id, &iter);
 	node = cds_lfht_iter_get_node(&iter);
-	if (caa_likely(!node)) {
+	if (caa_unlikely(!node)) {
 		/* TODO: is this an error? This might happen if the receive side
 		 * is slow to process event from source and that the trigger was
 		 * removed but the app still kicking. This yield another
@@ -4169,13 +4067,78 @@ int handle_notification_thread_event(struct notification_thread_state *state,
 			struct notification_trigger_tokens_ht_element,
 			node);
 
-	if (lttng_trigger_is_ready_to_fire(element->trigger)) {
-		perform_event_action(state, element->trigger, &notification, NULL);
+	if (!lttng_trigger_is_ready_to_fire(element->trigger)) {
+		ret = 0;
+		goto end_unlock;
 	}
 
-	ret = 0;
+	client_list = get_client_list_from_condition(state,
+			lttng_trigger_get_const_condition(element->trigger));
+	executor_status = action_executor_enqueue(
+			state->executor, element->trigger, client_list);
+	switch (executor_status) {
+	case ACTION_EXECUTOR_STATUS_OK:
+		ret = 0;
+		break;
+	case ACTION_EXECUTOR_STATUS_OVERFLOW:
+	{
+		struct notification_client_list_element *client_list_element,
+				*tmp;
+
+		/*
+		 * Not a fatal error; this is expected and simply means the
+		 * executor has too much work queued already.
+		 */
+		ret = 0;
+
+		if (!client_list) {
+			break;
+		}
+
+		/* Warn clients that a notification (or more) was dropped. */
+		pthread_mutex_lock(&client_list->lock);
+		cds_list_for_each_entry_safe(client_list_element, tmp,
+				&client_list->list, node) {
+			enum client_transmission_status transmission_status;
+			struct notification_client *client =
+					client_list_element->client;
+
+			pthread_mutex_lock(&client->lock);
+			ret = client_notification_overflow(client);
+			if (ret) {
+				/* Fatal error. */
+				goto next_client;
+			}
+
+			transmission_status =
+					client_flush_outgoing_queue(client);
+			ret = client_handle_transmission_status(
+					client, transmission_status, state);
+			if (ret) {
+				/* Fatal error. */
+				goto next_client;
+			}
+next_client:
+			pthread_mutex_unlock(&client->lock);
+			if (ret) {
+				break;
+			}
+		}
+		pthread_mutex_lock(&client_list->lock);
+		break;
+	}
+	case ACTION_EXECUTOR_STATUS_ERROR:
+		/* Fatal error, shut down everything. */
+		ERR("Fatal error encoutered while enqueuing action");
+		ret = -1;
+		goto end_unlock;
+	default:
+		/* Unhandled error. */
+		abort();
+	}
 
 end_unlock:
+	notification_client_list_put(client_list);
 	rcu_read_unlock();
 end:
 	return ret;
