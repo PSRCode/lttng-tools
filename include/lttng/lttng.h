@@ -39,6 +39,13 @@
 #include <lttng/condition/session-consumed-size.h>
 #include <lttng/condition/session-rotation.h>
 #include <lttng/condition/evaluation.h>
+#include <lttng/condition/event-rule.h>
+#include <lttng/event-rule/event-rule.h>
+#include <lttng/event-rule/kprobe.h>
+#include <lttng/event-rule/kretprobe.h>
+#include <lttng/event-rule/syscall.h>
+#include <lttng/event-rule/tracepoint.h>
+#include <lttng/event-rule/uprobe.h>
 #include <lttng/notification/channel.h>
 #include <lttng/notification/notification.h>
 #include <lttng/trigger/trigger.h>

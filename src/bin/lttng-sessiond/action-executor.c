@@ -485,10 +485,12 @@ static void *action_executor_thread(void *_data)
 
 		health_code_update();
 		if (executor->work.pending_count == 0) {
+			health_poll_entry();
 			DBG("No work items enqueued, entering wait");
 			pthread_cond_wait(&executor->work.cond,
 					&executor->work.lock);
 			DBG("Woke-up from wait");
+			health_poll_exit();
 			continue;
 		}
 
