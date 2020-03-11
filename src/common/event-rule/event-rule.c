@@ -12,6 +12,7 @@
 #include <common/error.h>
 #include <common/macros.h>
 #include <lttng/event-rule/event-rule-internal.h>
+#include <lttng/event-rule/kprobe-internal.h>
 #include <stdbool.h>
 
 enum lttng_event_rule_type lttng_event_rule_get_type(
@@ -156,7 +157,7 @@ ssize_t lttng_event_rule_create_from_buffer(
 		/* TODO */
 		break;
 	case LTTNG_EVENT_RULE_TYPE_KPROBE:
-		/* TODO */
+		create_from_buffer = lttng_event_rule_kprobe_create_from_buffer;
 		break;
 	case LTTNG_EVENT_RULE_TYPE_KRETPROBE:
 		/* TODO */

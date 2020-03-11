@@ -33,6 +33,7 @@
 #include <lttng/domain.h>
 #include <lttng/endpoint.h>
 #include <lttng/event-rule/event-rule.h>
+#include <lttng/event-rule/kprobe.h>
 #include <lttng/event.h>
 #include <lttng/handle.h>
 #include <lttng/health.h>

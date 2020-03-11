@@ -143,7 +143,8 @@ lttngtriggerinclude_HEADERS= \
 	lttng/trigger/trigger.h
 
 lttngeventruleinclude_HEADERS= \
-	lttng/event-rule/event-rule.h
+	lttng/event-rule/event-rule.h \
+	lttng/event-rule/kprobe.h
 
 noinst_HEADERS = \
 	lttng/snapshot-internal.h \
@@ -175,5 +176,6 @@ noinst_HEADERS = \
 	lttng/session-internal.h \
 	lttng/session-descriptor-internal.h \
 	lttng/event-rule/event-rule-internal.h \
+	lttng/event-rule/kprobe-internal.h \
 	version.h \
 	version.i
