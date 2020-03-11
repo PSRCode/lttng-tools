@@ -14,6 +14,7 @@
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/event-rule/kprobe-internal.h>
 #include <lttng/event-rule/kretprobe-internal.h>
+#include <lttng/event-rule/syscall-internal.h>
 #include <stdbool.h>
 
 enum lttng_event_rule_type lttng_event_rule_get_type(
@@ -168,7 +169,8 @@ ssize_t lttng_event_rule_create_from_buffer(
 		/* TODO */
 		break;
 	case LTTNG_EVENT_RULE_TYPE_SYSCALL:
-		/* TODO */
+		create_from_buffer =
+				lttng_event_rule_syscall_create_from_buffer;
 		break;
 	default:
 		ERR("Attempted to create event rule of unknown type (%i)",

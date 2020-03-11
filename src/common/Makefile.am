@@ -51,6 +51,7 @@ libcommon_la_SOURCES = \
 	event-rule/event-rule.c \
 	event-rule/kprobe.c \
 	event-rule/kretprobe.c \
+	event-rule/syscall.c \
 	filter.c filter.h \
 	fs-handle.c fs-handle.h fs-handle-internal.h \
 	futex.c futex.h \
