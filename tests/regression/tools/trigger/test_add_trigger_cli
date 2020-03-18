@@ -23,7 +23,7 @@ TESTDIR="$CURDIR/../../.."
 # shellcheck source=../../../utils/utils.sh
 source "$TESTDIR/utils/utils.sh"
 
-plan_tests 171
+plan_tests 216
 
 FULL_LTTNG_BIN="${TESTDIR}/../src/bin/lttng/${LTTNG_BIN}"
 
@@ -147,6 +147,34 @@ skip $ist_root "non-root user: skipping syscall tests" 9 || {
 test_success "--action notify" \
 	--condition on-event some-event-notify -u \
 	--action notify
+
+test_success "--action notify --capture foo" \
+	--condition on-event some-event-notify-foo -u \
+	--action notify --capture foo
+
+test_success "--action notify --capture foo[2]" \
+	--condition on-event some-event-notify-foo2 -u \
+	--action notify --capture 'foo[2]'
+
+test_success '--action notify --capture $ctx.foo' \
+	--condition on-event some-event-notify-ctx-foo -u \
+	--action notify --capture '$ctx.foo'
+
+test_success '--action notify --capture $ctx.foo[2]' \
+	--condition on-event some-event-notify-ctx-foo2 -u \
+	--action notify --capture '$ctx.foo[2]'
+
+test_success '--action notify --capture $app.prov:type' \
+	--condition on-event some-event-notify-app-prov-type -u \
+	--action notify --capture '$app.prov:type'
+
+test_success '--action notify --capture $app.prov:type[2]' \
+	--condition on-event some-event-notify-app-prov-type-2 -u \
+	--action notify --capture '$app.prov:type[2]'
+
+test_success '--action notify multiple captures' \
+	--condition on-event some-event-notify-multiple-captures -u \
+	--action notify --capture foo --capture '$app.hello:world'
 
 # `--action start-session` successes
 test_success "--action start-session" \
@@ -274,6 +302,46 @@ test_failure "extra arg after --action notify" \
 	"Error: Unexpected argument \`bob\`." \
 	--condition on-event -u -a \
 	--action notify bob
+
+test_failure "missing argument to --capture" \
+	'Error: While parsing argument #1 (`--capture`): Missing required argument for option `--capture`' \
+	--condition on-event -u -a \
+	--action notify --capture
+
+test_failure "binary operator in capture expression" \
+	"Binary operators are not allowed in capture expressions." \
+	--condition on-event -u -a \
+	--action notify --capture 'foo == 2'
+
+test_failure "unary operator in capture expression" \
+	"Unary operators are not allowed in capture expressions." \
+	--condition on-event -u -a \
+	--action notify --capture '!foo'
+
+test_failure "logical operator in capture expression" \
+	"Logical operators are not allowed in capture expressions." \
+	--condition on-event -u -a \
+	--action notify --capture 'foo || bar'
+
+test_failure "accessing a sub-field" \
+	"Capturing subfields is not supported." \
+	--condition on-event -u -a \
+	--action notify --capture 'foo.bar'
+
+test_failure "accessing the sub-field of an array element" \
+	"Capturing subfields is not supported." \
+	--condition on-event -u -a \
+	--action notify --capture 'foo[3].bar'
+
+test_failure "missing colon in app-specific context field" \
+	'Invalid app-specific context field name: missing colon in `foo`.' \
+	--condition on-event -u -a \
+	--action notify --capture '$app.foo'
+
+test_failure "missing colon in app-specific context field" \
+	'Invalid app-specific context field name: missing type name after colon in `foo:`.' \
+	--condition on-event -u -a \
+	--action notify --capture '$app.foo:'
 
 # `--action start-session` failures
 test_failure "missing arg after --action start-session" \
