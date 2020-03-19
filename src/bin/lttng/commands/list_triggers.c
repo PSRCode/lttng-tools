@@ -52,13 +52,13 @@ void print_event_rule_tracepoint(const struct lttng_event_rule *event_rule)
 		event_rule, &domain_type);
 	assert(event_rule_status == LTTNG_EVENT_RULE_STATUS_OK);
 
-	printf("    rule: %s (type: tracepoint, domain: %s", pattern,
+	_MSG("    rule: %s (type: tracepoint, domain: %s", pattern,
 		lttng_domain_type_str(domain_type));
 
 	event_rule_status = lttng_event_rule_tracepoint_get_filter(
 		event_rule, &filter);
 	if (event_rule_status == LTTNG_EVENT_RULE_STATUS_OK) {
-		printf(", filter: %s", filter);
+		_MSG(", filter: %s", filter);
 	} else {
 		assert(event_rule_status == LTTNG_EVENT_RULE_STATUS_UNSET);
 	}
@@ -77,7 +77,7 @@ void print_event_rule_tracepoint(const struct lttng_event_rule *event_rule)
 
 		loglevel_op = (loglevel_type == LTTNG_EVENT_LOGLEVEL_RANGE ? "<=" : "==");
 
-		printf(", log level %s %s", loglevel_op,
+		_MSG(", log level %s %s", loglevel_op,
 			mi_lttng_loglevel_string(loglevel, domain_type));
 	} else {
 		assert(event_rule_status == LTTNG_EVENT_RULE_STATUS_UNSET);
@@ -87,7 +87,7 @@ void print_event_rule_tracepoint(const struct lttng_event_rule *event_rule)
 		event_rule, &exclusions_count);
 	assert(event_rule_status == LTTNG_EVENT_RULE_STATUS_OK);
 	if (exclusions_count > 0) {
-		printf(", exclusions: ");
+		_MSG(", exclusions: ");
 		for (i = 0; i < exclusions_count; i++) {
 			const char *exclusion;
 
@@ -95,12 +95,11 @@ void print_event_rule_tracepoint(const struct lttng_event_rule *event_rule)
 				event_rule, i, &exclusion);
 			assert(event_rule_status == LTTNG_EVENT_RULE_STATUS_OK);
 
-			printf("%s%s", i > 0 ? "," : "", exclusion);
+			_MSG("%s%s", i > 0 ? "," : "", exclusion);
 		}
 	}
 
-
-	printf(")\n");
+	MSG(")");
 }
 
 static
@@ -112,26 +111,26 @@ void print_event_rule_kprobe(const struct lttng_event_rule *event_rule)
 
 	event_rule_status = lttng_event_rule_kprobe_get_name(event_rule, &name);
 	if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-		fprintf(stderr, "Failed to get kprobe event rule's name.\n");
+		ERR("Failed to get kprobe event rule's name.");
 		goto end;
 	}
 
 	assert(lttng_event_rule_get_type(event_rule) == LTTNG_EVENT_RULE_TYPE_KPROBE);
 
-	printf("    rule: %s (type: probe, location: ", name);
+	_MSG("    rule: %s (type: probe, location: ", name);
 
 	// FIXME: When the location has been specified by address, this field
 	// contains the address as a string.  The only downside is that we are
 	// missing a `0x` prefix.
 	symbol_name = lttng_event_rule_kprobe_get_symbol_name(event_rule);
-	printf("%s", symbol_name);
+	_MSG("%s", symbol_name);
 
 	offset = lttng_event_rule_kprobe_get_offset(event_rule);
 	if (offset > 0) {
-		printf("+0x%" PRIx64, offset);
+		_MSG("+0x%" PRIx64, offset);
 	}
 
-	printf(")\n");
+	MSG(")");
 
 end:
 	return;
@@ -149,17 +148,17 @@ void print_event_rule_uprobe(const struct lttng_event_rule *event_rule)
 
 	event_rule_status = lttng_event_rule_uprobe_get_name(event_rule, &name);
 	if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-		fprintf(stderr, "Failed to get uprobe event rule's name.\n");
+		ERR("Failed to get uprobe event rule's name.");
 		goto end;
 	}
 
 	event_rule_status = lttng_event_rule_uprobe_get_location(event_rule, &location);
 	if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-		fprintf(stderr, "Failed to get uprobe event rule's location.\n");
+		ERR("Failed to get uprobe event rule's location.");
 		goto end;
 	}
 
-	printf("    rule: %s (type: userspace probe, location: ", name);
+	_MSG("    rule: %s (type: userspace probe, location: ", name);
 
 	userspace_probe_location_type =
 		lttng_userspace_probe_location_get_type(location);
@@ -172,19 +171,19 @@ void print_event_rule_uprobe(const struct lttng_event_rule *event_rule)
 		binary_path = lttng_userspace_probe_location_function_get_binary_path(location);
 		function_name = lttng_userspace_probe_location_function_get_function_name(location);
 
-		printf("%s:%s", binary_path, function_name);
+		_MSG("%s:%s", binary_path, function_name);
 		break;
 	}
 
 	case LTTNG_USERSPACE_PROBE_LOCATION_TYPE_TRACEPOINT:
-		printf("SDT not implemented yet");
+		_MSG("SDT not implemented yet");
 		break;
 
 	default:
 		abort();
 	}
 
-	printf(")\n");
+	MSG(")");
 
 end:
 	return;
@@ -201,17 +200,17 @@ void print_event_rule_syscall(const struct lttng_event_rule *event_rule)
 	event_rule_status = lttng_event_rule_syscall_get_pattern(event_rule, &pattern);
 	assert(event_rule_status == LTTNG_EVENT_RULE_STATUS_OK);
 
-	printf("  - rule: %s (type: syscall", pattern);
+	_MSG("  - rule: %s (type: syscall", pattern);
 
 	event_rule_status = lttng_event_rule_syscall_get_filter(
 		event_rule, &filter);
 	if (event_rule_status == LTTNG_EVENT_RULE_STATUS_OK) {
-		printf(", filter: %s", filter);
+		_MSG(", filter: %s", filter);
 	} else {
 		assert(event_rule_status == LTTNG_EVENT_RULE_STATUS_UNSET);
 	}
 
-	printf(")\n");
+	MSG(")");
 }
 
 static
@@ -267,28 +266,28 @@ void print_one_action(const struct lttng_action *action)
 
 	switch (action_type) {
 	case LTTNG_ACTION_TYPE_NOTIFY:
-		printf("notify\n");
+		MSG("notify");
 		break;
 
 	case LTTNG_ACTION_TYPE_START_SESSION:
 		action_status = lttng_action_start_session_get_session_name(
 			action, &value);
 		assert(action_status == LTTNG_ACTION_STATUS_OK);
-		printf("start session `%s`\n", value);
+		MSG("start session `%s`", value);
 		break;
 
 	case LTTNG_ACTION_TYPE_STOP_SESSION:
 		action_status = lttng_action_stop_session_get_session_name(
 			action, &value);
 		assert(action_status == LTTNG_ACTION_STATUS_OK);
-		printf("stop session `%s`\n", value);
+		MSG("stop session `%s`", value);
 		break;
 
 	case LTTNG_ACTION_TYPE_ROTATE_SESSION:
 		action_status = lttng_action_rotate_session_get_session_name(
 			action, &value);
 		assert(action_status == LTTNG_ACTION_STATUS_OK);
-		printf("rotate session `%s`\n", value);
+		MSG("rotate session `%s`", value);
 		break;
 
 	case LTTNG_ACTION_TYPE_SNAPSHOT_SESSION:
@@ -298,7 +297,7 @@ void print_one_action(const struct lttng_action *action)
 		action_status = lttng_action_snapshot_session_get_session_name(
 			action, &value);
 		assert(action_status == LTTNG_ACTION_STATUS_OK);
-		printf("snapshot session `%s`", value);
+		_MSG("snapshot session `%s`", value);
 
 		action_status = lttng_action_snapshot_session_get_output_const(
 			action, &output);
@@ -323,28 +322,28 @@ void print_one_action(const struct lttng_action *action)
 					ctrl_url += strlen("file://");
 				}
 
-				printf(", path: %s", ctrl_url);
+				_MSG(", path: %s", ctrl_url);
 			} else if (starts_with_net || starts_with_net6) {
-				printf(", url: %s", ctrl_url);
+				_MSG(", url: %s", ctrl_url);
 			} else {
 				assert(strlen(data_url) > 0);
 
-				printf(", control url: %s, data url: %s", ctrl_url, data_url);
+				_MSG(", control url: %s, data url: %s", ctrl_url, data_url);
 			}
 
 			name = lttng_snapshot_output_get_name(output);
 			assert(name);
 			if (strlen(name) > 0) {
-				printf(", name: %s", name);
+				_MSG(", name: %s", name);
 			}
 
 			max_size = lttng_snapshot_output_get_maxsize(output);
 			if (max_size != -1ULL) {
-				printf(", max size: %" PRIu64, max_size);
+				_MSG(", max size: %" PRIu64, max_size);
 			}
 		}
 
-		printf("\n");
+		MSG("");
 		break;
 	}
 
@@ -367,24 +366,24 @@ void print_one_trigger(const struct lttng_trigger *trigger)
 
 	trigger_status = lttng_trigger_get_name(trigger, &name);
 	assert(trigger_status == LTTNG_TRIGGER_STATUS_OK);
-	printf("- id: %s\n", name);
+	MSG("- id: %s", name);
 
 	trigger_status = lttng_trigger_get_firing_policy(trigger,
 			&policy_type, &threshold);
 	if (trigger_status != LTTNG_TRIGGER_STATUS_OK) {
-		fprintf(stderr, "Failed to get trigger's firing policy.\n");
+		ERR("Failed to get trigger's firing policy.");
 		goto end;
 	}
 
 	switch (policy_type) {
 	case LTTNG_TRIGGER_FIRE_EVERY_N:
 		if (threshold > 1) {
-			printf("  firing policy: after every %llu occurences\n", threshold);
+			MSG("  firing policy: after every %llu occurences", threshold);
 		}
 		break;
 
 	case LTTNG_TRIGGER_FIRE_ONCE_AFTER_N:
-		printf("  firing policy: once after %llu occurences\n", threshold);
+		MSG("  firing policy: once after %llu occurences", threshold);
 		break;
 
 	default:
@@ -393,7 +392,7 @@ void print_one_trigger(const struct lttng_trigger *trigger)
 
 	condition = lttng_trigger_get_const_condition(trigger);
 	condition_type = lttng_condition_get_type(condition);
-	printf("  condition: %s\n",
+	MSG("  condition: %s",
 		lttng_condition_type_str(condition_type));
 
 	switch (condition_type) {
@@ -402,7 +401,7 @@ void print_one_trigger(const struct lttng_trigger *trigger)
 		break;
 
 	default:
-		printf("  (condition type not handled in %s)\n", __func__);
+		MSG("  (condition type not handled in %s)", __func__);
 		break;
 	}
 
@@ -412,7 +411,7 @@ void print_one_trigger(const struct lttng_trigger *trigger)
 		enum lttng_action_status action_status;
 		unsigned int count, i;
 
-		printf("  actions:\n");
+		MSG("  actions:");
 
 		action_status = lttng_action_group_get_count(action, &count);
 		assert(action_status == LTTNG_ACTION_STATUS_OK);
@@ -421,11 +420,11 @@ void print_one_trigger(const struct lttng_trigger *trigger)
 			const struct lttng_action *subaction =
 				lttng_action_group_get_at_index_const(action, i);
 
-			printf("    ");
+			_MSG("    ");
 			print_one_action(subaction);
 		}
 	} else {
-		printf(" action:");
+		_MSG(" action:");
 		print_one_action(action);
 	}
 
@@ -463,7 +462,7 @@ int cmd_list_triggers(int argc, const char **argv)
 	argpar_parse_ret = argpar_parse(argc - 1, argv + 1,
 		list_trigger_options, true);
 	if (!argpar_parse_ret.items) {
-		fprintf(stderr, "Error: %s\n", argpar_parse_ret.error);
+		ERR("%s", argpar_parse_ret.error);
 		goto error;
 	}
 
@@ -494,26 +493,26 @@ int cmd_list_triggers(int argc, const char **argv)
 			struct argpar_item_non_opt *item_non_opt =
 				(struct argpar_item_non_opt *) item;
 
-			fprintf(stderr, "Unexpected argument: %s\n", item_non_opt->arg);
+			ERR("Unexpected argument: %s", item_non_opt->arg);
 		}
 	}
 
 	ret = lttng_list_triggers(&triggers);
 	if (ret != 0) {
-		fprintf(stderr, "Error listing triggers: %s.\n",
+		ERR("Error listing triggers: %s.",
 			lttng_strerror(ret));
 		goto error;
 	}
 
 	trigger_status = lttng_triggers_get_count(triggers, &num_triggers);
 	if (trigger_status != LTTNG_TRIGGER_STATUS_OK) {
-		fprintf(stderr, "Failed to get trigger count.\n");
+		ERR("Failed to get trigger count.");
 		goto error;
 	}
 
 	sorted_triggers = calloc(num_triggers, sizeof(struct lttng_trigger *));
 	if (!sorted_triggers) {
-		fprintf(stderr, "Failed to allocate array of struct lttng_trigger *.\n");
+		ERR("Failed to allocate array of struct lttng_trigger *.");
 		goto error;
 	}
 
