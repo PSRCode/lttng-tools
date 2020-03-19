@@ -89,7 +89,7 @@ bool assign_domain_type(enum lttng_domain_type *dest,
 		*dest = src;
 		ret = true;
 	} else {
-		fprintf(stderr, "Error: Multiple domains specified.\n");
+		ERR("Multiple domains specified.");
 		ret = false;
 	}
 
@@ -106,7 +106,7 @@ bool assign_event_rule_type(enum lttng_event_rule_type *dest,
 		*dest = src;
 		ret = true;
 	} else {
-		fprintf(stderr, "Error: Multiple event type not supported.\n");
+		ERR("Multiple event type not supported.");
 		ret = false;
 	}
 
@@ -119,14 +119,14 @@ bool assign_string(char **dest, const char *src, const char *opt_name)
 	bool ret;
 
 	if (*dest) {
-		fprintf(stderr,
-			"Duplicate %s given.\n", opt_name);
+		ERR(
+			"Duplicate %s given.", opt_name);
 		goto error;
 	}
 
 	*dest = strdup(src);
 	if (!*dest) {
-		fprintf(stderr, "Failed to allocate %s string.\n", opt_name);
+		ERR("Failed to allocate %s string.", opt_name);
 		goto error;
 	}
 
@@ -207,7 +207,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 
 	state = argpar_state_create(*argc, *argv, event_rule_opt_descrs);
 	if (!state) {
-		fprintf(stderr, "Failed to allocate an argpar state.\n");
+		ERR("Failed to allocate an argpar state.");
 		goto error;
 	}
 
@@ -217,7 +217,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 		ARGPAR_ITEM_DESTROY_AND_RESET(item);
 		status = argpar_state_parse_next(state, &item, &error);
 		if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR) {
-			fprintf(stderr, "Error: %s\n", error);
+			ERR("%s", error);
 			goto error;
 		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR_UNKNOWN_OPT) {
 			/* Just stop parsing here. */
@@ -346,8 +346,8 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 			 * names.
 			 */
 			if (tracepoint_name) {
-				fprintf(stderr,
-					"Error: Unexpected argument: %s\n",
+				ERR(
+					"Unexpected argument: %s",
 					item_non_opt->arg);
 				goto error;
 			}
@@ -370,13 +370,13 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 		case LTTNG_EVENT_RULE_TYPE_SYSCALL:
 			break;
 		default:
-			fprintf(stderr, "Error: Can't use -a/--all with event rule of type %s.\n",
+			ERR("Can't use -a/--all with event rule of type %s.",
 				lttng_event_rule_type_str(event_rule_type));
 			goto error;
 		}
 
 		if (tracepoint_name) {
-			fprintf(stderr, "Error: Can't provide a tracepoint name with -a/--all.\n");
+			ERR("Can't provide a tracepoint name with -a/--all.");
 			goto error;
 		}
 
@@ -389,7 +389,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 	 * is required.
 	 */
 	if (!tracepoint_name) {
-		fprintf(stderr, "Error: Need to provide either a tracepoint name or -a/--all.\n");
+		ERR("Need to provide either a tracepoint name or -a/--all.");
 		goto error;
 	}
 
@@ -397,7 +397,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 	 * We don't support multiple tracepoint names for now.
 	 */
 	if (strchr(tracepoint_name, ',')) {
-		fprintf(stderr, "Error: multiple tracepoint names are not supported at the moment.\n");
+		ERR("multiple tracepoint names are not supported at the moment.");
 		goto error;
 	}
 
@@ -411,7 +411,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 
 	/* Need to specify a domain. */
 	if (domain_type == LTTNG_DOMAIN_NONE) {
-		fprintf(stderr, "Error: Please specify a domain (-k/-u/-j).\n");
+		ERR("Please specify a domain (-k/-u/-j).");
 		goto error;
 	}
 
@@ -422,7 +422,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 	case LTTNG_EVENT_RULE_TYPE_UPROBE:
 	case LTTNG_EVENT_RULE_TYPE_SYSCALL:
 		if (domain_type != LTTNG_DOMAIN_KERNEL) {
-			fprintf(stderr, "Error: Event type not available for user-space tracing\n");
+			ERR("Event type not available for user-space tracing");
 			goto error;
 		}
 		break;
@@ -454,7 +454,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 	/* If --exclude/-x was passed, split it into an exclusion list. */
 	if (exclude) {
 		if (domain_type != LTTNG_DOMAIN_UST) {
-			fprintf(stderr, "Event name exclusions are not yet implemented for %s events",
+			ERR("Event name exclusions are not yet implemented for %s events",
 						get_domain_str(domain_type));
 			goto error;
 		}
@@ -462,13 +462,13 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 
 		if (create_exclusion_list_and_validate(tracepoint_name, exclude,
 				&exclusion_list) != 0) {
-			fprintf(stderr, "Failed to create exclusion list.\n");
+			ERR("Failed to create exclusion list.");
 			goto error;
 		}
 	}
 
 	if (loglevel_str && event_rule_type != LTTNG_EVENT_RULE_TYPE_TRACEPOINT) {
-		fprintf(stderr, "Log levels are only application to tracepoint event rules.\n");
+		ERR("Log levels are only application to tracepoint event rules.");
 		goto error;
 	}
 
@@ -480,7 +480,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 
 		er = lttng_event_rule_tracepoint_create(domain_type);
 		if (!er) {
-			fprintf(stderr, "Failed to create tracepoint event rule.\n");
+			ERR("Failed to create tracepoint event rule.");
 			goto error;
 		}
 
@@ -488,7 +488,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 		event_rule_status =
 			lttng_event_rule_tracepoint_set_pattern(er, tracepoint_name);
 		if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-			fprintf(stderr, "Failed to set tracepoint pattern.\n");
+			ERR("Failed to set tracepoint pattern.");
 			goto error;
 		}
 
@@ -498,7 +498,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 				lttng_event_rule_tracepoint_set_filter(
 					er, filter);
 			if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-				fprintf(stderr, "Failed to set tracepoint filter expression.\n");
+				ERR("Failed to set tracepoint filter expression.");
 				goto error;
 			}
 		}
@@ -514,7 +514,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 				lttng_event_rule_tracepoint_set_exclusions(er,
 					n, (const char **) exclusion_list);
 			if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-				fprintf(stderr, "Failed to set tracepoint exclusion list.\n");
+				ERR("Failed to set tracepoint exclusion list.");
 				goto error;
 			}
 		}
@@ -523,14 +523,14 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 			int loglevel;
 
 			if (domain_type == LTTNG_DOMAIN_KERNEL) {
-				fprintf(stderr, "Log levels are not supported by the kernel tracer.\n");
+				ERR("Log levels are not supported by the kernel tracer.");
 				goto error;
 			}
 
 			loglevel = parse_loglevel_string(
 				loglevel_str, domain_type);
 			if (loglevel < 0) {
-				fprintf(stderr, "Failed to parse `%s` as a log level.\n", loglevel_str);
+				ERR("Failed to parse `%s` as a log level.", loglevel_str);
 				goto error;
 			}
 
@@ -545,7 +545,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 			}
 
 			if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-				fprintf(stderr, "Failed to set log level.\n");
+				ERR("Failed to set log level.");
 				goto error;
 			}
 		}
@@ -559,20 +559,20 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 
 		er = lttng_event_rule_kprobe_create();
 		if (!er) {
-			fprintf(stderr, "Failed to create kprobe event rule.\n");
+			ERR("Failed to create kprobe event rule.");
 			goto error;
 		}
 
 		event_rule_status = lttng_event_rule_kprobe_set_name(er, tracepoint_name);
 		if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-			fprintf(stderr, "Failed to set kprobe event rule's name.\n");
+			ERR("Failed to set kprobe event rule's name.");
 			goto error;
 		}
 
 		assert(source);
 		event_rule_status = lttng_event_rule_kprobe_set_source(er, source);
 		if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-			fprintf(stderr, "Failed to set kprobe event rule's source.\n");
+			ERR("Failed to set kprobe event rule's source.");
 			goto error;
 		}
 
@@ -586,25 +586,25 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 
 		ret = parse_userspace_probe_opts(source, &userspace_probe_location);
 		if (ret) {
-			fprintf(stderr, "Failed to parse userspace probe location.\n");
+			ERR("Failed to parse userspace probe location.");
 			goto error;
 		}
 
 		er = lttng_event_rule_uprobe_create();
 		if (!er) {
-			fprintf(stderr, "Failed to create userspace probe event rule.\n");
+			ERR("Failed to create userspace probe event rule.");
 			goto error;
 		}
 
 		event_rule_status = lttng_event_rule_uprobe_set_location(er, userspace_probe_location);
 		if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-			fprintf(stderr, "Failed to set userspace probe event rule's location.\n");
+			ERR("Failed to set userspace probe event rule's location.");
 			goto error;
 		}
 
 		event_rule_status = lttng_event_rule_uprobe_set_name(er, tracepoint_name);
 		if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-			fprintf(stderr, "Failed to set userspace probe event rule's name.\n");
+			ERR("Failed to set userspace probe event rule's name.");
 			goto error;
 		}
 
@@ -617,13 +617,13 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 
 		er = lttng_event_rule_syscall_create();
 		if (!er) {
-			fprintf(stderr, "Failed to create syscall event rule.\n");
+			ERR("Failed to create syscall event rule.");
 			goto error;
 		}
 
 		event_rule_status = lttng_event_rule_syscall_set_pattern(er, tracepoint_name);
 		if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-			fprintf(stderr, "Failed to set syscall event rule's pattern.\n");
+			ERR("Failed to set syscall event rule's pattern.");
 			goto error;
 		}
 
@@ -631,7 +631,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 			event_rule_status = lttng_event_rule_syscall_set_filter(
 					er, filter);
 			if (event_rule_status != LTTNG_EVENT_RULE_STATUS_OK) {
-				fprintf(stderr, "Failed to set syscall event rule's filter expression.\n");
+				ERR("Failed to set syscall event rule's filter expression.");
 				goto error;
 			}
 		}
@@ -640,7 +640,7 @@ struct lttng_event_rule *parse_event_rule(int *argc, const char ***argv)
 	}
 
 	default:
-		fprintf(stderr, "%s: I don't support event rules of type `%s` at the moment.\n", __func__,
+		ERR("%s: I don't support event rules of type `%s` at the moment.", __func__,
 			lttng_event_rule_type_str(event_rule_type));
 		goto error;
 	}
@@ -698,7 +698,7 @@ struct lttng_condition *handle_condition_session_consumed_size(int *argc, const 
 
 	state = argpar_state_create(*argc, *argv, event_rule_opt_descrs);
 	if (!state) {
-		fprintf(stderr, "Failed to allocate an argpar state.\n");
+		ERR("Failed to allocate an argpar state.");
 		goto error;
 	}
 
@@ -708,7 +708,7 @@ struct lttng_condition *handle_condition_session_consumed_size(int *argc, const 
 		ARGPAR_ITEM_DESTROY_AND_RESET(item);
 		status = argpar_state_parse_next(state, &item, &error);
 		if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR) {
-			fprintf(stderr, "Error: %s\n", error);
+			ERR("%s", error);
 			goto error;
 		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR_UNKNOWN_OPT) {
 			/* Just stop parsing here. */
@@ -742,7 +742,7 @@ struct lttng_condition *handle_condition_session_consumed_size(int *argc, const 
 				threshold_arg = item_non_opt->arg;
 				break;
 			default:
-				fprintf(stderr, "Unexpected argument `%s`.\n",
+				ERR("Unexpected argument `%s`.",
 					item_non_opt->arg);
 				goto error;
 			}
@@ -753,30 +753,30 @@ struct lttng_condition *handle_condition_session_consumed_size(int *argc, const 
 	*argv += argpar_state_get_ingested_orig_args(state);
 
 	if (!session_name_arg) {
-		fprintf(stderr, "Missing session name argument.\n");
+		ERR("Missing session name argument.");
 		goto error;
 	}
 
 	if (!threshold_arg) {
-		fprintf(stderr, "Missing threshold argument.\n");
+		ERR("Missing threshold argument.");
 		goto error;
 	}
 
 	if (utils_parse_size_suffix(threshold_arg, &threshold) != 0) {
-		fprintf(stderr, "Failed to parse `%s` as a size.\n", threshold_arg);
+		ERR("Failed to parse `%s` as a size.", threshold_arg);
 		goto error;
 	}
 
 	cond = lttng_condition_session_consumed_size_create();
 	if (!cond) {
-		fprintf(stderr, "Failed to allocate a session consumed size condition.\n");
+		ERR("Failed to allocate a session consumed size condition.");
 		goto error;
 	}
 
 	condition_status = lttng_condition_session_consumed_size_set_session_name(
 		cond, session_name_arg);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fprintf(stderr, "Failed to set session consumed size condition session name.\n");
+		ERR("Failed to set session consumed size condition session name.");
 		goto error;
 	}
 
@@ -784,7 +784,7 @@ struct lttng_condition *handle_condition_session_consumed_size(int *argc, const 
 	condition_status = lttng_condition_session_consumed_size_set_threshold(
 		cond, threshold);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fprintf(stderr, "Failed to set session consumed size condition threshold.\n");
+		ERR("Failed to set session consumed size condition threshold.");
 		goto error;
 	}
 
@@ -815,7 +815,7 @@ struct lttng_condition *handle_condition_buffer_usage_high(int *argc, const char
 
 	state = argpar_state_create(*argc, *argv, event_rule_opt_descrs);
 	if (!state) {
-		fprintf(stderr, "Failed to allocate an argpar state.\n");
+		ERR("Failed to allocate an argpar state.");
 		goto error;
 	}
 
@@ -825,7 +825,7 @@ struct lttng_condition *handle_condition_buffer_usage_high(int *argc, const char
 		ARGPAR_ITEM_DESTROY_AND_RESET(item);
 		status = argpar_state_parse_next(state, &item, &error);
 		if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR) {
-			fprintf(stderr, "Error: %s\n", error);
+			ERR("%s", error);
 			goto error;
 		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR_UNKNOWN_OPT) {
 			/* Just stop parsing here. */
@@ -859,7 +859,7 @@ struct lttng_condition *handle_condition_buffer_usage_high(int *argc, const char
 				threshold_arg = item_non_opt->arg;
 				break;
 			default:
-				fprintf(stderr, "Unexpected argument `%s`.\n",
+				ERR("Unexpected argument `%s`.",
 					item_non_opt->arg);
 				goto error;
 			}
@@ -870,37 +870,37 @@ struct lttng_condition *handle_condition_buffer_usage_high(int *argc, const char
 	*argv += argpar_state_get_ingested_orig_args(state);
 
 	if (!session_name_arg) {
-		fprintf(stderr, "Missing session name argument.\n");
+		ERR("Missing session name argument.");
 		goto error;
 	}
 
 	if (!threshold_arg) {
-		fprintf(stderr, "Missing threshold argument.\n");
+		ERR("Missing threshold argument.");
 		goto error;
 	}
 
 	if (utils_parse_size_suffix(threshold_arg, &threshold) != 0) {
-		fprintf(stderr, "Failed to parse `%s` as a size.\n", threshold_arg);
+		ERR("Failed to parse `%s` as a size.", threshold_arg);
 		goto error;
 	}
 
 	cond = lttng_condition_session_consumed_size_create();
 	if (!cond) {
-		fprintf(stderr, "Failed to allocate a session consumed size condition.\n");
+		ERR("Failed to allocate a session consumed size condition.");
 		goto error;
 	}
 
 	condition_status = lttng_condition_session_consumed_size_set_session_name(
 		cond, session_name_arg);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fprintf(stderr, "Failed to set session consumed size condition session name.\n");
+		ERR("Failed to set session consumed size condition session name.");
 		goto error;
 	}
 
 	condition_status = lttng_condition_session_consumed_size_set_threshold(
 		cond, threshold);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		fprintf(stderr, "Failed to set session consumed size condition threshold.\n");
+		ERR("Failed to set session consumed size condition threshold.");
 		goto error;
 	}
 
@@ -959,7 +959,7 @@ struct lttng_condition *parse_condition(int *argc, const char ***argv)
 	const struct condition_descr *descr = NULL;
 
 	if (*argc == 0) {
-		fprintf(stderr, "Missing condition name.\n");
+		ERR("Missing condition name.");
 		goto error;
 	}
 
@@ -976,7 +976,7 @@ struct lttng_condition *parse_condition(int *argc, const char ***argv)
 	}
 
 	if (!descr) {
-		fprintf(stderr, "Unknown condition name: %s\n", condition_name);
+		ERR("Unknown condition name: %s", condition_name);
 		goto error;
 	}
 
@@ -1025,7 +1025,7 @@ struct lttng_action *handle_action_simple_session(
 
 	state = argpar_state_create(*argc, *argv, no_opt_descrs);
 	if (!state) {
-		fprintf(stderr, "Failed to allocate an argpar state.\n");
+		ERR("Failed to allocate an argpar state.");
 		goto error;
 	}
 
@@ -1036,7 +1036,7 @@ struct lttng_action *handle_action_simple_session(
 		ARGPAR_ITEM_DESTROY_AND_RESET(item);
 		status = argpar_state_parse_next(state, &item, &error);
 		if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR) {
-			fprintf(stderr, "Error: %s\n", error);
+			ERR("%s", error);
 			goto error;
 		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR_UNKNOWN_OPT) {
 			/* Just stop parsing here. */
@@ -1055,7 +1055,7 @@ struct lttng_action *handle_action_simple_session(
 			session_name_arg = item_non_opt->arg;
 			break;
 		default:
-			fprintf(stderr, "Unexpected argument `%s`.\n",
+			ERR("Unexpected argument `%s`.",
 				item_non_opt->arg);
 			goto error;
 		}
@@ -1065,21 +1065,21 @@ struct lttng_action *handle_action_simple_session(
 	*argv += argpar_state_get_ingested_orig_args(state);
 
 	if (!session_name_arg) {
-		fprintf(stderr, "Missing session name.\n");
+		ERR("Missing session name.");
 		goto error;
 	}
 
 	action = create_action_cb();
 	if (!action) {
-		fprintf(stderr,
-			"Failed to allocate %s session action.\n", action_name);
+		ERR(
+			"Failed to allocate %s session action.", action_name);
 		goto error;
 	}
 
 	action_status = set_session_name_cb(action, session_name_arg);
 	if (action_status != LTTNG_ACTION_STATUS_OK) {
-		fprintf(stderr,
-			"Failed to set action %s session's session name.\n",
+		ERR(
+			"Failed to set action %s session's session name.",
 			action_name);
 		goto error;
 	}
@@ -1152,7 +1152,7 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 
 	state = argpar_state_create(*argc, *argv, snapshot_action_opt_descrs);
 	if (!state) {
-		fprintf(stderr, "Failed to allocate an argpar state.\n");
+		ERR("Failed to allocate an argpar state.");
 		goto error;
 	}
 
@@ -1162,7 +1162,7 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 		ARGPAR_ITEM_DESTROY_AND_RESET(item);
 		status = argpar_state_parse_next(state, &item, &error);
 		if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR) {
-			fprintf(stderr, "Error: %s\n", error);
+			ERR("%s", error);
 			goto error;
 		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR_UNKNOWN_OPT) {
 			/* Just stop parsing here. */
@@ -1225,7 +1225,7 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 				break;
 
 			default:
-				fprintf(stderr, "Unexpected argument `%s`.\n",
+				ERR("Unexpected argument `%s`.",
 					item_non_opt->arg);
 				goto error;
 			}
@@ -1236,25 +1236,25 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 	*argv += argpar_state_get_ingested_orig_args(state);
 
 	if (!session_name_arg) {
-		fprintf(stderr, "Missing session name.\n");
+		ERR("Missing session name.");
 		goto error;
 	}
 
 	/* --ctrl-url and --data-url must come in pair. */
 	if (ctrl_url_arg && !data_url_arg) {
-		fprintf(stderr, "--ctrl-url is specified, but --data-url is missing.\n");
+		ERR("--ctrl-url is specified, but --data-url is missing.");
 		goto error;
 	}
 
 	if (!ctrl_url_arg && data_url_arg) {
-		fprintf(stderr, "--data-url is specified, but --ctrl-url is missing.\n");
+		ERR("--data-url is specified, but --ctrl-url is missing.");
 		goto error;
 	}
 
 	/* --ctrl-url/--data-url and the non-option URL are mutually exclusive. */
 	if (ctrl_url_arg && url_arg) {
-		fprintf(stderr, "Both --ctrl-url/--data-url and the non-option URL argument "
-				"can't be used together.\n");
+		ERR("Both --ctrl-url/--data-url and the non-option URL argument "
+				"can't be used together.");
 		goto error;
 	}
 
@@ -1265,35 +1265,35 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 	if (url_arg || ctrl_url_arg) {
 		snapshot_output = lttng_snapshot_output_create();
 		if (!snapshot_output) {
-			fprintf(stderr, "Failed to allocate a snapshot output.\n");
+			ERR("Failed to allocate a snapshot output.");
 			goto error;
 		}
 	}
 
 	action = lttng_action_snapshot_session_create();
 	if (!action) {
-		fprintf(stderr,
-			"Failed to allocate snapshot session action.\n");
+		ERR(
+			"Failed to allocate snapshot session action.");
 		goto error;
 	}
 
 	action_status = lttng_action_snapshot_session_set_session_name(
 		action, session_name_arg);
 	if (action_status != LTTNG_ACTION_STATUS_OK) {
-		fprintf(stderr,
-			"Failed to set action snapshot session's session name.\n");
+		ERR(
+			"Failed to set action snapshot session's session name.");
 		goto error;
 	}
 
 	if (snapshot_name_arg) {
 		if (!snapshot_output) {
-			fprintf(stderr, "Can't provide a snapshot output name without a snapshot output destination.\n");
+			ERR("Can't provide a snapshot output name without a snapshot output destination.");
 			goto error;
 		}
 
 		ret = lttng_snapshot_output_set_name(snapshot_name_arg, snapshot_output);
 		if (ret != 0) {
-			fprintf(stderr, "Failed to set name of snapshot output.\n");
+			ERR("Failed to set name of snapshot output.");
 			goto error;
 		}
 	}
@@ -1302,19 +1302,19 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 		uint64_t max_size;
 
 		if (!snapshot_output) {
-			fprintf(stderr, "Can't provide a snapshot output max size without a snapshot output destination.\n");
+			ERR("Can't provide a snapshot output max size without a snapshot output destination.");
 			goto error;
 		}
 
 		ret = utils_parse_size_suffix(max_size_arg, &max_size);
 		if (ret != 0) {
-			fprintf(stderr, "Failed to parse `%s` as a size.\n", max_size_arg);
+			ERR("Failed to parse `%s` as a size.", max_size_arg);
 			goto error;
 		}
 
 		ret = lttng_snapshot_output_set_size(max_size, snapshot_output);
 		if (ret != 0) {
-			fprintf(stderr, "Failed to set snapshot output's max size.\n");
+			ERR("Failed to set snapshot output's max size.");
 			goto error;
 		}
 	}
@@ -1327,14 +1327,14 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 			ret = lttng_snapshot_output_set_network_url(
 				url_arg, snapshot_output);
 			if (ret != 0) {
-				fprintf(stderr, "Failed to parse %s as a network URL.\n", url_arg);
+				ERR("Failed to parse %s as a network URL.", url_arg);
 				goto error;
 			}
 		} else {
 			ret = lttng_snapshot_output_set_local_path(
 				url_arg, snapshot_output);
 			if (ret != 0) {
-				fprintf(stderr, "Failed to parse %s as a local path.\n", url_arg);
+				ERR("Failed to parse %s as a local path.", url_arg);
 				goto error;
 			}
 		}
@@ -1348,7 +1348,7 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 		ret = lttng_snapshot_output_set_network_urls(
 			ctrl_url_arg, data_url_arg, snapshot_output);
 		if (ret != 0) {
-			fprintf(stderr, "Failed to parse `%s` and `%s` as control and data URLs.\n",
+			ERR("Failed to parse `%s` and `%s` as control and data URLs.",
 				ctrl_url_arg, data_url_arg);
 			goto error;
 		}
@@ -1358,7 +1358,7 @@ struct lttng_action *handle_action_snapshot_session(int *argc,
 		action_status = lttng_action_snapshot_session_set_output(
 			action, snapshot_output);
 		if (action_status != LTTNG_ACTION_STATUS_OK) {
-			fprintf(stderr, "Failed to set snapshot session action's output.\n");
+			ERR("Failed to set snapshot session action's output.");
 			goto error;
 		}
 
@@ -1403,7 +1403,7 @@ struct lttng_action *parse_action(int *argc, const char ***argv)
 	const struct action_descr *descr = NULL;
 
 	if (*argc == 0) {
-		fprintf(stderr, "Missing action name.\n");
+		ERR("Missing action name.");
 		goto error;
 	}
 
@@ -1420,7 +1420,7 @@ struct lttng_action *parse_action(int *argc, const char ***argv)
 	}
 
 	if (!descr) {
-		fprintf(stderr, "Unknown action name: %s\n", action_name);
+		ERR("Unknown action name: %s", action_name);
 		goto error;
 	}
 
@@ -1486,17 +1486,17 @@ int cmd_add_trigger(int argc, const char **argv)
 		argpar_state = argpar_state_create(my_argc, my_argv,
 			add_trigger_options);
 		if (!argpar_state) {
-			fprintf(stderr, "Failed to create argpar state.\n");
+			ERR("Failed to create argpar state.");
 			goto error;
 		}
 
 		status = argpar_state_parse_next(argpar_state, &argpar_item, &error);
 
 		if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR) {
-			fprintf(stderr, "Error: %s\n", error);
+			ERR("%s", error);
 			goto error;
 		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR_UNKNOWN_OPT) {
-			fprintf(stderr, "%s\n", error);
+			ERR("%s", error);
 			goto error;
 		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_END) {
 			break;
@@ -1508,7 +1508,7 @@ int cmd_add_trigger(int argc, const char **argv)
 			struct argpar_item_non_opt *item_non_opt =
 				(struct argpar_item_non_opt *) argpar_item;
 
-			fprintf(stderr, "Unexpected argument `%s`.\n",
+			ERR("Unexpected argument `%s`.",
 				item_non_opt->arg);
 			goto error;
 		}
@@ -1535,7 +1535,7 @@ int cmd_add_trigger(int argc, const char **argv)
 		case OPT_CONDITION:
 		{
 			if (condition) {
-				fprintf(stderr, "A --condition was already given.\n");
+				ERR("A --condition was already given.");
 				goto error;
 			}
 
@@ -1565,7 +1565,7 @@ int cmd_add_trigger(int argc, const char **argv)
 			ret = lttng_dynamic_pointer_array_add_pointer(
 				&actions, action);
 			if (ret) {
-				fprintf(stderr, "Failed to add pointer to pointer array.\n");
+				ERR("Failed to add pointer to pointer array.");
 				goto error;
 			}
 
@@ -1608,17 +1608,17 @@ int cmd_add_trigger(int argc, const char **argv)
 	}
 
 	if (!condition) {
-		fprintf(stderr, "Missing --condition.\n");
+		ERR("Missing --condition.");
 		goto error;
 	}
 
 	if (lttng_dynamic_pointer_array_get_count(&actions) == 0) {
-		fprintf(stderr, "Need at least one --action.\n");
+		ERR("Need at least one --action.");
 		goto error;
 	}
 
 	if (fire_every_str && fire_once_after_str) {
-		fprintf(stderr, "Can't specify both --fire-once-after and --fire-every.\n");
+		ERR("Can't specify both --fire-once-after and --fire-every.");
 		goto error;
 	}
 
@@ -1659,7 +1659,7 @@ int cmd_add_trigger(int argc, const char **argv)
 		enum lttng_trigger_status trigger_status =
 			lttng_trigger_set_name(trigger, id);
 		if (trigger_status != LTTNG_TRIGGER_STATUS_OK) {
-			fprintf(stderr, "Failed to set trigger id.\n");
+			ERR("Failed to set trigger id.");
 			goto error;
 		}
 	}
@@ -1669,14 +1669,14 @@ int cmd_add_trigger(int argc, const char **argv)
 		enum lttng_trigger_status trigger_status;
 
 		if (utils_parse_unsigned_long_long(fire_once_after_str, &threshold) != 0) {
-			fprintf(stderr, "Failed to parse `%s` as an integer.\n", fire_once_after_str);
+			ERR("Failed to parse `%s` as an integer.", fire_once_after_str);
 			goto error;
 		}
 
 		trigger_status = lttng_trigger_set_firing_policy(trigger,
 			LTTNG_TRIGGER_FIRE_ONCE_AFTER_N, threshold);
 		if (trigger_status != LTTNG_TRIGGER_STATUS_OK) {
-			fprintf(stderr, "Failed to set trigger's firing policy.\n");
+			ERR("Failed to set trigger's firing policy.");
 			goto error;
 		}
 	}
@@ -1686,26 +1686,26 @@ int cmd_add_trigger(int argc, const char **argv)
 		enum lttng_trigger_status trigger_status;
 
 		if (utils_parse_unsigned_long_long(fire_every_str, &threshold) != 0) {
-			fprintf(stderr, "Failed to parse `%s` as an integer.\n", fire_every_str);
+			ERR("Failed to parse `%s` as an integer.", fire_every_str);
 			goto error;
 		}
 
 		trigger_status = lttng_trigger_set_firing_policy(trigger,
 			LTTNG_TRIGGER_FIRE_EVERY_N, threshold);
 		if (trigger_status != LTTNG_TRIGGER_STATUS_OK) {
-			fprintf(stderr, "Failed to set trigger's firing policy.\n");
+			ERR("Failed to set trigger's firing policy.");
 			goto error;
 		}
 	}
 
 	ret = lttng_register_trigger(trigger);
 	if (ret) {
-		fprintf(stderr, "Failed to register trigger: %s.\n",
+		ERR("Failed to register trigger: %s.",
 			lttng_strerror(ret));
 		goto error;
 	}
 
-	printf("Trigger registered successfully.\n");
+	MSG("Trigger registered successfully.");
 
 	goto end;
 
