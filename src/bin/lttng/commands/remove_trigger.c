@@ -36,7 +36,7 @@ int cmd_remove_trigger(int argc, const char **argv)
 	argpar_parse_ret = argpar_parse(argc - 1, argv + 1,
 		remove_trigger_options, true);
 	if (!argpar_parse_ret.items) {
-		fprintf(stderr, "Error: %s\n", argpar_parse_ret.error);
+		ERR("%s", argpar_parse_ret.error);
 		goto error;
 	}
 
@@ -68,7 +68,7 @@ int cmd_remove_trigger(int argc, const char **argv)
 				(struct argpar_item_non_opt *) item;
 
 			if (id) {
-				fprintf(stderr, "Unexpected argument: %s\n", item_non_opt->arg);
+				ERR("Unexpected argument: %s", item_non_opt->arg);
 				goto error;
 			}
 
@@ -77,13 +77,13 @@ int cmd_remove_trigger(int argc, const char **argv)
 	}
 
 	if (!id) {
-		fprintf(stderr, "Missing `id` argument.\n");
+		ERR("Missing `id` argument.");
 		goto error;
 	}
 
 	ret = lttng_list_triggers(&triggers);
 	if (ret != 0) {
-		fprintf(stderr, "Failed to get the list of triggers.\n");
+		ERR("Failed to get the list of triggers.");
 		goto error;
 	}
 
@@ -105,17 +105,17 @@ int cmd_remove_trigger(int argc, const char **argv)
 	}
 
 	if (!trigger_to_remove) {
-		fprintf(stderr, "Couldn't find trigger with id `%s`.\n", id);
+		ERR("Couldn't find trigger with id `%s`.", id);
 		goto error;
 	}
 
 	ret = lttng_unregister_trigger(trigger_to_remove);
 	if (ret != 0) {
-		fprintf(stderr, "Failed to unregister trigger `%s`.\n", id);
+		ERR("Failed to unregister trigger `%s`.", id);
 		goto error;
 	}
 
-	printf("Removed trigger `%s`.\n", id);
+	MSG("Removed trigger `%s`.", id);
 
 	ret = 0;
 	goto end;
