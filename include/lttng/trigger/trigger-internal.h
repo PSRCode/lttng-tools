@@ -47,4 +47,8 @@ const struct lttng_action *lttng_trigger_get_const_action(
 LTTNG_HIDDEN
 bool lttng_trigger_validate(struct lttng_trigger *trigger);
 
+LTTNG_HIDDEN
+bool lttng_trigger_is_equal(const struct lttng_trigger *a,
+		const struct lttng_trigger *b);
+
 #endif /* LTTNG_TRIGGER_INTERNAL_H */
