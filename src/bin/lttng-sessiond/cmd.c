@@ -4387,6 +4387,9 @@ int cmd_register_trigger(struct command_ctx *cmd_ctx, int sock,
 	 */
 	lttng_trigger_get(trigger);
 
+	/* Set the trigger credential */
+	lttng_trigger_set_credentials(trigger, cmd_ctx->creds.uid, cmd_ctx->creds.gid);
+
 	/* Inform the notification thread */
 	ret = notification_thread_command_register_trigger(notification_thread,
 			trigger);
@@ -4440,6 +4443,8 @@ int cmd_unregister_trigger(struct command_ctx *cmd_ctx, int sock,
 		ret = LTTNG_ERR_INVALID_TRIGGER;
 		goto end;
 	}
+
+	lttng_trigger_set_credentials(trigger, cmd_ctx->creds.uid, cmd_ctx->creds.gid);
 
 	ret = notification_thread_command_unregister_trigger(notification_thread,
 			trigger);
