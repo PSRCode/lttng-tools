@@ -3631,7 +3631,7 @@ int send_evaluation_to_clients(const struct lttng_trigger *trigger,
 		const struct lttng_evaluation *evaluation,
 		struct notification_client_list* client_list,
 		struct notification_thread_state *state,
-		uid_t channel_uid, gid_t channel_gid)
+		uid_t object_uid, gid_t object_gid)
 {
 	int ret = 0;
 	struct lttng_dynamic_buffer msg_buffer;
@@ -3643,6 +3643,7 @@ int send_evaluation_to_clients(const struct lttng_trigger *trigger,
 	struct lttng_notification_channel_message msg_header = {
 		.type = (int8_t) LTTNG_NOTIFICATION_CHANNEL_MESSAGE_TYPE_NOTIFICATION,
 	};
+	const struct lttng_credentials *trigger_creds = lttng_trigger_get_credentials(trigger);
 
 	lttng_dynamic_buffer_init(&msg_buffer);
 
@@ -3668,10 +3669,24 @@ int send_evaluation_to_clients(const struct lttng_trigger *trigger,
 		struct notification_client *client =
 				client_list_element->client;
 
-		if (client->uid != channel_uid && client->gid != channel_gid &&
+		if (client->uid != object_uid && client->gid != object_gid &&
 				client->uid != 0) {
 			/* Client is not allowed to monitor this channel. */
-			DBG("[notification-thread] Skipping client at it does not have the permission to receive notification for this channel");
+			DBG("[notification-thread] Skipping client at it does not have the object permission to receive notification for this trigger");
+			continue;
+		}
+
+		/* TODO: what is the behavior for root client on non root
+		 * trigger? Since multiple triggers (different user) can have the same condition
+		 * but with different action group that can have each a notify.
+		 * Does the root client receive multiple notification for all
+		 * those triggers with the same condition or only notification
+		 * for triggers the root user configured?
+		 * For now we do the later. All users including the root user
+		 * can only receive notification from trigger it registered.
+		 */
+		if (client->uid != trigger_creds->uid && client->gid != trigger_creds->gid) {
+			DBG("[notification-thread] Skipping client at it does not have the permission to receive notification for this trigger");
 			continue;
 		}
 
