@@ -20,6 +20,7 @@
 #include <lttng/condition/condition.h>
 #include <lttng/action/action-internal.h>
 #include <lttng/action/group-internal.h>
+#include <lttng/domain-internal.h>
 #include <lttng/notification/notification-internal.h>
 #include <lttng/condition/condition-internal.h>
 #include <lttng/condition/buffer-usage-internal.h>
@@ -119,19 +120,6 @@ struct lttng_trigger_ht_element {
 struct lttng_condition_list_element {
 	struct lttng_condition *condition;
 	struct cds_list_head node;
-};
-
-/*
- * Facilities to carry the different notifications type in the action processing
- * code path.
- */
-struct lttng_trigger_notification {
-	union {
-		struct lttng_ust_trigger_notification *ust;
-		uint64_t *kernel;
-	} u;
-	uint64_t id;
-	enum lttng_domain_type type;
 };
 
 struct channel_state_sample {
@@ -604,7 +592,7 @@ struct session_info *session_info_create(const char *name, uid_t uid, gid_t gid,
 
 	assert(name);
 
-	session_info = zmalloc(sizeof(*session_info));
+	session_info = malloc(sizeof(*session_info));
 	if (!session_info) {
 		goto end;
 	}
@@ -1696,9 +1684,10 @@ int handle_notification_thread_command_add_channel(
 	struct cds_lfht_iter iter;
 	struct session_info *session_info = NULL;
 
-	DBG("[notification-thread] Adding channel %s from session %s, channel key = %" PRIu64 " in %s domain",
+	DBG("[notification-thread] Adding channel %s from session %s, channel key = %" PRIu64
+	    " in %s domain",
 			channel_name, session_name, channel_key_int,
-			channel_domain == LTTNG_DOMAIN_KERNEL ? "kernel" : "user space");
+			lttng_domain_type_str(channel_domain));
 
 	CDS_INIT_LIST_HEAD(&trigger_list);
 
@@ -1798,8 +1787,9 @@ int handle_notification_thread_command_remove_channel(
 	struct channel_key key = { .key = channel_key, .domain = domain };
 	struct channel_info *channel_info;
 
-	DBG("[notification-thread] Removing channel key = %" PRIu64 " in %s domain",
-			channel_key, domain == LTTNG_DOMAIN_KERNEL ? "kernel" : "user space");
+	DBG("[notification-thread] Removing channel key = %" PRIu64
+	    " in %s domain",
+			channel_key, lttng_domain_type_str(domain));
 
 	rcu_read_lock();
 
@@ -4033,34 +4023,29 @@ end:
 	return ret;
 }
 
-int handle_notification_thread_event(struct notification_thread_state *state,
-		int pipe,
-		enum lttng_domain_type domain)
+static int receive_notification(int pipe,
+		enum lttng_domain_type domain,
+		struct lttng_trigger_notification *notification)
 {
 	int ret;
 	struct lttng_ust_trigger_notification ust_notification;
 	uint64_t kernel_notification;
-	struct cds_lfht_node *node;
-	struct cds_lfht_iter iter;
-	struct notification_trigger_tokens_ht_element *element;
-	struct lttng_trigger_notification notification;
+	char *capture_buffer = NULL;
 	void *reception_buffer;
 	size_t reception_size;
-	enum action_executor_status executor_status;
-	struct notification_client_list *client_list = NULL;
 
-	notification.type = domain;
+	/* Init lttng_trigger_notification */
+	notification->type = domain;
+	notification->capture_buffer = NULL;
 
 	switch(domain) {
 	case LTTNG_DOMAIN_UST:
 		reception_buffer = (void *) &ust_notification;
 		reception_size = sizeof(ust_notification);
-		notification.u.ust = &ust_notification;
 		break;
 	case LTTNG_DOMAIN_KERNEL:
 		reception_buffer = (void *) &kernel_notification;
 		reception_size = sizeof(kernel_notification);
-		notification.u.kernel = &kernel_notification;
 		break;
 	default:
 		assert(0);
@@ -4086,20 +4071,85 @@ int handle_notification_thread_event(struct notification_thread_state *state,
 
 	switch(domain) {
 	case LTTNG_DOMAIN_UST:
-		notification.id = ust_notification.id;
+		notification->id = ust_notification.id;
+		notification->capture_buf_size =
+				ust_notification.capture_buf_size;
 		break;
 	case LTTNG_DOMAIN_KERNEL:
-		notification.id = kernel_notification;
+		notification->id = kernel_notification;
+		notification->capture_buf_size = 0;
 		break;
 	default:
 		assert(0);
 	}
 
+	if (notification->capture_buf_size == 0) {
+		goto skip_capture;
+	}
+
+	capture_buffer = malloc(notification->capture_buf_size);
+	if (!capture_buffer) {
+		ERR("[notification-thread] Failed to allocate capture buffer");
+		ret = -1;
+		goto end;
+	}
+
+	/*
+	 * Fetch additional payload (capture).
+	 */
+	ret = lttng_read(pipe, capture_buffer, notification->capture_buf_size);
+	if (ret != notification->capture_buf_size) {
+		ERR("[notification-thread] Failed to read from event source pipe (fd = %i)",
+				pipe);
+		/* TODO: Should this error out completly.
+		 * This can happen when an app is killed as of today
+		 * ret = -1 cause the whole thread to die and fuck up
+		 * everything.
+		 */
+		goto end;
+	}
+
+	notification->capture_buffer = capture_buffer;
+
+skip_capture:
+	ret = 0;
+
+end:
+	return ret;
+}
+
+int handle_notification_thread_event(struct notification_thread_state *state,
+		int pipe,
+		enum lttng_domain_type domain)
+{
+	int ret;
+	struct cds_lfht_node *node;
+	struct cds_lfht_iter iter;
+	struct notification_trigger_tokens_ht_element *element;
+	struct lttng_trigger_notification *notification = NULL;
+	enum action_executor_status executor_status;
+	struct notification_client_list *client_list = NULL;
+
+	notification = zmalloc(sizeof(struct lttng_trigger_notification));
+	if (!notification) {
+		ERR("[notification-thread] Error allocating notification ");
+		ret = -1;
+		goto end;
+	}
+
+	ret = receive_notification(pipe, domain, notification);
+	if (ret) {
+		ERR("[notification-thread] Error receiving notification from tracer "
+		    "(fd = %i, domain = %s)",
+				pipe, lttng_domain_type_str(domain));
+		goto end;
+	}
+
 	/* Find triggers associated with this token. */
 	rcu_read_lock();
 	cds_lfht_lookup(state->trigger_tokens_ht,
-			hash_key_u64(&notification.id, lttng_ht_seed), match_trigger_token,
-			&notification.id, &iter);
+			hash_key_u64(&notification->id, lttng_ht_seed),
+			match_trigger_token, &notification->id, &iter);
 	node = cds_lfht_iter_get_node(&iter);
 	if (caa_unlikely(!node)) {
 		/* TODO: is this an error? This might happen if the receive side
@@ -4128,8 +4178,12 @@ int handle_notification_thread_event(struct notification_thread_state *state,
 
 	client_list = get_client_list_from_condition(state,
 			lttng_trigger_get_const_condition(element->trigger));
-	executor_status = action_executor_enqueue(
-			state->executor, element->trigger, client_list);
+	executor_status = action_executor_enqueue(state->executor,
+			element->trigger, client_list, notification);
+
+	/* Notification ownership pass to the executor. */
+	notification = NULL;
+
 	switch (executor_status) {
 	case ACTION_EXECUTOR_STATUS_OK:
 		ret = 0;
@@ -4248,10 +4302,10 @@ int handle_notification_thread_channel_sample(
 		 * channel's destruction before we get a chance to process that
 		 * sample.
 		 */
-		DBG("[notification-thread] Received a sample for an unknown channel from consumerd, key = %" PRIu64 " in %s domain",
+		DBG("[notification-thread] Received a sample for an unknown channel from consumerd, key = %" PRIu64
+		    " in %s domain",
 				latest_sample.key.key,
-				domain == LTTNG_DOMAIN_KERNEL ? "kernel" :
-					"user space");
+				lttng_domain_type_str(domain));
 		goto end_unlock;
 	}
 	channel_info = caa_container_of(node, struct channel_info,

@@ -5,6 +5,8 @@
  *
  */
 
+#include <msgpack.h>
+
 #include "action-executor.h"
 #include "cmd.h"
 #include "health-sessiond.h"
@@ -14,6 +16,7 @@
 #include "thread.h"
 #include <common/macros.h>
 #include <lttng/action/group.h>
+#include <lttng/action/notify-internal.h>
 #include <lttng/action/notify.h>
 #include <lttng/action/rotate-session.h>
 #include <lttng/action/snapshot-session.h>
@@ -36,6 +39,7 @@ struct action_work_item {
 	struct lttng_trigger *trigger;
 	struct notification_client_list *client_list;
 	struct cds_list_head list_node;
+	void *priv_data;
 };
 
 struct action_executor {
@@ -156,12 +160,156 @@ end:
 	return ret;
 }
 
+static void print_dgb_msgpack(msgpack_object *object)
+{
+	switch (object->type) {
+	case MSGPACK_OBJECT_NIL:
+		DBG("msgpack: nil");
+		break;
+	case MSGPACK_OBJECT_BOOLEAN:
+		DBG("msgpack: bool: %s",
+				object->via.boolean ? "true" : "false");
+		break;
+	case MSGPACK_OBJECT_POSITIVE_INTEGER:
+		DBG("msgpack: unsigned integer: %" PRIu64, object->via.u64);
+		break;
+	case MSGPACK_OBJECT_NEGATIVE_INTEGER:
+		DBG("msgpack: signed integer: %" PRIi64, object->via.i64);
+		break;
+	case MSGPACK_OBJECT_FLOAT32:
+	case MSGPACK_OBJECT_FLOAT64:
+		DBG("msgpack: float: %f", object->via.f64);
+		break;
+	case MSGPACK_OBJECT_STR:
+		DBG("msgpack: string: size: %" PRIu32 " : %.*s",
+				object->via.str.size, object->via.str.size,
+				object->via.str.ptr);
+		break;
+	case MSGPACK_OBJECT_ARRAY:
+	{
+		DBG("msgpack: array size: %" PRIu32 " {",
+			object->via.array.size);
+		for (unsigned int i = 0; i < object->via.array.size; i++) {
+			print_dgb_msgpack(&object->via.array.ptr[i]);
+		}
+		DBG("msgpack: array }");
+
+		break;
+	}
+	case MSGPACK_OBJECT_BIN:
+	case MSGPACK_OBJECT_EXT:
+	case MSGPACK_OBJECT_MAP:
+	default:
+		ERR("msgpack type not supported");
+		break;
+	}
+}
+static int handle_capture_fields(const struct lttng_condition *condition,
+		struct lttng_trigger_notification *notification,
+		struct lttng_evaluation *evaluation)
+{
+	int ret = 0;
+	unsigned int capture_count = 0;
+	msgpack_object capture_array;
+	msgpack_object *capture;
+	msgpack_zone mempool;
+
+	if (LTTNG_ACTION_STATUS_OK !=
+			lttng_condition_event_rule_get_capture_descriptor_count (
+					condition, &capture_count)) {
+		ERR("Get capture count");
+		ret = -1;
+		goto end;
+	}
+
+	if (!notification->capture_buffer && capture_count != 0) {
+		ERR("Expected capture but capture buffer is null");
+		ret = -1;
+		goto end;
+	}
+
+	if (!notification->capture_buffer || capture_count == 0) {
+		/* Nothing to do */
+		ret = 0;
+		goto end;
+	}
+
+	/*
+	 * TODO: msgpack_unpack is considered deprecated [1], msgpack_unpacker
+	 * is the cool kid. We might event want to use it directly on the
+	 * reception side to prevent many unpacking for the same buffer.
+	 * [1] https://github.com/msgpack/msgpack-c/wiki/v2_0_c_overview
+	 * The actual object manipulation does not change.
+	 */
+
+	msgpack_zone_init(&mempool, 4096);
+
+	// TODO attach capture buffer to the evaluation somehow.
+	// the capture buffer is work_item->priv_data
+	msgpack_unpack(notification->capture_buffer,
+			notification->capture_buf_size, NULL, &mempool,
+			&capture_array);
+
+	if (capture_array.type != MSGPACK_OBJECT_ARRAY) {
+		ERR("Based object of capture payload is not an array");
+		ret = -1;
+		goto end;
+	}
+
+	if (capture_array.via.array.size == 0) {
+		ERR("Empty captured field array");
+		ret = -1;
+		goto end;
+	}
+
+	/*
+	 * Note: the capture_count can be superior to the overall size of the
+	 * captured field array, a user can decide to capture the same field as
+	 * much as he want, but the tracer captures it only once.
+	 */
+
+	for (unsigned int i = 0; i < capture_count; i++) {
+		const struct lttng_capture_descriptor *capture_desc;
+		capture_desc = lttng_condition_event_rule_get_internal_capture_descriptor_at_index(
+				condition, i);
+		/* TODO: provide either a lttgn_action getter or a
+		 * lttng_capture_descriptor getter instead of accessing directly
+		 * the index here.
+		 */
+		if (capture_desc->capture_index < 0) {
+			ERR("Capture index is uninitialized");
+			ret = -1;
+			goto end;
+		}
+
+		if (capture_desc->capture_index >
+				capture_array.via.array.size) {
+			ERR("Capture index is uninitialized");
+			ret = -1;
+			goto end;
+		}
+
+		/* TODO: move a its own function create_x_from_capture_object */
+		DBG("Fetching capture fields for index %d at index %d", i,
+				capture_desc->capture_index);
+		capture = &(capture_array.via.array.ptr
+						[capture_desc->capture_index]);
+		print_dgb_msgpack(capture);
+	}
+
+end:
+	return ret;
+}
+
 static int action_executor_notify_handler(struct action_executor *executor,
 		const struct action_work_item *work_item,
 		const struct lttng_action *action)
 {
 	int ret = 0;
 	struct lttng_evaluation *evaluation = NULL;
+	struct lttng_trigger_notification *notification =
+			(struct lttng_trigger_notification *)
+					work_item->priv_data;
 
 	assert(work_item->client_list);
 
@@ -169,6 +317,15 @@ static int action_executor_notify_handler(struct action_executor *executor,
 			get_trigger_name(work_item->trigger));
 	if (!evaluation) {
 		ERR("Failed to create event rule hit evaluation");
+		ret = -1;
+		goto end;
+	}
+
+	ret = handle_capture_fields(
+			lttng_trigger_get_const_condition(work_item->trigger),
+			notification, evaluation);
+	if (ret < 0) {
+		ERR("Failed to populate evaluation capture field");
 		ret = -1;
 		goto end;
 	}
@@ -490,6 +647,7 @@ static void action_work_item_destroy(struct action_work_item *work_item)
 {
 	lttng_trigger_put(work_item->trigger);
 	notification_client_list_put(work_item->client_list);
+	free(work_item->priv_data);
 	free(work_item);
 }
 
@@ -626,7 +784,8 @@ void action_executor_destroy(struct action_executor *executor)
 enum action_executor_status action_executor_enqueue(
 		struct action_executor *executor,
 		struct lttng_trigger *trigger,
-		struct notification_client_list *client_list)
+		struct notification_client_list *client_list,
+		void *priv_data)
 {
 	enum action_executor_status executor_status = ACTION_EXECUTOR_STATUS_OK;
 	const uint64_t work_item_id = executor->next_work_item_id++;
@@ -665,6 +824,7 @@ enum action_executor_status action_executor_enqueue(
 			.trigger = trigger,
 			.client_list = client_list,
 			.list_node = CDS_LIST_HEAD_INIT(work_item->list_node),
+			.priv_data = priv_data,
 	};
 	cds_list_add_tail(&work_item->list_node, &executor->work.list);
 	executor->work.pending_count++;

@@ -73,6 +73,17 @@ struct channel_info {
 	struct rcu_head rcu_node;
 };
 
+/*
+ * Facilities to carry the different notifications type in the action
+ * processing code path.
+ */
+struct lttng_trigger_notification {
+	uint64_t id;
+	enum lttng_domain_type type;
+	size_t capture_buf_size;
+	char *capture_buffer;
+};
+
 struct notification_client_list_element {
 	struct notification_client *client;
 	struct cds_list_head node;

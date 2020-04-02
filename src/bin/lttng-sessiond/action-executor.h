@@ -28,6 +28,7 @@ void action_executor_destroy(struct action_executor *executor);
 enum action_executor_status action_executor_enqueue(
 	struct action_executor *executor,
 	struct lttng_trigger *trigger,
-	struct notification_client_list *list);
+	struct notification_client_list *list,
+	void *priv_data);
 
 #endif /* ACTION_EXECUTOR_H */
