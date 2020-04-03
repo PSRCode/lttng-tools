@@ -1119,6 +1119,7 @@ AC_CONFIG_FILES([
 	src/Makefile
 	src/common/Makefile
 	src/common/argpar/Makefile
+	src/common/bytecode/Makefile
 	src/common/kernel-ctl/Makefile
 	src/common/kernel-consumer/Makefile
 	src/common/consumer/Makefile
