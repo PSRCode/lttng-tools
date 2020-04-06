@@ -23,7 +23,8 @@ TESTS = test_kernel_data \
 	ini_config/test_ini_config \
 	test_fd_tracker \
 	test_uuid \
-	test_buffer_view
+	test_buffer_view \
+	test_event_expr_to_bytecode
 
 LIBTAP=$(top_builddir)/tests/utils/tap/libtap.la
 
@@ -42,7 +43,8 @@ noinst_PROGRAMS = test_uri test_session test_kernel_data \
                   test_string_utils test_notification test_directory_handle \
                   test_relayd_backward_compat_group_by_session \
                   test_fd_tracker test_uuid \
-                  test_buffer_view test_fd_tracker test_event_rule test_condition
+                  test_buffer_view test_fd_tracker test_event_rule test_condition \
+		  test_event_expr_to_bytecode
 
 if HAVE_LIBLTTNG_UST_CTL
 noinst_PROGRAMS += test_ust_data
@@ -211,3 +213,7 @@ test_uuid_LDADD = $(LIBTAP) $(LIBCOMMON)
 # buffer view unit test
 test_buffer_view_SOURCES = test_buffer_view.c
 test_buffer_view_LDADD = $(LIBTAP) $(LIBCOMMON)
+
+# Event expression to bytecode test
+test_event_expr_to_bytecode_SOURCES = test_event_expr_to_bytecode.c
+test_event_expr_to_bytecode_LDADD = $(LIBTAP) $(LIBLTTNG_CTL) $(LIBCOMMON)
