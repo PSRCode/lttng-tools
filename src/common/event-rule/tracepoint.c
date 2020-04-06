@@ -331,7 +331,7 @@ static enum lttng_error_code lttng_event_rule_tracepoint_populate(
 	enum lttng_domain_type domain_type;
 	enum lttng_event_rule_status status;
 	const char *filter;
-	struct lttng_filter_bytecode *bytecode = NULL;
+	struct lttng_bytecode *bytecode = NULL;
 
 	assert(rule);
 
@@ -421,7 +421,7 @@ static const char *lttng_event_rule_tracepoint_get_internal_filter(
 	return tracepoint->internal_filter.filter;
 }
 
-static const struct lttng_filter_bytecode *
+static const struct lttng_bytecode *
 lttng_event_rule_tracepoint_get_internal_filter_bytecode(
 		const struct lttng_event_rule *rule)
 {

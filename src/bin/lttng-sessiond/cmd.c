@@ -115,7 +115,7 @@ static int cmd_enable_event_internal(struct ltt_session *session,
 		const struct lttng_domain *domain,
 		char *channel_name, struct lttng_event *event,
 		char *filter_expression,
-		struct lttng_filter_bytecode *filter,
+		struct lttng_bytecode *filter,
 		struct lttng_event_exclusion *exclusion,
 		int wpipe);
 
@@ -2172,7 +2172,7 @@ static int _cmd_enable_event(struct ltt_session *session,
 		const struct lttng_domain *domain,
 		char *channel_name, struct lttng_event *event,
 		char *filter_expression,
-		struct lttng_filter_bytecode *filter,
+		struct lttng_bytecode *filter,
 		struct lttng_event_exclusion *exclusion,
 		int wpipe, bool internal_event)
 {
@@ -2255,7 +2255,7 @@ static int _cmd_enable_event(struct ltt_session *session,
 		case LTTNG_EVENT_ALL:
 		{
 			char *filter_expression_a = NULL;
-			struct lttng_filter_bytecode *filter_a = NULL;
+			struct lttng_bytecode *filter_a = NULL;
 
 			/*
 			 * We need to duplicate filter_expression and filter,
@@ -2490,11 +2490,11 @@ static int _cmd_enable_event(struct ltt_session *session,
 
 		{
 			char *filter_expression_copy = NULL;
-			struct lttng_filter_bytecode *filter_copy = NULL;
+			struct lttng_bytecode *filter_copy = NULL;
 
 			if (filter) {
 				const size_t filter_size = sizeof(
-						struct lttng_filter_bytecode)
+						struct lttng_bytecode)
 						+ filter->len;
 
 				filter_copy = zmalloc(filter_size);
@@ -2570,7 +2570,7 @@ int cmd_enable_event(struct ltt_session *session,
 		const struct lttng_domain *domain,
 		char *channel_name, struct lttng_event *event,
 		char *filter_expression,
-		struct lttng_filter_bytecode *filter,
+		struct lttng_bytecode *filter,
 		struct lttng_event_exclusion *exclusion,
 		int wpipe)
 {
@@ -2587,7 +2587,7 @@ static int cmd_enable_event_internal(struct ltt_session *session,
 		const struct lttng_domain *domain,
 		char *channel_name, struct lttng_event *event,
 		char *filter_expression,
-		struct lttng_filter_bytecode *filter,
+		struct lttng_bytecode *filter,
 		struct lttng_event_exclusion *exclusion,
 		int wpipe)
 {
