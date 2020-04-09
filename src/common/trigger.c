@@ -7,9 +7,11 @@
 
 #include <lttng/trigger/trigger-internal.h>
 #include <lttng/condition/condition-internal.h>
+#include <lttng/condition/event-rule-internal.h>
 #include <lttng/condition/event-rule.h>
 #include <lttng/condition/buffer-usage.h>
 #include <lttng/event-rule/event-rule-internal.h>
+#include <lttng/event-expr-internal.h>
 #include <lttng/action/action-internal.h>
 #include <lttng/domain.h>
 #include <common/error.h>
@@ -33,6 +35,15 @@ static void lttng_trigger_set_internal_object_ownership(
 	 */
 	assert(trigger);
 	trigger->owns_internal_objects = true;
+}
+
+static void destroy_lttng_condition_event_rule_capture_bytecode_element(void *ptr)
+{
+	struct lttng_condition_event_rule_capture_bytecode_element *element =
+			ptr;
+	lttng_event_expr_destroy(element->expression);
+	free(element->bytecode);
+	free(element);
 }
 
 LTTNG_HIDDEN
@@ -75,6 +86,9 @@ struct lttng_trigger *lttng_trigger_create(
 
 	trigger->creds.set = false;
 
+	lttng_dynamic_pointer_array_init(&trigger->capture_bytecode_set,
+			destroy_lttng_condition_event_rule_capture_bytecode_element);
+
 end:
 	return trigger;
 }
@@ -107,6 +121,8 @@ static void trigger_destroy_ref(struct urcu_ref *ref)
 {
 	struct lttng_trigger *trigger =
 			container_of(ref, struct lttng_trigger, ref);
+
+	lttng_dynamic_pointer_array_reset(&trigger->capture_bytecode_set);
 
 	if (trigger->owns_internal_objects) {
 		struct lttng_action *action = lttng_trigger_get_action(trigger);

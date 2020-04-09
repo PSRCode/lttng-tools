@@ -39,6 +39,15 @@ struct lttng_trigger {
 		uint64_t threshold;
 		uint64_t current_count;
 	} firing_policy;
+
+	/* This ordered set is used to hold the capture bytecodoes and their
+	 * expression. lttng_action_capture_bytecode_element.
+	 * We could only have bytecodes here... the expression are a left over
+	 * from the generation process of the set. They are used for comparison
+	 * during the gathering process. They are refcounted (TODO) and are the same
+	 * object that are present un the underlying action object/s
+	 */
+	struct lttng_dynamic_pointer_array capture_bytecode_set;
 };
 
 struct lttng_triggers {
