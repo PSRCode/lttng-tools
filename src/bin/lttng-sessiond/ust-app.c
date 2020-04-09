@@ -1899,6 +1899,7 @@ int create_ust_token_event_rule(struct ust_app *app, struct ust_app_token_event_
 	struct lttng_ust_trigger trigger;
 
 	health_code_update();
+	assert(app->token_communication.handle);
 
 	init_ust_trigger_from_event_rule(ua_token->event_rule, &trigger);
 	trigger.id = ua_token->token;
@@ -5589,6 +5590,11 @@ void ust_app_global_update_tokens(struct ust_app *app)
 	if (!app->compatible) {
 		return;
 	}
+	if (app->token_communication.handle == NULL) {
+		WARN("UST app global update token for app sock %d skipped since communcation handle is null", app->sock);
+		return;
+	}
+
 	ust_app_synchronize_tokens(app);
 }
 
