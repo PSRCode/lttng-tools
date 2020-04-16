@@ -1501,9 +1501,11 @@ error:
 
 /*
  * Set a capture bytecode for the passed object.
+ * The seqnum enforce the ordering at runtime and on reception.
  */
 static int set_ust_capture(struct ust_app *app,
 		const struct lttng_bytecode *bytecode,
+		unsigned int seqnum,
 		struct lttng_ust_object_data *ust_object)
 {
 	int ret;
@@ -1516,6 +1518,10 @@ static int set_ust_capture(struct ust_app *app,
 		ret = -LTTNG_ERR_NOMEM;
 		goto error;
 	}
+
+	/* Set the seqnum */
+	ust_bytecode->seqnum = seqnum;
+
 	pthread_mutex_lock(&app->sock_lock);
 	ret = ustctl_set_capture(app->sock, ust_bytecode,
 			ust_object);
@@ -2049,7 +2055,7 @@ int create_ust_token_event_rule(struct ust_app *app, struct ust_app_token_event_
 	capture_bytecode_count = lttng_trigger_get_capture_bytecode_count(ua_token->trigger);
 	for (unsigned int i = 0; i < capture_bytecode_count; i++) {
 		const struct lttng_bytecode *capture_bytecode = lttng_trigger_get_capture_bytecode_at_index(ua_token->trigger, i);
-		ret = set_ust_capture(app, capture_bytecode, ua_token->obj);
+		ret = set_ust_capture(app, capture_bytecode, i, ua_token->obj);
 		if (ret < 0) {
 			goto error;
 		}
