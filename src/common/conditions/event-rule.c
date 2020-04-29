@@ -255,13 +255,25 @@ int lttng_condition_event_rule_serialize(
 	}
 
 	for (i = 0; i < capture_descr_count; i++) {
-		const struct lttng_event_expr *expr =
-				lttng_condition_event_rule_get_capture_descriptor_at_index(
+		const struct lttng_capture_descriptor *desc =
+				lttng_condition_event_rule_get_internal_capture_descriptor_at_index(
 						condition, i);
 
 		DBG("Serializing event rule condition's capture descriptor %" PRIu32,
 				i);
-		ret = serialize_event_expr(expr, buf);
+		ret = serialize_event_expr(desc->event_expression, buf);
+		if (ret) {
+			goto end;
+		}
+
+		/*
+		 * Appending the internal index paylod linked with the
+		 * descriptor.
+		 * TODO: might want to move to a englobing object to describe a
+		 * capture descriptor.
+		 */
+		ret = lttng_dynamic_buffer_append(buf, &desc->capture_index,
+				sizeof(desc->capture_index));
 		if (ret) {
 			goto end;
 		}
@@ -404,6 +416,41 @@ end:
 	return parent;
 }
 
+static
+uint64_t int_from_buffer(const struct lttng_buffer_view *view, size_t size,
+		size_t *offset)
+{
+	uint64_t ret;
+
+	if (*offset + size > view->size) {
+		ret = UINT64_C(-1);
+		goto end;
+	}
+
+	switch (size) {
+	case 1:
+		ret = (int64_t) view->data[*offset];
+		break;
+	case sizeof(int32_t):
+	{
+		int32_t s32;
+
+		memcpy(&s32, &view->data[*offset], sizeof(s32));
+		ret = (int64_t) s32;
+		break;
+	}
+	case sizeof(ret):
+		memcpy(&ret, &view->data[*offset], sizeof(ret));
+		break;
+	default:
+		abort();
+	}
+
+	*offset += size;
+
+end:
+	return ret;
+}
 static
 uint64_t uint_from_buffer(const struct lttng_buffer_view *view, size_t size,
 		size_t *offset)
@@ -602,9 +649,13 @@ ssize_t lttng_condition_event_rule_create_from_buffer(
 
 	/* Capture descriptors */
 	for (i = 0; i < capture_descr_count; i++) {
+		enum lttng_condition_status status;
+		struct lttng_capture_descriptor *desc;
+
 		struct lttng_event_expr *expr = event_expr_from_buffer(
 				view, &offset);
-		enum lttng_condition_status status;
+		int32_t payload_index = int_from_buffer(view, sizeof(int32_t),
+				&offset);
 
 		if (!expr) {
 			goto error;
@@ -618,6 +669,12 @@ ssize_t lttng_condition_event_rule_create_from_buffer(
 			lttng_event_expr_destroy(expr);
 			goto error;
 		}
+
+		desc = lttng_condition_event_rule_get_internal_capture_descriptor_at_index(condition, i);
+		if (desc == NULL) {
+			goto error;
+		}
+		desc->capture_index = payload_index;
 	}
 
 	consumed_length = (ssize_t) offset;
