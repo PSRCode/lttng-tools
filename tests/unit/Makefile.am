@@ -121,6 +121,7 @@ test_session_SOURCES = test_session.c
 test_session_LDADD = $(LIBTAP) $(LIBCOMMON) $(LIBRELAYD) $(LIBSESSIOND_COMM) \
 		     $(LIBHASHTABLE) $(DL_LIBS) -lrt $(URCU_LIBS) \
 		     $(KMOD_LIBS) \
+		     -lmsgpackc \
 		     $(top_builddir)/src/lib/lttng-ctl/liblttng-ctl.la \
 		     $(top_builddir)/src/common/kernel-ctl/libkernel-ctl.la \
 		     $(top_builddir)/src/common/compat/libcompat.la \
@@ -142,6 +143,7 @@ test_ust_data_LDADD = $(LIBTAP) $(LIBCOMMON) $(LIBRELAYD) $(LIBSESSIOND_COMM) \
 		      $(LIBHASHTABLE) $(DL_LIBS) -lrt $(URCU_LIBS) \
 		      $(UST_CTL_LIBS) \
 		      $(KMOD_LIBS) \
+		      -lmsgpackc \
 		      $(top_builddir)/src/lib/lttng-ctl/liblttng-ctl.la \
 		      $(top_builddir)/src/common/kernel-ctl/libkernel-ctl.la \
 		      $(top_builddir)/src/common/compat/libcompat.la \
