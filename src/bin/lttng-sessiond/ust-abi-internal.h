@@ -109,9 +109,10 @@ struct lttng_ust_event_notifier {
 	char padding[LTTNG_UST_EVENT_NOTIFIER_PADDING];
 } LTTNG_PACKED;
 
-#define LTTNG_UST_EVENT_NOTIFIER_NOTIFICATION_PADDING 34
+#define LTTNG_UST_EVENT_NOTIFIER_NOTIFICATION_PADDING 32
 struct lttng_ust_event_notifier_notification {
 	uint64_t token;
+	uint16_t capture_buf_size;
 	char padding[LTTNG_UST_EVENT_NOTIFIER_NOTIFICATION_PADDING];
 } LTTNG_PACKED;
 
