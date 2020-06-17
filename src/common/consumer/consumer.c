@@ -3165,6 +3165,7 @@ ssize_t lttng_consumer_read_subbuffer(struct lttng_consumer_stream *stream,
 		if (ret == -ENODATA) {
 			/* Not an error. */
 			ret = 0;
+			goto sleep_stream;
 		}
 		goto end;
 	}
@@ -3209,6 +3210,7 @@ ssize_t lttng_consumer_read_subbuffer(struct lttng_consumer_stream *stream,
 		}
 	}
 
+stream_sleep:
 	if (stream->read_subbuffer_ops.on_sleep) {
 		stream->read_subbuffer_ops.on_sleep(stream, ctx);
 	}
