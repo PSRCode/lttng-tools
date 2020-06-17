@@ -3210,7 +3210,7 @@ ssize_t lttng_consumer_read_subbuffer(struct lttng_consumer_stream *stream,
 		}
 	}
 
-stream_sleep:
+sleep_stream:
 	if (stream->read_subbuffer_ops.on_sleep) {
 		stream->read_subbuffer_ops.on_sleep(stream, ctx);
 	}
