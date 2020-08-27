@@ -1,1 +1,2 @@
 captures
+trigger error counter
