@@ -19,6 +19,7 @@ lttng_sessiond_SOURCES = utils.c utils.h \
                        condition-internal.c condition-internal.h \
                        context.c context.h \
                        channel.c channel.h \
+                       map.c map.h \
                        event.c event.h \
                        consumer.c consumer.h \
                        session.c session.h \

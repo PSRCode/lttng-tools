@@ -74,6 +74,7 @@ libcommon_la_SOURCES = \
 	index-allocator.c index-allocator.h \
 	location.c \
 	log-level-rule.c \
+	map.c \
 	mi-lttng.c mi-lttng.h \
 	notification.c \
 	optional.h \
