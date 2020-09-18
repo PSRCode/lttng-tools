@@ -425,6 +425,7 @@ _AC_DEFINE_AND_SUBST([DEFAULT_ROTATE_PENDING_TIMER], [500000])
 
 # Command short descriptions
 _AC_DEFINE_QUOTED_AND_SUBST([CMD_DESCR_ADD_CONTEXT], [Add context fields to a channel])
+_AC_DEFINE_QUOTED_AND_SUBST([CMD_DESCR_ADD_MAP], [Add map])
 _AC_DEFINE_QUOTED_AND_SUBST([CMD_DESCR_CREATE], [Create a tracing session])
 _AC_DEFINE_QUOTED_AND_SUBST([CMD_DESCR_CLEAR], [Clear a tracing session])
 _AC_DEFINE_QUOTED_AND_SUBST([CMD_DESCR_DESTROY], [Tear down tracing sessions])
@@ -1154,6 +1155,7 @@ AC_CONFIG_FILES([
 	tests/regression/tools/notification/Makefile
 	tests/regression/tools/rotation/Makefile
 	tests/regression/tools/base-path/Makefile
+	tests/regression/tools/map/Makefile
 	tests/regression/tools/metadata/Makefile
 	tests/regression/tools/tracker/Makefile
 	tests/regression/tools/working-directory/Makefile

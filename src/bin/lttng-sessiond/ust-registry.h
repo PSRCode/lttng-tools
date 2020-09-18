@@ -35,6 +35,10 @@ struct ust_registry_session {
 	uint32_t next_channel_id;
 	/* Once this value reaches UINT32_MAX, no more id can be allocated. */
 	uint32_t used_channel_id;
+	/* Next map ID available for a newly registered map. */
+	uint32_t next_map_id;
+	/* Once this value reaches UINT32_MAX, no more id can be allocated. */
+	uint32_t used_map_id;
 	/* Next enumeration ID available. */
 	uint64_t next_enum_id;
 	/* Universal unique identifier used by the tracer. */
@@ -97,6 +101,12 @@ struct ust_registry_session {
 	 * be accessed with a RCU read side lock acquired.
 	 */
 	struct lttng_ht *channels;
+
+	/*
+	 * Hash table containing maps sent by the UST tracer. MUST
+	 * be accessed with a RCU read side lock acquired.
+	 */
+	struct lttng_ht *maps;
 	/*
 	 * Unique key to identify the metadata on the consumer side.
 	 */
@@ -157,6 +167,29 @@ struct ust_registry_channel {
 	 */
 	size_t nr_ctx_fields;
 	struct ustctl_field *ctx_fields;
+	struct lttng_ht_node_u64 node;
+	/* For delayed reclaim */
+	struct rcu_head rcu_head;
+};
+
+struct ust_registry_map {
+	uint64_t key;
+	/* Id set when replying to a register map. */
+	uint32_t map_id;
+
+	/* Indicates if this map registry has already been registered. */
+	unsigned int register_done;
+
+	/*
+	 * Hash table containing events sent by the UST tracer. MUST be accessed
+	 * with a RCU read side lock acquired.
+	 */
+	struct lttng_ht *ht;
+	/* Next event ID available for a newly registered event. */
+	uint32_t next_event_id;
+	/* Once this value reaches UINT32_MAX, no more id can be allocated. */
+	uint32_t used_event_id;
+
 	struct lttng_ht_node_u64 node;
 	/* For delayed reclaim */
 	struct rcu_head rcu_head;
@@ -252,6 +285,26 @@ static inline uint32_t ust_registry_get_next_chan_id(
 }
 
 /*
+ * Return next available map id and increment the used counter. The
+ * ust_registry_is_max_id function MUST be called before in order to validate
+ * if the maximum number of IDs have been reached. If not, it is safe to call
+ * this function.
+ *
+ * Return a unique map ID. If max is reached, the used_map_id counter
+ * is returned.
+ */
+static inline uint32_t ust_registry_get_next_map_id(
+		struct ust_registry_session *r)
+{
+	if (ust_registry_is_max_id(r->used_map_id)) {
+		return r->used_map_id;
+	}
+
+	r->used_map_id++;
+	return r->next_map_id++;
+}
+
+/*
  * Return registry event count. This is read atomically.
  */
 static inline uint32_t ust_registry_get_event_count(
@@ -262,6 +315,7 @@ static inline uint32_t ust_registry_get_event_count(
 
 #ifdef HAVE_LIBLTTNG_UST_CTL
 
+/* Channels */
 void ust_registry_channel_destroy(struct ust_registry_session *session,
 		struct ust_registry_channel *chan);
 struct ust_registry_channel *ust_registry_channel_find(
@@ -270,6 +324,16 @@ int ust_registry_channel_add(struct ust_registry_session *session,
 		uint64_t key);
 void ust_registry_channel_del_free(struct ust_registry_session *session,
 		uint64_t key, bool notif);
+
+/* Maps */
+void ust_registry_map_destroy(struct ust_registry_session *session,
+		struct ust_registry_map *map);
+struct ust_registry_map *ust_registry_map_find(
+		struct ust_registry_session *session, uint64_t key);
+int ust_registry_map_add(struct ust_registry_session *session,
+		uint64_t key);
+void ust_registry_map_del_free(struct ust_registry_session *session,
+		uint64_t key);
 
 int ust_registry_session_init(struct ust_registry_session **sessionp,
 		struct ust_app *app,
@@ -290,14 +354,24 @@ int ust_registry_session_init(struct ust_registry_session **sessionp,
 		uid_t tracing_uid);
 void ust_registry_session_destroy(struct ust_registry_session *session);
 
-int ust_registry_create_event(struct ust_registry_session *session,
+int ust_registry_chan_create_event(struct ust_registry_session *session,
 		uint64_t chan_key, int session_objd, int channel_objd, char *name,
 		char *sig, size_t nr_fields, struct ustctl_field *fields,
 		int loglevel_value, char *model_emf_uri, int buffer_type,
 		uint32_t *event_id_p, struct ust_app *app);
-struct ust_registry_event *ust_registry_find_event(
+struct ust_registry_event *ust_registry_chan_find_event(
 		struct ust_registry_channel *chan, char *name, char *sig);
-void ust_registry_destroy_event(struct ust_registry_channel *chan,
+void ust_registry_chan_destroy_event(struct ust_registry_channel *chan,
+		struct ust_registry_event *event);
+
+int ust_registry_map_create_event(struct ust_registry_session *session,
+		uint64_t map_key, int session_objd, int map_objd, char *name,
+		char *sig, size_t nr_fields, struct ustctl_field *fields,
+		int loglevel_value, char *model_emf_uri, int buffer_type,
+		uint32_t *event_id_p, struct ust_app *app);
+struct ust_registry_event *ust_registry_map_find_event(
+		struct ust_registry_map *map, char *name, char *sig);
+void ust_registry_map_destroy_event(struct ust_registry_map *map,
 		struct ust_registry_event *event);
 
 /* app can be NULL for registry shared across applications. */

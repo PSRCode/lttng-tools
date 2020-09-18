@@ -73,6 +73,8 @@ static struct cmd_struct commands[] =  {
 	{ "disable-event", cmd_disable_events},
 	{ "enable-channel", cmd_enable_channels},
 	{ "enable-event", cmd_enable_events},
+	{ "add-map", cmd_add_map},
+	{ "remove-map", cmd_remove_map},
 	{ "help", NULL},
 	{ "list", cmd_list},
 	{ "list-triggers", cmd_list_triggers},
@@ -285,6 +287,10 @@ static void show_basic_help(void)
 	puts("  add-context       " CONFIG_CMD_DESCR_ADD_CONTEXT);
 	puts("  disable-channel   " CONFIG_CMD_DESCR_DISABLE_CHANNEL);
 	puts("  enable-channel    " CONFIG_CMD_DESCR_ENABLE_CHANNEL);
+	puts("");
+	puts("Maps:");
+	puts("  add-map           " CONFIG_CMD_DESCR_ADD_MAP);
+	puts("  remove-map	  " CONFIG_CMD_DESCR_ADD_MAP);
 	puts("");
 	puts("Event rules:");
 	puts("  disable-event     " CONFIG_CMD_DESCR_DISABLE_EVENT);

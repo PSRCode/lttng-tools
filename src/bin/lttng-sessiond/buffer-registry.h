@@ -26,6 +26,14 @@ struct buffer_reg_stream {
 	} obj;
 };
 
+struct buffer_reg_map_counter {
+	struct cds_list_head lnode;
+	union {
+		/* Original object data that MUST be copied over. */
+		struct lttng_ust_object_data *ust;
+	} obj;
+};
+
 struct buffer_reg_channel {
 	/* This key is the same as a tracing channel key. */
 	uint32_t key;
@@ -49,6 +57,23 @@ struct buffer_reg_channel {
 	} obj;
 };
 
+struct buffer_reg_map {
+	/* This key is the same as a tracing map key. */
+	uint32_t key;
+	/* Stream registry object of this map registry. */
+	struct cds_list_head counters;
+	/* Total number of stream in the list. */
+	uint64_t counter_count;
+	/* Used to ensure mutual exclusion to the counter's list. */
+	pthread_mutex_t counter_list_lock;
+	/* Node for hash table usage. */
+	struct lttng_ht_node_u64 node;
+	union {
+		/* Original object data that MUST be copied over. */
+		struct lttng_ust_object_data *ust;
+	} obj;
+};
+
 struct buffer_reg_session {
 	/* Registry per domain. */
 	union {
@@ -57,6 +82,8 @@ struct buffer_reg_session {
 
 	/* Contains buffer registry channel indexed by tracing channel key. */
 	struct lttng_ht *channels;
+	/* Contains buffer registry map indexed by tracing map key. */
+	struct lttng_ht *maps;
 };
 
 /*
@@ -130,11 +157,29 @@ void buffer_reg_channel_remove(struct buffer_reg_session *session,
 void buffer_reg_channel_destroy(struct buffer_reg_channel *regp,
 		enum lttng_domain_type domain);
 
+/* Map */
+int buffer_reg_map_create(uint64_t key, struct buffer_reg_map **regp);
+void buffer_reg_map_add(struct buffer_reg_session *session,
+		struct buffer_reg_map *map);
+struct buffer_reg_map *buffer_reg_map_find(uint64_t key,
+		struct buffer_reg_uid *reg);
+void buffer_reg_map_remove(struct buffer_reg_session *session,
+		struct buffer_reg_map *regp);
+void buffer_reg_map_destroy(struct buffer_reg_map *regp,
+		enum lttng_domain_type domain);
+
 /* Stream */
 int buffer_reg_stream_create(struct buffer_reg_stream **regp);
 void buffer_reg_stream_add(struct buffer_reg_stream *stream,
 		struct buffer_reg_channel *channel);
 void buffer_reg_stream_destroy(struct buffer_reg_stream *regp,
+		enum lttng_domain_type domain);
+
+/* Map counter */
+int buffer_reg_map_counter_create(struct buffer_reg_map_counter **regp);
+void buffer_reg_map_counter_add(struct buffer_reg_map_counter *map_counter,
+		struct buffer_reg_map *map);
+void buffer_reg_map_counter_destroy(struct buffer_reg_map_counter *regp,
 		enum lttng_domain_type domain);
 
 /* Global registry. */

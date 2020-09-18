@@ -49,6 +49,8 @@ int cmd_disable_channel(struct ltt_session *session,
 int cmd_enable_channel(struct ltt_session *session,
 		const struct lttng_domain *domain, const struct lttng_channel *attr,
 		int wpipe);
+enum lttng_error_code cmd_add_map(struct command_ctx *cmd_ctx, int sock);
+enum lttng_error_code cmd_remove_map(struct command_ctx *cmd_ctx, int sock);
 
 /* Process attribute tracker commands */
 enum lttng_error_code cmd_process_attr_tracker_get_tracking_policy(

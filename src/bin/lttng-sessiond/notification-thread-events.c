@@ -2865,7 +2865,7 @@ void free_notification_trigger_tokens_ht_element_rcu(struct rcu_head *node)
 
 static
 void teardown_tracer_notifier(struct notification_thread_state *state,
-		struct lttng_trigger *trigger)
+		const struct lttng_trigger *trigger)
 {
 	struct cds_lfht_iter iter;
 	struct notification_trigger_tokens_ht_element *trigger_tokens_ht_element;

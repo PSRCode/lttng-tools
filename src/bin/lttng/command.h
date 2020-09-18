@@ -60,6 +60,8 @@ DECL_COMMAND(enable_events);
 DECL_COMMAND(disable_events);
 DECL_COMMAND(enable_channels);
 DECL_COMMAND(disable_channels);
+DECL_COMMAND(add_map);
+DECL_COMMAND(remove_map);
 DECL_COMMAND(add_context);
 DECL_COMMAND(set_session);
 DECL_COMMAND(version);

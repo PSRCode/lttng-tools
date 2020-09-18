@@ -1,0 +1,132 @@
+#!/bin/bash
+#
+# Copyright (C) 2020 Francis Deslauriers <francis.deslauriers@efficios.com>
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+
+CURDIR=$(dirname "$0")/
+TESTDIR=$CURDIR/../../../
+
+TMPDIR=$(mktemp -d)
+
+SH_TAP=1
+
+# shellcheck source=../../../utils/utils.sh
+source "$TESTDIR/utils/utils.sh"
+# shellcheck source=./util_event_generator.sh
+
+FULL_LTTNG_BIN="${TESTDIR}/../src/bin/lttng/${LTTNG_BIN}"
+
+UST_NUM_TESTS=10
+KERNEL_NUM_TESTS=19
+NUM_TESTS=$(($UST_NUM_TESTS + $KERNEL_NUM_TESTS))
+
+plan_tests $NUM_TESTS
+
+function test_map_ust_create()
+{
+	local map_name="map_name"
+	local map_name_2="map_name2"
+	local sess_name="map_name"
+
+	create_lttng_session_ok "$sess_name"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 32 --session "wrong_session_name" "$map_name"
+	isnt $? 0 "Map creation failed on wrong session name"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 42 --session "$sess_name" "$map_name"
+	isnt $? 0 "Map creation failed \"--bitness\" wrong value as expected"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --session "SESS_DOESNT_EXIST" "$map_name"
+	isnt $? 0 "Failed to add map to session that doesn't exist"
+
+	"$FULL_LTTNG_BIN" remove-map --userspace --session "$sess_name" "MAP_DOESNT_EXIST"
+	isnt $? 0 "Failed to remove map that doesn't exist"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$sess_name" "$map_name"
+	ok $? "Map with 64bit bitness created succesfully"
+
+	"$FULL_LTTNG_BIN" remove-map --userspace "$map_name"
+	ok $? "Map removed succesfully"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --buffers-pid --session "$sess_name" "$map_name_2"
+	ok $? "Map per-pid 64bit bitness created succesfully"
+
+	"$FULL_LTTNG_BIN" remove-map --userspace "$map_name_2"
+	ok $? "Map removed succesfully"
+
+	destroy_lttng_session_ok "$sess_name"
+}
+
+
+function test_map_kernel_create()
+{
+	local map_name="map_name"
+	local sess_name="map_name"
+
+	create_lttng_session_ok "$sess_name"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "wrong_session_name" "$map_name"
+	isnt $? 0 "Map creation failed on wrong session name"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 42 --session "$sess_name" "$map_name"
+	isnt $? 0 "Map creation failed \"--bitness\" wrong value as expected"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --session "SESS_DOESNT_EXIST" "$map_name"
+	isnt $? 0 "Failed to add map to session that doesn't exist"
+
+	"$FULL_LTTNG_BIN" remove-map --kernel "MAP_DOESNT_EXIST"
+	isnt $? 0 "Failed to remove map that doesn't exist"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 64 --session "$sess_name" "$map_name"
+	ok $? "Map with 64bit bitness created succesfully"
+
+	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	ok $? "Map removed succesfully"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "$sess_name" "$map_name"
+	ok $? "Map with 32bit bitness created succesfully"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" "$map_name"
+	isnt $? 0 "Duplicated map fails to create as expected"
+
+	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	ok $? "Map removed succesfully"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" "$map_name"
+	ok $? "Map with default bitness created succesfully"
+
+	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	ok $? "Map removed succesfully"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" --max-key-count 212 "$map_name"
+	ok $? "Map with max key count created succesfully"
+
+	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	ok $? "Map removed succesfully"
+
+	destroy_lttng_session_ok "$sess_name"
+}
+
+start_lttng_sessiond_notap
+
+test_map_ust_create
+
+if [ "$(id -u)" == "0" ]; then
+
+	validate_lttng_modules_present
+
+	modprobe lttng-test
+
+	test_map_kernel_create
+
+	modprobe --remove lttng-test
+
+else
+	# Kernel tests are skipped.
+	skip 0 "Root access is needed. Skipping all kernel notification tests." $KERNEL_NUM_TESTS
+fi
+
+stop_lttng_sessiond_notap
+
+rm -rf "$TMPDIR"

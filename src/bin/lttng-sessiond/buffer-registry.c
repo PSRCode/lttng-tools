@@ -136,6 +136,14 @@ int buffer_reg_uid_create(uint64_t session_id, uint32_t bits_per_long, uid_t uid
 		goto error_session;
 	}
 
+	reg->registry->maps = lttng_ht_new(0, LTTNG_HT_TYPE_U64);
+	if (!reg->registry->maps) {
+		lttng_ht_destroy(reg->registry->channels);
+		ret = -ENOMEM;
+		goto error_session;
+	}
+
+
 	cds_lfht_node_init(&reg->node.node);
 	*regp = reg;
 
@@ -258,6 +266,13 @@ int buffer_reg_pid_create(uint64_t session_id, struct buffer_reg_pid **regp,
 	}
 	reg->registry->channels = lttng_ht_new(0, LTTNG_HT_TYPE_U64);
 	if (!reg->registry->channels) {
+		ret = -ENOMEM;
+		goto error_session;
+	}
+
+	reg->registry->maps = lttng_ht_new(0, LTTNG_HT_TYPE_U64);
+	if (!reg->registry->maps) {
+		lttng_ht_destroy(reg->registry->channels);
 		ret = -ENOMEM;
 		goto error_session;
 	}
@@ -386,6 +401,36 @@ int buffer_reg_channel_create(uint64_t key, struct buffer_reg_channel **regp)
 }
 
 /*
+ * Allocate and initialize a buffer registry map with the given key. Set
+ * regp with the object pointer.
+ *
+ * Return 0 on success or else a negative value keeping regp untouched.
+ */
+int buffer_reg_map_create(uint64_t key, struct buffer_reg_map **regp)
+{
+	struct buffer_reg_map *reg;
+
+	assert(regp);
+
+	DBG3("Buffer registry map create with key: %" PRIu64, key);
+
+	reg = zmalloc(sizeof(*reg));
+	if (!reg) {
+		PERROR("zmalloc buffer registry map");
+		return -ENOMEM;
+	}
+
+	reg->key = key;
+	CDS_INIT_LIST_HEAD(&reg->counters);
+	pthread_mutex_init(&reg->counter_list_lock, NULL);
+
+	lttng_ht_node_init_u64(&reg->node, key);
+	*regp = reg;
+
+	return 0;
+}
+
+/*
  * Allocate and initialize a buffer registry stream. Set regp with the object
  * pointer.
  *
@@ -411,6 +456,31 @@ int buffer_reg_stream_create(struct buffer_reg_stream **regp)
 }
 
 /*
+ * Allocate and initialize a buffer registry map_counter. Set regp with the object
+ * pointer.
+ *
+ * Return 0 on success or else a negative value keeping regp untouched.
+ */
+int buffer_reg_map_counter_create(struct buffer_reg_map_counter **regp)
+{
+	struct buffer_reg_map_counter *reg;
+
+	assert(regp);
+
+	DBG3("Buffer registry creating map_counter");
+
+	reg = zmalloc(sizeof(*reg));
+	if (!reg) {
+		PERROR("zmalloc buffer registry map_counter");
+		return -ENOMEM;
+	}
+
+	*regp = reg;
+
+	return 0;
+}
+
+/*
  * Add stream to the list in the channel.
  */
 void buffer_reg_stream_add(struct buffer_reg_stream *stream,
@@ -426,6 +496,21 @@ void buffer_reg_stream_add(struct buffer_reg_stream *stream,
 }
 
 /*
+ * Add map_counter to the list in the map.
+ */
+void buffer_reg_map_counter_add(struct buffer_reg_map_counter *map_counter,
+		struct buffer_reg_map *map)
+{
+	assert(map_counter);
+	assert(map);
+
+	pthread_mutex_lock(&map->counter_list_lock);
+	cds_list_add_tail(&map_counter->lnode, &map->counters);
+	map->counter_count++;
+	pthread_mutex_unlock(&map->counter_list_lock);
+}
+
+/*
  * Add a buffer registry channel object to the given session.
  */
 void buffer_reg_channel_add(struct buffer_reg_session *session,
@@ -436,6 +521,20 @@ void buffer_reg_channel_add(struct buffer_reg_session *session,
 
 	rcu_read_lock();
 	lttng_ht_add_unique_u64(session->channels, &channel->node);
+	rcu_read_unlock();
+}
+
+/*
+ * Add a buffer registry map object to the given session.
+ */
+void buffer_reg_map_add(struct buffer_reg_session *session,
+		struct buffer_reg_map *map)
+{
+	assert(session);
+	assert(map);
+
+	rcu_read_lock();
+	lttng_ht_add_unique_u64(session->maps, &map->node);
 	rcu_read_unlock();
 }
 
@@ -477,6 +576,43 @@ end:
 }
 
 /*
+ * Find a buffer registry map object with the given key. RCU read side lock
+ * MUST be acquired and hold on until the object reference is not needed
+ * anymore.
+ *
+ * Return the object pointer or NULL on error.
+ */
+struct buffer_reg_map *buffer_reg_map_find(uint64_t key,
+		struct buffer_reg_uid *reg)
+{
+	struct lttng_ht_node_u64 *node;
+	struct lttng_ht_iter iter;
+	struct buffer_reg_map *map = NULL;
+	struct lttng_ht *ht;
+
+	assert(reg);
+
+	switch (reg->domain) {
+	case LTTNG_DOMAIN_UST:
+		ht = reg->registry->maps;
+		break;
+	default:
+		assert(0);
+		goto end;
+	}
+
+	lttng_ht_lookup(ht, &key, &iter);
+	node = lttng_ht_iter_get_node_u64(&iter);
+	if (!node) {
+		goto end;
+	}
+	map = caa_container_of(node, struct buffer_reg_map, node);
+
+end:
+	return map;
+}
+
+/*
  * Destroy a buffer registry stream with the given domain.
  */
 void buffer_reg_stream_destroy(struct buffer_reg_stream *regp,
@@ -512,6 +648,41 @@ void buffer_reg_stream_destroy(struct buffer_reg_stream *regp,
 }
 
 /*
+ * Destroy a buffer registry map_counter with the given domain.
+ */
+void buffer_reg_map_counter_destroy(struct buffer_reg_map_counter *regp,
+		enum lttng_domain_type domain)
+{
+	if (!regp) {
+		return;
+	}
+
+	DBG3("Buffer registry map counter destroy with handle %d",
+			regp->obj.ust->handle);
+
+	switch (domain) {
+	case LTTNG_DOMAIN_UST:
+	{
+		int ret;
+
+		ret = ust_app_release_object(NULL, regp->obj.ust);
+		if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
+			ERR("Buffer reg map counter release obj handle %d failed with ret %d",
+					regp->obj.ust->handle, ret);
+		}
+		free(regp->obj.ust);
+		lttng_fd_put(LTTNG_FD_APPS, 2);
+		break;
+	}
+	default:
+		assert(0);
+	}
+
+	free(regp);
+	return;
+}
+
+/*
  * Remove buffer registry channel object from the session hash table. RCU read
  * side lock MUST be acquired before calling this.
  */
@@ -526,6 +697,24 @@ void buffer_reg_channel_remove(struct buffer_reg_session *session,
 
 	iter.iter.node = &regp->node.node;
 	ret = lttng_ht_del(session->channels, &iter);
+	assert(!ret);
+}
+
+/*
+ * Remove buffer registry map object from the session hash table. RCU read
+ * side lock MUST be acquired before calling this.
+ */
+void buffer_reg_map_remove(struct buffer_reg_session *session,
+		struct buffer_reg_map *regp)
+{
+	int ret;
+	struct lttng_ht_iter iter;
+
+	assert(session);
+	assert(regp);
+
+	iter.iter.node = &regp->node.node;
+	ret = lttng_ht_del(session->maps, &iter);
 	assert(!ret);
 }
 
@@ -557,6 +746,49 @@ void buffer_reg_channel_destroy(struct buffer_reg_channel *regp,
 			ret = ust_app_release_object(NULL, regp->obj.ust);
 			if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 				ERR("Buffer reg channel release obj handle %d failed with ret %d",
+						regp->obj.ust->handle, ret);
+			}
+			free(regp->obj.ust);
+		}
+		lttng_fd_put(LTTNG_FD_APPS, 1);
+		break;
+	}
+	default:
+		assert(0);
+	}
+
+	free(regp);
+	return;
+}
+
+/*
+ * Destroy a buffer registry map with the given domain.
+ */
+void buffer_reg_map_destroy(struct buffer_reg_map *regp,
+		enum lttng_domain_type domain)
+{
+	if (!regp) {
+		return;
+	}
+
+	DBG3("Buffer registry map destroy with key %" PRIu32, regp->key);
+
+	switch (domain) {
+	case LTTNG_DOMAIN_UST:
+	{
+		int ret;
+		struct buffer_reg_stream *sreg, *stmp;
+		/* Wipe counter */
+		cds_list_for_each_entry_safe(sreg, stmp, &regp->counters, lnode) {
+			cds_list_del(&sreg->lnode);
+			regp->counter_count--;
+			//buffer_reg_counter_destroy(sreg, domain);
+		}
+
+		if (regp->obj.ust) {
+			ret = ust_app_release_object(NULL, regp->obj.ust);
+			if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
+				ERR("Buffer reg map release obj handle %d failed with ret %d",
 						regp->obj.ust->handle, ret);
 			}
 			free(regp->obj.ust);

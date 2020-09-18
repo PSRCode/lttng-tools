@@ -243,6 +243,7 @@ static const char *error_string_array[] = {
 	[ ERROR_INDEX(LTTNG_ERR_EVENT_NOTIFIER_REGISTRATION) ] = "Failed to create event notifier",
 	[ ERROR_INDEX(LTTNG_ERR_EVENT_NOTIFIER_ERROR_ACCOUNTING) ] = "Failed to initialize event notifier error accounting",
 	[ ERROR_INDEX(LTTNG_ERR_EVENT_NOTIFIER_ERROR_ACCOUNTING_FULL) ] = "No index available in event notifier error accounting",
+	[ ERROR_INDEX(LTTNG_ERR_INVALID_MAP) ] = "Invalid map",
 
 	/* Last element */
 	[ ERROR_INDEX(LTTNG_ERR_NR) ] = "Unknown error code"
