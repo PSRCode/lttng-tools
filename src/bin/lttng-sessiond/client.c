@@ -886,6 +886,8 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	switch (cmd_ctx->lsm.cmd_type) {
 	case LTTNG_REGISTER_TRIGGER:
 	case LTTNG_UNREGISTER_TRIGGER:
+	case LTTNG_ADD_MAP:
+	case LTTNG_REMOVE_MAP:
 		need_consumerd = false;
 		break;
 	default:
@@ -986,6 +988,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	switch (cmd_ctx->lsm.cmd_type) {
 	case LTTNG_DISABLE_CHANNEL:
 	case LTTNG_DISABLE_EVENT:
+	case LTTNG_REMOVE_MAP:
 		switch (cmd_ctx->lsm.domain.type) {
 		case LTTNG_DOMAIN_KERNEL:
 			if (!cmd_ctx->session->kernel_session) {
@@ -1352,6 +1355,18 @@ error_add_context:
 				ALIGNED_CONST_PTR(cmd_ctx->lsm.domain),
 				ALIGNED_CONST_PTR(cmd_ctx->lsm.u.channel.chan),
 				kernel_poll_pipe[1]);
+		break;
+	}
+	case LTTNG_ADD_MAP:
+	{
+		ret = cmd_add_map(cmd_ctx, *sock);
+
+		break;
+	}
+	case LTTNG_REMOVE_MAP:
+	{
+		ret = cmd_remove_map(cmd_ctx, *sock);
+
 		break;
 	}
 	case LTTNG_PROCESS_ATTR_TRACKER_ADD_INCLUDE_VALUE:

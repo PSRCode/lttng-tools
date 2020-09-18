@@ -25,6 +25,7 @@
 #include <lttng/event-rule/tracepoint.h>
 #include <lttng/event-rule/tracepoint-internal.h>
 #include <lttng/event-rule/userspace-probe-internal.h>
+#include <lttng/map/map.h>
 #include <common/common.h>
 #include <common/defaults.h>
 #include <common/trace-chunk.h>
@@ -163,6 +164,7 @@ struct ltt_kernel_session *trace_kernel_create_session(void)
 	lks->stream_count_global = 0;
 	lks->metadata = NULL;
 	CDS_INIT_LIST_HEAD(&lks->channel_list.head);
+	CDS_INIT_LIST_HEAD(&lks->map_list.head);
 
 	lks->tracker_pid = process_attr_tracker_create();
 	if (!lks->tracker_pid) {
@@ -272,6 +274,66 @@ error:
 	free(extended);
 	free(lkc);
 	return NULL;
+}
+
+struct ltt_kernel_map *trace_kernel_create_map(
+		const struct lttng_map *map)
+{
+	struct ltt_kernel_map *kernel_map = NULL;
+	unsigned int i, number_dimensions;
+
+	kernel_map = zmalloc(sizeof(*kernel_map));
+	if (!kernel_map) {
+		PERROR("ltt_kernel_map zmalloc");
+		goto end;
+	}
+
+	switch (lttng_map_get_boundary_policy(map)) {
+	case LTTNG_MAP_BOUNDARY_POLICY_OVERFLOW:
+		kernel_map->counter_conf.arithmetic = LTTNG_KERNEL_COUNTER_ARITHMETIC_MODULAR;
+		break;
+	default:
+		abort();
+	}
+
+	switch (lttng_map_get_bitness(map)) {
+	case LTTNG_MAP_BITNESS_32BITS:
+		kernel_map->counter_conf.bitness = LTTNG_KERNEL_COUNTER_BITNESS_32;
+		break;
+	case LTTNG_MAP_BITNESS_64BITS:
+		kernel_map->counter_conf.bitness = LTTNG_KERNEL_COUNTER_BITNESS_64;
+		break;
+	default:
+		abort();
+	}
+
+	number_dimensions = lttng_map_get_dimension_count(map);
+	assert(number_dimensions <= LTTNG_KERNEL_COUNTER_DIMENSION_MAX);
+
+	kernel_map->counter_conf.number_dimensions = number_dimensions;
+
+	for (i = 0; i < kernel_map->counter_conf.number_dimensions; i++) {
+		enum lttng_map_status map_status;
+		uint64_t dimension_length;
+
+		map_status = lttng_map_get_dimension_length(map, i,
+				&dimension_length);
+		assert(map_status == LTTNG_MAP_STATUS_OK);
+
+		kernel_map->counter_conf.dimensions[i].size = dimension_length;
+
+		//FIXME: We need to turn on overflow and underflow
+		kernel_map->counter_conf.dimensions[i].has_overflow = false;
+		kernel_map->counter_conf.dimensions[i].has_underflow = false;
+	}
+
+	kernel_map->fd = -1;
+	kernel_map->enabled = 1;
+
+	/* Init linked list */
+	CDS_INIT_LIST_HEAD(&kernel_map->event_counters_list.head);
+end:
+	return kernel_map;
 }
 
 /*
@@ -958,6 +1020,30 @@ void trace_kernel_destroy_channel(struct ltt_kernel_channel *channel)
 }
 
 /*
+ * Cleanup kernel map structure.
+ */
+void trace_kernel_destroy_map(struct ltt_kernel_map *map)
+{
+	int ret;
+
+	assert(map);
+
+	DBG("[trace] Closing map fd %d", map->fd);
+	/* Close kernel fd */
+	if (map->fd >= 0) {
+		ret = close(map->fd);
+		if (ret) {
+			PERROR("close");
+		}
+	}
+
+	/* Remove from map list */
+	cds_list_del(&map->list);
+
+	free(map);
+}
+
+/*
  * Cleanup kernel metadata structure.
  */
 void trace_kernel_destroy_metadata(struct ltt_kernel_metadata *metadata)
@@ -987,6 +1073,7 @@ void trace_kernel_destroy_metadata(struct ltt_kernel_metadata *metadata)
 void trace_kernel_destroy_session(struct ltt_kernel_session *session)
 {
 	struct ltt_kernel_channel *channel, *ctmp;
+	struct ltt_kernel_map *map, *map_tmp;
 	int ret;
 
 	assert(session);
@@ -1014,6 +1101,10 @@ void trace_kernel_destroy_session(struct ltt_kernel_session *session)
 
 	cds_list_for_each_entry_safe(channel, ctmp, &session->channel_list.head, list) {
 		trace_kernel_destroy_channel(channel);
+	}
+
+	cds_list_for_each_entry_safe(map, map_tmp, &session->map_list.head, list) {
+		trace_kernel_destroy_map(map);
 	}
 }
 

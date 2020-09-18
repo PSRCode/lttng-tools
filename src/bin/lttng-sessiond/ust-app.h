@@ -94,6 +94,12 @@ struct ust_app_stream_list {
 	struct cds_list_head head;
 };
 
+/* counter list containing ust_app_counter. */
+struct ust_app_counter_list {
+	unsigned int count;
+	struct cds_list_head head;
+};
+
 struct ust_app_ctx {
 	int handle;
 	struct lttng_ust_context_attr ctx;
@@ -138,6 +144,13 @@ struct ust_app_stream {
 	char name[DEFAULT_STREAM_NAME_LEN];
 	struct lttng_ust_object_data *obj;
 	/* Using a list of streams to keep order. */
+	struct cds_list_head list;
+};
+
+struct ust_app_map_counter {
+	int handle;
+	struct lttng_ust_object_data *obj;
+	/* Using a list of counters to keep order. */
 	struct cds_list_head list;
 };
 
@@ -187,6 +200,41 @@ struct ust_app_channel {
 	struct rcu_head rcu_head;
 };
 
+struct ust_app_map {
+	int enabled;
+	int handle;
+	/* Counters were sent to the UST tracer. */
+	int is_sent;
+	/*
+	 * Unique key used to identify the channel on the consumer side.
+	 * 0 is a reserved 'invalid' value used to indicate that the consumer
+	 * does not know about this channel (i.e. an error occurred).
+	 */
+	uint64_t key;
+	/* Id of the tracing map set on creation. */
+	uint64_t tracing_map_id;
+	char name[LTTNG_UST_SYM_NAME_LEN];
+	struct lttng_ust_object_data *obj;
+	struct ust_app_counter_list counters;
+	/* Session pointer that owns this object. */
+	struct ust_app_session *session;
+	struct lttng_ht *events;
+
+	size_t bucket_count;
+	struct ustctl_daemon_counter *map_handle;
+	/*
+	 * Node indexed by channel name in the channels' hash table of a session.
+	 */
+	struct lttng_ht_node_str node;
+	/*
+	 * Node indexed by UST channel object descriptor (handle). Stored in the
+	 * ust_objd hash table in the ust_app object.
+	 */
+	struct lttng_ht_node_ulong ust_objd_node;
+	/* For delayed reclaim */
+	struct rcu_head rcu_head;
+};
+
 struct ust_app_session {
 	/*
 	 * Lock protecting this session's ust app interaction. Held
@@ -209,6 +257,7 @@ struct ust_app_session {
 	uint64_t tracing_id;
 	uint64_t id;	/* Unique session identifier */
 	struct lttng_ht *channels; /* Registered channels */
+	struct lttng_ht *maps; /* Registered maps */
 	struct lttng_ht_node_u64 node;
 	/*
 	 * Node indexed by UST session object descriptor (handle). Stored in the
@@ -366,6 +415,7 @@ void ust_app_clean_list(void);
 int ust_app_ht_alloc(void);
 struct ust_app *ust_app_find_by_pid(pid_t pid);
 struct ust_app_stream *ust_app_alloc_stream(void);
+struct ust_app_map_counter *ust_app_alloc_map_counter(void);
 int ust_app_recv_registration(int sock, struct ust_register_msg *msg);
 int ust_app_recv_notify(int sock);
 void ust_app_add(struct ust_app *app);

@@ -19,6 +19,7 @@
 int kernctl_create_session(int fd);
 int kernctl_open_metadata(int fd, struct lttng_channel_attr *chops);
 int kernctl_create_channel(int fd, struct lttng_channel_attr *chops);
+int kernctl_create_session_counter(int session_fd, struct lttng_kernel_counter_conf *counter_conf);
 int kernctl_create_stream(int fd);
 int kernctl_create_event(int fd, struct lttng_kernel_event *ev);
 int kernctl_add_context(int fd, struct lttng_kernel_context *ctx);

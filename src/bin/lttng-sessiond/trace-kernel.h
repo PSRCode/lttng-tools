@@ -11,6 +11,7 @@
 #include <urcu/list.h>
 
 #include <lttng/lttng.h>
+#include <lttng/map/map.h>
 #include <common/lttng-kernel.h>
 #include <common/lttng-kernel-old.h>
 #include <common/defaults.h>
@@ -23,6 +24,11 @@ struct ltt_kernel_event_list {
 	struct cds_list_head head;
 };
 
+/* Kernel event counter list */
+struct ltt_kernel_event_counter_list {
+	struct cds_list_head head;
+};
+
 /* Channel stream list */
 struct ltt_kernel_stream_list {
 	struct cds_list_head head;
@@ -30,6 +36,11 @@ struct ltt_kernel_stream_list {
 
 /* Channel list */
 struct ltt_kernel_channel_list {
+	struct cds_list_head head;
+};
+
+/* map list */
+struct ltt_kernel_map_list {
 	struct cds_list_head head;
 };
 
@@ -85,6 +96,18 @@ struct ltt_kernel_channel {
 	bool sent_to_consumer;
 };
 
+/* Kernel map */
+struct ltt_kernel_map {
+	int fd;
+	int enabled;
+	struct lttng_map *map;
+	struct lttng_kernel_counter_conf counter_conf;
+	struct ltt_kernel_event_counter_list event_counters_list;
+	struct cds_list_head list;
+	/* Session pointer which has a reference to this object. */
+	struct ltt_kernel_session *session;
+};
+
 /* Metadata */
 struct ltt_kernel_metadata {
 	int fd;
@@ -111,9 +134,11 @@ struct ltt_kernel_session {
 	int metadata_stream_fd;
 	int consumer_fds_sent;
 	unsigned int channel_count;
+	unsigned int map_count;
 	unsigned int stream_count_global;
 	struct ltt_kernel_metadata *metadata;
 	struct ltt_kernel_channel_list channel_list;
+	struct ltt_kernel_map_list map_list;
 	/* UID/GID of the user owning the session */
 	uid_t uid;
 	gid_t gid;
@@ -151,12 +176,16 @@ struct ltt_kernel_event *trace_kernel_find_event(
 struct ltt_kernel_channel *trace_kernel_get_channel_by_name(
 		const char *name, struct ltt_kernel_session *session);
 
+struct ltt_kernel_map *trace_kernel_get_map_by_name(
+		const char *name, struct ltt_kernel_session *session);
+
 /*
  * Create functions malloc() the data structure.
  */
 struct ltt_kernel_session *trace_kernel_create_session(void);
 struct ltt_kernel_channel *trace_kernel_create_channel(
 		struct lttng_channel *chan);
+struct ltt_kernel_map *trace_kernel_create_map(const struct lttng_map *map);
 enum lttng_error_code trace_kernel_create_event(struct lttng_event *ev,
 		char *filter_expression, struct lttng_bytecode *filter,
 		struct ltt_kernel_event **kernel_event);
@@ -183,6 +212,7 @@ enum lttng_error_code trace_kernel_init_event_notifier_from_event_rule(
 void trace_kernel_destroy_session(struct ltt_kernel_session *session);
 void trace_kernel_destroy_metadata(struct ltt_kernel_metadata *metadata);
 void trace_kernel_destroy_channel(struct ltt_kernel_channel *channel);
+void trace_kernel_destroy_map(struct ltt_kernel_map *map);
 void trace_kernel_destroy_event(struct ltt_kernel_event *event);
 void trace_kernel_destroy_stream(struct ltt_kernel_stream *stream);
 void trace_kernel_destroy_context(struct ltt_kernel_context *ctx);

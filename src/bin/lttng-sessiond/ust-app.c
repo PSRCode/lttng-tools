@@ -25,6 +25,7 @@
 #include <common/compat/errno.h>
 #include <common/common.h>
 #include <common/hashtable/utils.h>
+#include <common/shm.h>
 #include <lttng/event-rule/event-rule.h>
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/event-rule/tracepoint.h>
@@ -62,6 +63,10 @@ int ust_app_flush_app_session(struct ust_app *app, struct ust_app_session *ua_se
 static uint64_t _next_channel_key;
 static pthread_mutex_t next_channel_key_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/* Next available map key. Access under next_map_key_lock. */
+static uint64_t _next_map_key;
+static pthread_mutex_t next_map_key_lock = PTHREAD_MUTEX_INITIALIZER;
+
 /* Next available session ID. Access under next_session_id_lock. */
 static uint64_t _next_session_id;
 static pthread_mutex_t next_session_id_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -76,6 +81,19 @@ static uint64_t get_next_channel_key(void)
 	pthread_mutex_lock(&next_channel_key_lock);
 	ret = ++_next_channel_key;
 	pthread_mutex_unlock(&next_channel_key_lock);
+	return ret;
+}
+
+/*
+ * Return the incremented value of next_map_key.
+ */
+static uint64_t get_next_map_key(void)
+{
+	uint64_t ret;
+
+	pthread_mutex_lock(&next_map_key_lock);
+	ret = ++_next_map_key;
+	pthread_mutex_unlock(&next_map_key_lock);
 	return ret;
 }
 
@@ -399,6 +417,33 @@ static int release_ust_app_stream(int sock, struct ust_app_stream *stream,
 }
 
 /*
+ * Release ust data object of the given map_counter.
+ *
+ * Return 0 on success or else a negative value.
+ */
+static int release_ust_app_map_counter(int sock, struct ust_app_map_counter *map_counter,
+		struct ust_app *app)
+{
+	int ret = 0;
+
+	assert(map_counter);
+
+	if (map_counter->obj) {
+		pthread_mutex_lock(&app->sock_lock);
+		ret = ustctl_release_object(sock, map_counter->obj);
+		pthread_mutex_unlock(&app->sock_lock);
+		if (ret < 0 && ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
+			ERR("UST app sock %d release map_counter obj failed with ret %d",
+					sock, ret);
+		}
+		lttng_fd_put(LTTNG_FD_APPS, 2);
+		free(map_counter->obj);
+	}
+
+	return ret;
+}
+
+/*
  * Delete ust app stream safely. RCU read lock must be held before calling
  * this function.
  */
@@ -410,6 +455,20 @@ void delete_ust_app_stream(int sock, struct ust_app_stream *stream,
 
 	(void) release_ust_app_stream(sock, stream, app);
 	free(stream);
+}
+
+/*
+ * Delete ust app map_counter safely. RCU read lock must be held before calling
+ * this function.
+ */
+static
+void delete_ust_app_map_counter(int sock, struct ust_app_map_counter *map_counter,
+		struct ust_app *app)
+{
+	assert(map_counter);
+
+	(void) release_ust_app_map_counter(sock, map_counter, app);
+	free(map_counter);
 }
 
 /*
@@ -1119,6 +1178,7 @@ struct ust_app_session *alloc_ust_app_session(void)
 
 	ua_sess->handle = -1;
 	ua_sess->channels = lttng_ht_new(0, LTTNG_HT_TYPE_STRING);
+	ua_sess->maps = lttng_ht_new(0, LTTNG_HT_TYPE_STRING);
 	ua_sess->metadata_attr.type = LTTNG_UST_CHAN_METADATA;
 	pthread_mutex_init(&ua_sess->lock, NULL);
 
@@ -1183,6 +1243,43 @@ error:
 }
 
 /*
+ * Alloc new UST app map.
+ */
+static
+struct ust_app_map *alloc_ust_app_map(const char *name,
+		struct ust_app_session *ua_sess)
+{
+	struct ust_app_map *ua_map;
+
+	/* Init most of the default value by allocating and zeroing */
+	ua_map = zmalloc(sizeof(struct ust_app_map));
+	if (ua_map == NULL) {
+		PERROR("malloc");
+		goto error;
+	}
+
+	/* Setup map name */
+	strncpy(ua_map->name, name, sizeof(ua_map->name));
+	ua_map->name[sizeof(ua_map->name) - 1] = '\0';
+
+	ua_map->enabled = 1;
+	ua_map->handle = -1;
+	ua_map->session = ua_sess;
+	ua_map->key = get_next_map_key();
+	ua_map->events = lttng_ht_new(0, LTTNG_HT_TYPE_STRING);
+	lttng_ht_node_init_str(&ua_map->node, ua_map->name);
+
+	CDS_INIT_LIST_HEAD(&ua_map->counters.head);
+
+	DBG3("UST app map %s allocated", ua_map->name);
+
+	return ua_map;
+
+error:
+	return NULL;
+}
+
+/*
  * Allocate and initialize a UST app stream.
  *
  * Return newly allocated stream pointer or NULL on error.
@@ -1202,6 +1299,28 @@ struct ust_app_stream *ust_app_alloc_stream(void)
 
 error:
 	return stream;
+}
+
+/*
+ * Allocate and initialize a UST app map_counter.
+ *
+ * Return newly allocated map_counter pointer or NULL on error.
+ */
+struct ust_app_map_counter *ust_app_alloc_map_counter(void)
+{
+	struct ust_app_map_counter *map_counter = NULL;
+
+	map_counter = zmalloc(sizeof(*map_counter));
+	if (map_counter == NULL) {
+		PERROR("zmalloc ust app map_counter");
+		goto error;
+	}
+
+	/* Zero could be a valid value for a handle so flag it to -1. */
+	map_counter->handle = -1;
+
+error:
+	return map_counter;
 }
 
 /*
@@ -1782,6 +1901,44 @@ error:
 }
 
 /*
+ * Disable the specified map on to UST tracer for the UST session.
+ */
+static int disable_ust_map(struct ust_app *app,
+		struct ust_app_session *ua_sess, struct ust_app_map *ua_map)
+{
+	int ret;
+
+	health_code_update();
+
+	pthread_mutex_lock(&app->sock_lock);
+	ret = ustctl_disable(app->sock, ua_map->obj);
+	pthread_mutex_unlock(&app->sock_lock);
+	if (ret < 0) {
+		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
+			ERR("UST app map %s disable failed for app (pid: %d) "
+					"and session handle %d with ret %d",
+					ua_map->name, app->pid, ua_sess->handle, ret);
+		} else {
+			/*
+			 * This is normal behavior, an application can die during the
+			 * creation process. Don't report an error so the execution can
+			 * continue normally.
+			 */
+			ret = 0;
+			DBG3("UST app disable map failed. Application is dead.");
+		}
+		goto error;
+	}
+
+	DBG2("UST app map %s disabled successfully for app (pid: %d)",
+			ua_map->name, app->pid);
+
+error:
+	health_code_update();
+	return ret;
+}
+
+/*
  * Enable the specified channel on to UST tracer for the UST session.
  */
 static int enable_ust_channel(struct ust_app *app,
@@ -1815,6 +1972,46 @@ static int enable_ust_channel(struct ust_app *app,
 
 	DBG2("UST app channel %s enabled successfully for app (pid: %d)",
 			ua_chan->name, app->pid);
+
+error:
+	health_code_update();
+	return ret;
+}
+
+/*
+ * Enable the specified map on to UST tracer for the UST session.
+ */
+static int enable_ust_map(struct ust_app *app,
+		struct ust_app_session *ua_sess, struct ust_app_map *ua_map)
+{
+	int ret;
+
+	health_code_update();
+
+	pthread_mutex_lock(&app->sock_lock);
+	ret = ustctl_enable(app->sock, ua_map->obj);
+	pthread_mutex_unlock(&app->sock_lock);
+	if (ret < 0) {
+		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
+			ERR("UST app map %s enable failed for app (pid: %d) "
+					"and session handle %d with ret %d",
+					ua_map->name, app->pid, ua_sess->handle, ret);
+		} else {
+			/*
+			 * This is normal behavior, an application can die during the
+			 * creation process. Don't report an error so the execution can
+			 * continue normally.
+			 */
+			ret = 0;
+			DBG3("UST app enable map failed. Application is dead.");
+		}
+		goto error;
+	}
+
+	ua_map->enabled = 1;
+
+	DBG2("UST app map %s enabled successfully for app (pid: %d)",
+			ua_map->name, app->pid);
 
 error:
 	health_code_update();
@@ -1911,12 +2108,61 @@ error:
 }
 
 /*
+ * Send map and stream buffer to application.
+ *
+ * Return 0 on success. On error, a negative value is returned.
+ */
+static int send_map_pid_to_ust(struct ust_app *app,
+		struct ust_app_session *ua_sess, struct ust_app_map *ua_map)
+{
+	int ret;
+	struct ust_app_map_counter *counter, *ctmp;
+
+	assert(app);
+	assert(ua_sess);
+	assert(ua_map);
+
+	health_code_update();
+
+	DBG("UST app sending map %s to UST app sock %d", ua_map->name,
+			app->sock);
+
+	/* Send map to the application. */
+	pthread_mutex_lock(&app->sock_lock);
+	ret = ustctl_send_counter_data_to_ust(app->sock,
+			ua_sess->handle, ua_map->obj);
+	pthread_mutex_unlock(&app->sock_lock);
+	assert(ret == 0);
+
+	health_code_update();
+
+	/* Send all streams to application. */
+	cds_list_for_each_entry_safe(counter, ctmp, &ua_map->counters.head, list) {
+		pthread_mutex_lock(&app->sock_lock);
+		// Do send the per cpu counter here
+		ret = ustctl_send_counter_cpu_data_to_ust(app->sock,
+				ua_map->obj, counter->obj);
+		pthread_mutex_unlock(&app->sock_lock);
+		assert(ret == 0);
+
+		/* We don't need the stream anymore once sent to the tracer. */
+		cds_list_del(&counter->list);
+		delete_ust_app_map_counter(-1, counter, app);
+	}
+	/* Flag the map that it is sent to the application. */
+	ua_map->is_sent = 1;
+
+	health_code_update();
+	return ret;
+}
+
+/*
  * Create the specified event onto the UST tracer for a UST session.
  *
  * Should be called with session mutex held.
  */
 static
-int create_ust_event(struct ust_app *app, struct ust_app_session *ua_sess,
+int create_ust_channel_event(struct ust_app *app, struct ust_app_session *ua_sess,
 		struct ust_app_channel *ua_chan, struct ust_app_event *ua_event)
 {
 	int ret = 0;
@@ -2001,6 +2247,96 @@ error:
 	return ret;
 }
 
+/*
+ * Create the specified event onto the UST tracer for a UST session.
+ *
+ * Should be called with session mutex held.
+ */
+static
+int create_ust_map_event(struct ust_app *app, struct ust_app_session *ua_sess,
+		struct ust_app_map *ua_map, struct ust_app_event *ua_event)
+{
+	int ret = 0;
+
+	health_code_update();
+
+	/* Create UST event on tracer */
+	pthread_mutex_lock(&app->sock_lock);
+	ret = ustctl_create_event(app->sock, &ua_event->attr, ua_map->obj,
+			&ua_event->obj);
+	pthread_mutex_unlock(&app->sock_lock);
+	if (ret < 0) {
+		if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
+			abort();
+			ERR("Error ustctl create event %s for app pid: %d with ret %d",
+					ua_event->attr.name, app->pid, ret);
+		} else {
+			/*
+			 * This is normal behavior, an application can die during the
+			 * creation process. Don't report an error so the execution can
+			 * continue normally.
+			 */
+			ret = 0;
+			DBG3("UST app create event failed. Application is dead.");
+		}
+		goto error;
+	}
+
+	ua_event->handle = ua_event->obj->handle;
+
+	DBG2("UST app event %s created successfully for pid:%d object: %p",
+			ua_event->attr.name, app->pid, ua_event->obj);
+
+	health_code_update();
+
+	/* Set filter if one is present. */
+	if (ua_event->filter) {
+		ret = set_ust_object_filter(app, ua_event->filter, ua_event->obj);
+		if (ret < 0) {
+			goto error;
+		}
+	}
+
+	/* Set exclusions for the event */
+	if (ua_event->exclusion) {
+		ret = set_ust_object_exclusions(app, ua_event->exclusion, ua_event->obj);
+		if (ret < 0) {
+			goto error;
+		}
+	}
+
+	/* If event not enabled, disable it on the tracer */
+	if (ua_event->enabled) {
+		/*
+		 * We now need to explicitly enable the event, since it
+		 * is now disabled at creation.
+		 */
+		ret = enable_ust_object(app, ua_event->obj);
+		if (ret < 0) {
+			/*
+			 * If we hit an EPERM, something is wrong with our enable call. If
+			 * we get an EEXIST, there is a problem on the tracer side since we
+			 * just created it.
+			 */
+			switch (ret) {
+			case -LTTNG_UST_ERR_PERM:
+				/* Code flow problem */
+				assert(0);
+			case -LTTNG_UST_ERR_EXIST:
+				/* It's OK for our use case. */
+				ret = 0;
+				break;
+			default:
+				break;
+			}
+			goto error;
+		}
+	}
+
+error:
+	health_code_update();
+	return ret;
+}
 static int init_ust_event_notifier_from_event_rule(
 		const struct lttng_event_rule *rule,
 		struct lttng_ust_event_notifier *event_notifier)
@@ -2844,6 +3180,26 @@ error:
 }
 
 /*
+ * Lookup ust app map for session and disable it on the tracer side.
+ */
+static
+int disable_ust_app_map(struct ust_app_session *ua_sess,
+		struct ust_app_map *ua_map, struct ust_app *app)
+{
+	int ret;
+
+	ret = disable_ust_map(app, ua_sess, ua_map);
+	if (ret < 0) {
+		goto error;
+	}
+
+	ua_map->enabled = 0;
+
+error:
+	return ret;
+}
+
+/*
  * Lookup ust app channel for session and enable it on the tracer side. This
  * MUST be called with a RCU read side lock acquired.
  */
@@ -2866,6 +3222,37 @@ static int enable_ust_app_channel(struct ust_app_session *ua_sess,
 	ua_chan = caa_container_of(ua_chan_node, struct ust_app_channel, node);
 
 	ret = enable_ust_channel(app, ua_sess, ua_chan);
+	if (ret < 0) {
+		goto error;
+	}
+
+error:
+	return ret;
+}
+
+/*
+ * Lookup ust app map for session and enable it on the tracer side. This
+ * MUST be called with a RCU read side lock acquired.
+ */
+static int enable_ust_app_map(struct ust_app_session *ua_sess,
+		struct ltt_ust_map *umap, struct ust_app *app)
+{
+	int ret = 0;
+	struct lttng_ht_iter iter;
+	struct lttng_ht_node_str *ua_map_node;
+	struct ust_app_map *ua_map;
+
+	lttng_ht_lookup(ua_sess->maps, (void *)umap->name, &iter);
+	ua_map_node = lttng_ht_iter_get_node_str(&iter);
+	if (ua_map_node == NULL) {
+		DBG2("Unable to find map %s in ust session id %" PRIu64,
+				umap->name, ua_sess->tracing_id);
+		goto error;
+	}
+
+	ua_map = caa_container_of(ua_map_node, struct ust_app_map, node);
+
+	ret = enable_ust_map(app, ua_sess, ua_map);
 	if (ret < 0) {
 		goto error;
 	}
@@ -2971,6 +3358,107 @@ error:
 	return ret;
 }
 
+static int create_map_object(struct ltt_ust_session *usess,
+		struct ust_app_session *ua_sess, struct ust_app_map *ua_map,
+		struct ust_registry_session *registry)
+{
+	int i, ret, nr_counter_cpu;
+	struct ustctl_counter_dimension dimension[1] = {0};
+	struct ustctl_daemon_counter *daemon_counter;
+	struct lttng_ust_object_data **counter_cpus;
+	int *counter_cpu_fds;
+
+	assert(usess);
+	assert(ua_sess);
+	assert(ua_map);
+	assert(ua_map->bucket_count > 0);
+
+	nr_counter_cpu = ustctl_get_nr_cpu_per_counter();
+	counter_cpu_fds = zmalloc(nr_counter_cpu * sizeof(*counter_cpu_fds));
+	if (!counter_cpu_fds) {
+		ret = -1;
+		goto end;
+	}
+
+	counter_cpus = zmalloc(nr_counter_cpu * sizeof(**counter_cpus));
+	if (!counter_cpus) {
+		ret = -1;
+		goto  free_cpu_fds;
+	}
+
+	/* Need one fd for each cpu counter of the map. */
+	ret = lttng_fd_get(LTTNG_FD_APPS, nr_counter_cpu);
+	if (ret < 0) {
+		ERR("Exhausted number of available FD upon create map");
+		goto free_cpu_counters;
+	}
+
+	for (i = 0; i < nr_counter_cpu; i++) {
+		counter_cpu_fds[i] = shm_create_anonymous("ust-map-counter");
+		if (counter_cpu_fds[i] < 0) {
+			ERR("Error creating anonymous shared memory object");
+			ret = -1;
+			goto error;
+		}
+	}
+
+	dimension[0].size = ua_map->bucket_count;
+	dimension[0].has_underflow = false;
+	dimension[0].has_overflow = false;
+
+	daemon_counter = ustctl_create_counter(1, dimension, 0, -1,
+			nr_counter_cpu, counter_cpu_fds,
+			USTCTL_COUNTER_BITNESS_32,
+			USTCTL_COUNTER_ARITHMETIC_MODULAR,
+			USTCTL_COUNTER_ALLOC_PER_CPU);
+	assert(daemon_counter);
+
+	ua_map->map_handle = daemon_counter;
+
+	ret = ustctl_create_counter_data(daemon_counter, &ua_map->obj);
+	assert(ret == 0);
+
+	for (i = 0; i < nr_counter_cpu; i++) {
+		struct ust_app_map_counter *counter;
+
+		/* Create UST counter */
+		counter = ust_app_alloc_map_counter();
+		if (counter == NULL) {
+			ret = -ENOMEM;
+			goto release_counters;
+		}
+
+		ret = ustctl_create_counter_cpu_data(daemon_counter, i,
+				&counter->obj);
+		if (ret < 0) {
+			ERR("Creating map counter cpu data");
+			free(counter);
+			goto error;
+		}
+
+		cds_list_add_tail(&counter->list, &ua_map->counters.head);
+		ua_map->counters.count++;
+
+		DBG2("UST app map counter %d created successfully", ua_map->counters.count);
+	}
+
+	ret = 0;
+	goto end;
+
+
+error:
+release_counters:
+	//TODO
+free_cpu_counters:
+	free(counter_cpus);
+
+free_cpu_fds:
+	free(counter_cpu_fds);
+end:
+	return ret;
+}
+
+
 /*
  * Duplicate the ust data object of the ust app stream and save it in the
  * buffer registry stream.
@@ -3008,6 +3496,42 @@ error:
 }
 
 /*
+ * Duplicate the ust data object of the ust app map_counter and save it in the
+ * buffer registry map_counter.
+ *
+ * Return 0 on success or else a negative value.
+ */
+static int duplicate_map_counter_object(struct buffer_reg_map_counter *reg_map_counter,
+		struct ust_app_map_counter *map_counter)
+{
+	int ret;
+
+	assert(reg_map_counter);
+	assert(map_counter);
+
+	/* Duplicating a map_counter requires 2 new fds. Reserve them. */
+	ret = lttng_fd_get(LTTNG_FD_APPS, 2);
+	if (ret < 0) {
+		ERR("Exhausted number of available FD upon duplicate map_counter");
+		goto error;
+	}
+
+	/* Duplicate object for map_counter once the original is in the registry. */
+	ret = ustctl_duplicate_ust_object_data(&map_counter->obj,
+			reg_map_counter->obj.ust);
+	if (ret < 0) {
+		ERR("Duplicate map_counter obj from %p to %p failed with ret %d",
+				reg_map_counter->obj.ust, map_counter->obj, ret);
+		lttng_fd_put(LTTNG_FD_APPS, 2);
+		goto error;
+	}
+	map_counter->handle = map_counter->obj->handle;
+
+error:
+	return ret;
+}
+
+/*
  * Duplicate the ust data object of the ust app. channel and save it in the
  * buffer registry channel.
  *
@@ -3036,6 +3560,44 @@ static int duplicate_channel_object(struct buffer_reg_channel *buf_reg_chan,
 		goto error;
 	}
 	ua_chan->handle = ua_chan->obj->handle;
+
+	return 0;
+
+error:
+	lttng_fd_put(LTTNG_FD_APPS, 1);
+error_fd_get:
+	return ret;
+}
+
+/*
+ * Duplicate the ust data object of the ust app. map and save it in the
+ * buffer registry map.
+ *
+ * Return 0 on success or else a negative value.
+ */
+static int duplicate_map_object(struct buffer_reg_map *reg_map,
+		struct ust_app_map *ua_map)
+{
+	int ret;
+
+	assert(reg_map);
+	assert(ua_map);
+
+	/* Duplicating a map requires 1 new fd. Reserve it. */
+	ret = lttng_fd_get(LTTNG_FD_APPS, 1);
+	if (ret < 0) {
+		ERR("Exhausted number of available FD upon duplicate map");
+		goto error_fd_get;
+	}
+
+	/* Duplicate object for stream once the original is in the registry. */
+	ret = ustctl_duplicate_ust_object_data(&ua_map->obj, reg_map->obj.ust);
+	if (ret < 0) {
+		ERR("Duplicate map obj from %p to %p failed with ret: %d",
+				reg_map->obj.ust, ua_map->obj, ret);
+		goto error;
+	}
+	ua_map->handle = ua_map->obj->handle;
 
 	return 0;
 
@@ -3083,6 +3645,50 @@ static int setup_buffer_reg_streams(struct buffer_reg_channel *buf_reg_chan,
 		/* We don't need the streams anymore. */
 		cds_list_del(&stream->list);
 		delete_ust_app_stream(-1, stream, app);
+	}
+
+error:
+	return ret;
+}
+
+/*
+ * For a given map buffer registry, setup all counters of the given ust
+ * application map.
+ *
+ * Return 0 on success or else a negative value.
+ */
+static int setup_buffer_reg_map_counters(struct buffer_reg_map *reg_map,
+		struct ust_app_map *ua_map,
+		struct ust_app *app)
+{
+	int ret = 0;
+	struct ust_app_map_counter *counter, *stmp;
+
+	assert(reg_map);
+	assert(ua_map);
+
+	DBG2("UST app setup buffer registry counter");
+
+	/* Send all counters to application. */
+	cds_list_for_each_entry_safe(counter, stmp, &ua_map->counters.head, list) {
+		struct buffer_reg_map_counter *reg_counter;
+
+		ret = buffer_reg_map_counter_create(&reg_counter);
+		if (ret < 0) {
+			goto error;
+		}
+
+		/*
+		 * Keep original pointer and nullify it in the counter so the delete
+		 * counter call does not release the object.
+		 */
+		reg_counter->obj.ust = counter->obj;
+		counter->obj = NULL;
+		buffer_reg_map_counter_add(reg_counter, reg_map);
+
+		/* We don't need the counters anymore. */
+		cds_list_del(&counter->list);
+		delete_ust_app_map_counter(-1, counter, app);
 	}
 
 error:
@@ -3140,6 +3746,53 @@ error_create:
 }
 
 /*
+ * Create a buffer registry map for the given session registry and
+ * application map object. If regp pointer is valid, it's set with the
+ * created object. Important, the created object is NOT added to the session
+ * registry hash table.
+ *
+ * Return 0 on success else a negative value.
+ */
+static int create_buffer_reg_map(struct buffer_reg_session *reg_sess,
+		struct ust_app_map *ua_map, struct buffer_reg_map **regp)
+{
+	int ret;
+	struct buffer_reg_map *reg_map = NULL;
+
+	assert(reg_sess);
+	assert(ua_map);
+
+	DBG2("UST app creating buffer registry map for %s", ua_map->name);
+
+	/* Create buffer registry map. */
+	ret = buffer_reg_map_create(ua_map->tracing_map_id, &reg_map);
+	if (ret < 0) {
+		goto error_create;
+	}
+	assert(reg_map);
+
+	/* Create and add a map registry to session. */
+	ret = ust_registry_map_add(reg_sess->reg.ust,
+			ua_map->tracing_map_id);
+	if (ret < 0) {
+		goto error;
+	}
+	buffer_reg_map_add(reg_sess, reg_map);
+
+	if (regp) {
+		*regp = reg_map;
+	}
+
+	return 0;
+
+error:
+	/* Safe because the registry map object was not added to any HT. */
+	buffer_reg_map_destroy(reg_map, LTTNG_DOMAIN_UST);
+error_create:
+	return ret;
+}
+
+/*
  * Setup buffer registry channel for the given session registry and application
  * channel object. If regp pointer is valid, it's set with the created object.
  *
@@ -3172,6 +3825,42 @@ static int setup_buffer_reg_channel(struct buffer_reg_session *reg_sess,
 error:
 	buffer_reg_channel_remove(reg_sess, buf_reg_chan);
 	buffer_reg_channel_destroy(buf_reg_chan, LTTNG_DOMAIN_UST);
+	return ret;
+}
+
+/*
+ * Setup buffer registry map for the given session registry and application
+ * map object. If regp pointer is valid, it's set with the created object.
+ *
+ * Return 0 on success else a negative value.
+ */
+static int setup_buffer_reg_map(struct buffer_reg_session *reg_sess,
+		struct ust_app_map *ua_map, struct buffer_reg_map *reg_map,
+		struct ust_app *app)
+{
+	int ret;
+
+	assert(reg_sess);
+	assert(reg_map);
+	assert(ua_map);
+	assert(ua_map->obj);
+
+	DBG2("UST app setup buffer registry map for %s", ua_map->name);
+
+	/* Setup all counters for the registry. */
+	ret = setup_buffer_reg_map_counters(reg_map, ua_map, app);
+	if (ret < 0) {
+		goto error;
+	}
+
+	reg_map->obj.ust = ua_map->obj;
+	ua_map->obj = NULL;
+
+	return 0;
+
+error:
+	buffer_reg_map_remove(reg_sess, reg_map);
+	buffer_reg_map_destroy(reg_map, LTTNG_DOMAIN_UST);
 	return ret;
 }
 
@@ -3239,6 +3928,84 @@ static int send_channel_uid_to_ust(struct buffer_reg_channel *buf_reg_chan,
 
 error_stream_unlock:
 	pthread_mutex_unlock(&buf_reg_chan->stream_list_lock);
+error:
+	return ret;
+}
+
+/*
+ * Send buffer registry map to the application.
+ *
+ * Return 0 on success else a negative value.
+ */
+static int send_map_uid_to_ust(struct buffer_reg_map *reg_map,
+		struct ust_app *app, struct ust_app_session *ua_sess,
+		struct ust_app_map *ua_map)
+{
+	int ret;
+	struct buffer_reg_map_counter *reg_map_counter;
+
+	assert(reg_map);
+	assert(app);
+	assert(ua_sess);
+	assert(ua_map);
+
+	DBG("UST app sending buffer registry map to ust sock %d", app->sock);
+
+	ret = duplicate_map_object(reg_map, ua_map);
+	if (ret < 0) {
+		goto error;
+	}
+
+	/* Send map to the application. */
+
+	pthread_mutex_lock(&app->sock_lock);
+	ret = ustctl_send_counter_data_to_ust(app->sock,
+			ua_sess->handle, ua_map->obj);
+	pthread_mutex_unlock(&app->sock_lock);
+	assert(ret == 0);
+	if (ret < 0) {
+		if (ret == -EPIPE || ret == -LTTNG_UST_ERR_EXITING) {
+			ret = -ENOTCONN; /* Caused by app exiting. */
+		}
+		goto error_map_counter_unlock;
+	}
+
+	health_code_update();
+
+	/* Send all map_counters to application. */
+	pthread_mutex_lock(&reg_map->counter_list_lock);
+	cds_list_for_each_entry(reg_map_counter, &reg_map->counters, lnode) {
+		struct ust_app_map_counter map_counter;
+
+		ret = duplicate_map_counter_object(reg_map_counter, &map_counter);
+		if (ret < 0) {
+			goto error_map_counter_unlock;
+		}
+
+		pthread_mutex_lock(&app->sock_lock);
+		// Do send the per cpu counter here
+		ret = ustctl_send_counter_cpu_data_to_ust(app->sock,
+				ua_map->obj, map_counter.obj);
+		pthread_mutex_unlock(&app->sock_lock);
+		assert(ret == 0);
+		if (ret < 0) {
+			(void) release_ust_app_map_counter(-1, &map_counter, app);
+			if (ret == -EPIPE || ret == -LTTNG_UST_ERR_EXITING) {
+				ret = -ENOTCONN; /* Caused by app exiting. */
+			}
+			goto error_map_counter_unlock;
+		}
+
+		/*
+		 * The return value is not important here. This function will
+		 * output an error if needed.
+		 */
+		(void) release_ust_app_map_counter(-1, &map_counter, app);
+	}
+	ua_map->is_sent = 1;
+
+error_map_counter_unlock:
+	pthread_mutex_unlock(&reg_map->counter_list_lock);
 error:
 	return ret;
 }
@@ -3368,6 +4135,104 @@ error:
 }
 
 /*
+ * Create and send to the application the created buffers with per UID buffers.
+ *
+ * This MUST be called with a RCU read side lock acquired.
+ * The session list lock and the session's lock must be acquired.
+ *
+ * Return 0 on success else a negative value.
+ */
+static int create_map_per_uid(struct ust_app *app,
+		struct ltt_ust_session *usess, struct ust_app_session *ua_sess,
+		struct ust_app_map *ua_map)
+{
+	int ret;
+	struct buffer_reg_uid *reg_uid;
+	struct buffer_reg_map *reg_map;
+	struct ltt_session *session = NULL;
+	struct ust_registry_map *map_reg;
+
+	assert(app);
+	assert(usess);
+	assert(ua_sess);
+	assert(ua_map);
+
+	DBG("UST app creating map %s with per UID buffers", ua_map->name);
+
+	reg_uid = buffer_reg_uid_find(usess->id, app->bits_per_long, app->uid);
+	/*
+	 * The session creation handles the creation of this global registry
+	 * object. If none can be find, there is a code flow problem or a
+	 * teardown race.
+	 */
+	assert(reg_uid);
+
+	reg_map = buffer_reg_map_find(ua_map->tracing_map_id,
+			reg_uid);
+	if (reg_map) {
+		goto send_map;
+	}
+
+	/* Create the buffer registry map object. */
+	ret = create_buffer_reg_map(reg_uid->registry, ua_map, &reg_map);
+	if (ret < 0) {
+		ERR("Error creating the UST map \"%s\" registry instance",
+				ua_map->name);
+		goto error;
+	}
+
+	session = session_find_by_id(ua_sess->tracing_id);
+	assert(session);
+	assert(pthread_mutex_trylock(&session->lock));
+	assert(session_trylock_list());
+
+	/*
+	 */
+	ret = create_map_object(usess, ua_sess, ua_map,
+			reg_uid->registry->reg.ust);
+	assert(ret == 0);
+	if (ret < 0) {
+		ERR("Error creating UST map object: map_name = \"%s\"", ua_map->name);
+		goto error;
+	}
+
+	/*
+	 * Setup the streams and add it to the session registry.
+	 */
+	ret = setup_buffer_reg_map(reg_uid->registry,
+			ua_map, reg_map, app);
+	if (ret < 0) {
+		ERR("Error setting up UST map \"%s\"", ua_map->name);
+		goto error;
+	}
+
+	/* Notify the notification subsystem of the map's creation. */
+	pthread_mutex_lock(&reg_uid->registry->reg.ust->lock);
+	map_reg = ust_registry_map_find(reg_uid->registry->reg.ust,
+			ua_map->tracing_map_id);
+	assert(map_reg);
+	map_reg = NULL;
+	pthread_mutex_unlock(&reg_uid->registry->reg.ust->lock);
+
+
+send_map:
+	/* Send buffers to the application. */
+	ret = send_map_uid_to_ust(reg_map, app, ua_sess, ua_map);
+	if (ret < 0) {
+		if (ret != -ENOTCONN) {
+			ERR("Error sending map to application");
+		}
+		goto error;
+	}
+
+error:
+	if (session) {
+		session_put(session);
+	}
+	return ret;
+}
+
+/*
  * Create and send to the application the created buffers with per PID buffers.
  *
  * Called with UST app session lock held.
@@ -3464,6 +4329,85 @@ error:
 }
 
 /*
+ * Create and send to the application the created buffers with per PID buffers.
+ *
+ * Called with UST app session lock held.
+ * The session list lock and the session's lock must be acquired.
+ *
+ * Return 0 on success else a negative value.
+ */
+static int create_map_per_pid(struct ust_app *app,
+		struct ltt_ust_session *usess, struct ust_app_session *ua_sess,
+		struct ust_app_map *ua_map)
+{
+	int ret;
+	struct ust_registry_session *registry;
+	struct ltt_session *session = NULL;
+	uint64_t map_reg_key;
+	struct ust_registry_map *map_reg;
+
+	assert(app);
+	assert(usess);
+	assert(ua_sess);
+	assert(ua_map);
+
+	DBG("UST app creating map %s with per PID buffers", ua_map->name);
+
+	rcu_read_lock();
+
+	registry = get_session_registry(ua_sess);
+	/* The UST app session lock is held, registry shall not be null. */
+	assert(registry);
+
+	/* Create and add a new map registry to session. */
+	ret = ust_registry_map_add(registry, ua_map->key);
+	if (ret < 0) {
+		ERR("Error creating the UST map \"%s\" registry instance",
+			ua_map->name);
+		goto error;
+	}
+
+	session = session_find_by_id(ua_sess->tracing_id);
+	assert(session);
+
+	assert(pthread_mutex_trylock(&session->lock));
+	assert(session_trylock_list());
+
+	/* Create and get map on the consumer side. */
+	ret = create_map_object(usess, ua_sess, ua_map, registry);
+	if (ret < 0) {
+		ERR("Error creating UST map object: map_name = \"%s\" ",
+			ua_map->name);
+		goto error_remove_from_registry;
+	}
+
+	ret = send_map_pid_to_ust(app, ua_sess, ua_map);
+	if (ret < 0) {
+		if (ret != -ENOTCONN) {
+			ERR("Error sending map to application");
+		}
+		goto error_remove_from_registry;
+	}
+
+	map_reg_key = ua_map->key;
+	pthread_mutex_lock(&registry->lock);
+	map_reg = ust_registry_map_find(registry, map_reg_key);
+	assert(map_reg);
+	pthread_mutex_unlock(&registry->lock);
+
+error_remove_from_registry:
+	if (ret) {
+		ust_registry_map_del_free(registry, ua_map->key);
+	}
+error:
+	rcu_read_unlock();
+	if (session) {
+		session_put(session);
+	}
+	return ret;
+}
+
+/*
  * From an already allocated ust app channel, create the channel buffers if
  * needed and send them to the application. This MUST be called with a RCU read
  * side lock acquired.
@@ -3526,6 +4470,68 @@ error:
 }
 
 /*
+ * From an already allocated ust app map, create the map buffers if
+ * needed and send them to the application. This MUST be called with a RCU read
+ * side lock acquired.
+ *
+ * Called with UST app session lock held.
+ *
+ * Return 0 on success or else a negative value. Returns -ENOTCONN if
+ * the application exited concurrently.
+ */
+static int ust_app_map_send(struct ust_app *app,
+		struct ltt_ust_session *usess, struct ust_app_session *ua_sess,
+		struct ust_app_map *ua_map)
+{
+	int ret;
+
+	assert(app);
+	assert(usess);
+	assert(usess->active);
+	assert(ua_sess);
+	assert(ua_map);
+
+	/* Handle buffer type before sending the map to the application. */
+	switch (usess->buffer_type) {
+	case LTTNG_BUFFER_PER_UID:
+	{
+		ret = create_map_per_uid(app, usess, ua_sess, ua_map);
+		if (ret < 0) {
+			goto error;
+		}
+		break;
+	}
+	case LTTNG_BUFFER_PER_PID:
+	{
+		ret = create_map_per_pid(app, usess, ua_sess, ua_map);
+		if (ret < 0) {
+			goto error;
+		}
+		break;
+	}
+	default:
+		assert(0);
+		ret = -EINVAL;
+		goto error;
+	}
+
+	/* Initialize ust objd object using the received handle and add it. */
+	lttng_ht_node_init_ulong(&ua_map->ust_objd_node, ua_map->handle);
+	lttng_ht_add_unique_ulong(app->ust_objd, &ua_map->ust_objd_node);
+
+	/* If map is not enabled, disable it on the tracer */
+	if (!ua_map->enabled) {
+		ret = disable_ust_map(app, ua_sess, ua_map);
+		if (ret < 0) {
+			goto error;
+		}
+	}
+
+error:
+	return ret;
+}
+
+/*
  * Create UST app channel and return it through ua_chanp if not NULL.
  *
  * Called with UST app session lock and RCU read-side lock held.
@@ -3576,13 +4582,66 @@ error:
 }
 
 /*
+ * Create UST app map and return it through ua_mapp if not NULL.
+ *
+ * Called with UST app session lock and RCU read-side lock held.
+ *
+ * Return 0 on success or else a negative value.
+ */
+static int ust_app_map_allocate(struct ust_app_session *ua_sess,
+		struct ltt_ust_map *umap,
+		enum lttng_ust_chan_type type, struct ltt_ust_session *usess,
+		struct ust_app_map **ua_mapp)
+{
+	int ret = 0;
+	struct lttng_ht_iter iter;
+	struct lttng_ht_node_str *ua_map_node;
+	struct ust_app_map *ua_map;
+
+	DBG("Allocating map id = %"PRIu64, umap->id);
+
+	/* Lookup map in the ust app session */
+	lttng_ht_lookup(ua_sess->maps, (void *)umap->name, &iter);
+	ua_map_node = lttng_ht_iter_get_node_str(&iter);
+	if (ua_map_node != NULL) {
+		ua_map = caa_container_of(ua_map_node, struct ust_app_map, node);
+		goto end;
+	}
+
+	ua_map = alloc_ust_app_map(umap->name, ua_sess);
+	if (ua_map == NULL) {
+		/* Only malloc can fail here */
+		ret = -ENOMEM;
+		goto error;
+	}
+	//shadow_copy_map(ua_map, umap);
+
+	/* Set map type. */
+	//ua_map->attr.type = type;
+	ua_map->bucket_count = umap->bucket_count;
+
+	/* Only add the map if successful on the tracer side. */
+	lttng_ht_add_unique_str(ua_sess->maps, &ua_map->node);
+end:
+	if (ua_mapp) {
+		*ua_mapp = ua_map;
+	}
+
+	/* Everything went well. */
+	return 0;
+
+error:
+	return ret;
+}
+
+/*
  * Create UST app event and create it on the tracer side.
  *
  * Must be called with the RCU read side lock held.
  * Called with ust app session mutex held.
  */
 static
-int create_ust_app_event(struct ust_app_session *ua_sess,
+int create_ust_app_channel_event(struct ust_app_session *ua_sess,
 		struct ust_app_channel *ua_chan, struct ltt_ust_event *uevent,
 		struct ust_app *app)
 {
@@ -3598,7 +4657,7 @@ int create_ust_app_event(struct ust_app_session *ua_sess,
 	shadow_copy_event(ua_event, uevent);
 
 	/* Create it on the tracer side */
-	ret = create_ust_event(app, ua_sess, ua_chan, ua_event);
+	ret = create_ust_channel_event(app, ua_sess, ua_chan, ua_event);
 	if (ret < 0) {
 		/*
 		 * Not found previously means that it does not exist on the
@@ -3617,6 +4676,61 @@ int create_ust_app_event(struct ust_app_session *ua_sess,
 	}
 
 	add_unique_ust_app_event(ua_chan->events, ua_event);
+
+	DBG2("UST app create event completed: app = '%s' (ppid: %d)",
+			app->name, app->ppid);
+
+end:
+	return ret;
+
+error:
+	/* Valid. Calling here is already in a read side lock */
+	delete_ust_app_event(-1, ua_event, app);
+	return ret;
+}
+
+/*
+ * Create UST app event and create it on the tracer side.
+ *
+ * Must be called with the RCU read side lock held.
+ * Called with ust app session mutex held.
+ */
+static
+int create_ust_app_map_event(struct ust_app_session *ua_sess,
+		struct ust_app_map *ua_map, struct ltt_ust_event *uevent,
+		struct ust_app *app)
+{
+	int ret = 0;
+	struct ust_app_event *ua_event;
+
+	ua_event = alloc_ust_app_event(uevent->attr.name, &uevent->attr);
+	if (ua_event == NULL) {
+		/* Only failure mode of alloc_ust_app_event(). */
+		ret = -ENOMEM;
+		goto end;
+	}
+	shadow_copy_event(ua_event, uevent);
+
+	/* Create it on the tracer side */
+	ret = create_ust_map_event(app, ua_sess, ua_map, ua_event);
+	if (ret < 0) {
+		/*
+		 * Not found previously means that it does not exist on the
+		 * tracer. If the application reports that the event existed,
+		 * it means there is a bug in the sessiond or lttng-ust
+		 * (or corruption, etc.)
+		 */
+		if (ret == -LTTNG_UST_ERR_EXIST) {
+			ERR("Tracer for application reported that an event being created already existed: "
+					"event_name = \"%s\", pid = %d, ppid = %d, uid = %d, gid = %d",
+					uevent->attr.name,
+					app->pid, app->ppid, app->uid,
+					app->gid);
+		}
+		goto error;
+	}
+
+	add_unique_ust_app_event(ua_map->events, ua_event);
 
 	DBG2("UST app create event completed: app = '%s' (ppid: %d)",
 			app->name, app->ppid);
@@ -4770,6 +5884,64 @@ error:
 	return ret;
 }
 
+/* The ua_sess lock must be held by the caller.  */
+static
+int ust_app_map_create(struct ltt_ust_session *usess,
+		struct ust_app_session *ua_sess,
+		struct ltt_ust_map *umap, struct ust_app *app,
+		struct ust_app_map **_ua_map)
+{
+	int ret = 0;
+	struct ust_app_map *ua_map = NULL;
+
+	assert(ua_sess);
+	ASSERT_LOCKED(ua_sess->lock);
+
+	/*
+	 * Create map onto application and synchronize its
+	 * configuration.
+	 */
+	ret = ust_app_map_allocate(ua_sess, umap,
+		LTTNG_UST_CHAN_PER_CPU, usess,
+		&ua_map);
+	if (ret < 0) {
+		goto error;
+	}
+
+	ret = ust_app_map_send(app, usess,
+		ua_sess, ua_map);
+	if (ret) {
+		goto error;
+	}
+
+error:
+	if (ret < 0) {
+		switch (ret) {
+		case -ENOTCONN:
+			/*
+			 * The application's socket is not valid. Either a bad socket
+			 * or a timeout on it. We can't inform the caller that for a
+			 * specific app, the session failed so lets continue here.
+			 */
+			ret = 0;	/* Not an error. */
+			break;
+		case -ENOMEM:
+		default:
+			break;
+		}
+	}
+
+	if (ret == 0 && _ua_map) {
+		/*
+		 * Only return the application's map on success. Note
+		 * that the map can still be part of the application's
+		 * map hashtable on error.
+		 */
+		*_ua_map = ua_map;
+	}
+	return ret;
+}
+
 /*
  * Enable event for a specific session and channel on the tracer.
  */
@@ -4906,7 +6078,7 @@ int ust_app_create_event_glb(struct ltt_ust_session *usess,
 
 		ua_chan = caa_container_of(ua_chan_node, struct ust_app_channel, node);
 
-		ret = create_ust_app_event(ua_sess, ua_chan, uevent, app);
+		ret = create_ust_app_channel_event(ua_sess, ua_chan, uevent, app);
 		pthread_mutex_unlock(&ua_sess->lock);
 		if (ret < 0) {
 			if (ret != -LTTNG_UST_ERR_EXIST) {
@@ -5573,6 +6745,36 @@ end:
 	return ret;
 }
 
+/* The ua_sess lock must be held by the caller. */
+static
+int find_or_create_ust_app_map(
+		struct ltt_ust_session *usess,
+		struct ust_app_session *ua_sess,
+		struct ust_app *app,
+		struct ltt_ust_map *umap,
+		struct ust_app_map **ua_map)
+{
+	int ret = 0;
+	struct lttng_ht_iter iter;
+	struct lttng_ht_node_str *ua_map_node;
+
+	lttng_ht_lookup(ua_sess->maps, (void *) umap->name, &iter);
+	ua_map_node = lttng_ht_iter_get_node_str(&iter);
+	if (ua_map_node) {
+		*ua_map = caa_container_of(ua_map_node,
+			struct ust_app_map, node);
+		goto end;
+	}
+
+	DBG("UST map id = %"PRIu64" not found. Creating it.", umap->id);
+	ret = ust_app_map_create(usess, ua_sess, umap, app, ua_map);
+	if (ret) {
+		goto end;
+	}
+end:
+	return ret;
+}
+
 static
 int ust_app_channel_synchronize_event(struct ust_app_channel *ua_chan,
 		struct ltt_ust_event *uevent, struct ust_app_session *ua_sess,
@@ -5584,7 +6786,7 @@ int ust_app_channel_synchronize_event(struct ust_app_channel *ua_chan,
 	ua_event = find_ust_app_event(ua_chan->events, uevent->attr.name,
 		uevent->filter, uevent->attr.loglevel, uevent->exclusion);
 	if (!ua_event) {
-		ret = create_ust_app_event(ua_sess, ua_chan, uevent, app);
+		ret = create_ust_app_channel_event(ua_sess, ua_chan, uevent, app);
 		if (ret < 0) {
 			goto end;
 		}
@@ -5601,6 +6803,33 @@ end:
 }
 
 /* Called with RCU read-side lock held. */
+static
+int ust_app_map_synchronize_event(struct ust_app_map *ua_map,
+		struct ltt_ust_event *uevent, struct ust_app_session *ua_sess,
+		struct ust_app *app)
+{
+	int ret = 0;
+	struct ust_app_event *ua_event = NULL;
+
+	ua_event = find_ust_app_event(ua_map->events, uevent->attr.name,
+		uevent->filter, uevent->attr.loglevel, uevent->exclusion);
+	if (!ua_event) {
+		ret = create_ust_app_map_event(ua_sess, ua_map, uevent, app);
+		if (ret < 0) {
+			goto end;
+		}
+	} else {
+		if (ua_event->enabled != uevent->enabled) {
+			ret = uevent->enabled ?
+				enable_ust_app_event(ua_sess, ua_event, app) :
+				disable_ust_app_event(ua_sess, ua_event, app);
+		}
+	}
+
+end:
+	return ret;
+}
+
 static
 void ust_app_synchronize_event_notifier_rules(struct ust_app *app)
 {
@@ -5743,6 +6972,9 @@ end:
 	return;
 }
 
+/*
+ * Called with RCU read-side lock held.
+ */
 static
 void ust_app_synchronize_all_channels(struct ltt_ust_session *usess,
 		struct ust_app_session *ua_sess,
@@ -5804,6 +7036,64 @@ end:
 }
 
 /*
+ * Called with RCU read-side lock held.
+ */
+static
+void ust_app_synchronize_all_maps(struct ltt_ust_session *usess,
+		struct ust_app_session *ua_sess,
+		struct ust_app *app)
+{
+	int ret = 0;
+	struct cds_lfht_iter umap_iter;
+	struct ltt_ust_map *umap;
+
+	assert(usess);
+	assert(ua_sess);
+	assert(app);
+
+	cds_lfht_for_each_entry(usess->domain_global.maps->ht, &umap_iter,
+			umap, node.node) {
+		struct ust_app_map *ua_map;
+		struct cds_lfht_iter uevent_iter;
+		struct ltt_ust_event *uevent;
+
+		DBG("Synchronizing map id = %"PRIu64, umap->id);
+
+		ret = find_or_create_ust_app_map(usess, ua_sess,
+			app, umap, &ua_map);
+		if (ret) {
+			/* Tracer is probably gone or ENOMEM. */
+			goto end;
+		}
+
+		if (!ua_map) {
+			/* ua_map will be NULL for the metadata mapnel */
+			continue;
+		}
+
+		cds_lfht_for_each_entry(umap->events->ht, &uevent_iter, uevent,
+				node.node) {
+			ret = ust_app_map_synchronize_event(ua_map,
+					uevent, ua_sess, app);
+			if (ret) {
+				goto end;
+			}
+		}
+
+		if (ua_map->enabled != umap->enabled) {
+			ret = umap->enabled ?
+				enable_ust_app_map(ua_sess, umap, app) :
+				disable_ust_app_map(ua_sess, ua_map, app);
+			if (ret) {
+				goto end;
+			}
+		}
+	}
+end:
+	return;
+}
+
+/*
  * The caller must ensure that the application is compatible and is tracked
  * by the process attribute trackers.
  */
@@ -5836,6 +7126,7 @@ void ust_app_synchronize(struct ltt_ust_session *usess,
 	rcu_read_lock();
 
 	ust_app_synchronize_all_channels(usess, ua_sess, app);
+	ust_app_synchronize_all_maps(usess, ua_sess, app);
 
 	/*
 	 * Create the metadata for the application. This returns gracefully if a
@@ -6320,7 +7611,7 @@ static int add_event_ust_registry(int sock, int sobjd, int cobjd, char *name,
 	 * and model_emf_uri meaning any free are done inside it if needed. These
 	 * three variables MUST NOT be read/write after this.
 	 */
-	ret_code = ust_registry_create_event(registry, chan_reg_key,
+	ret_code = ust_registry_chan_create_event(registry, chan_reg_key,
 			sobjd, cobjd, name, sig, nr_fields, fields,
 			loglevel_value, model_emf_uri, ua_sess->buffer_type,
 			&event_id, app);
@@ -6470,7 +7761,7 @@ int ust_app_recv_notify(int sock)
 	case USTCTL_NOTIFY_CMD_EVENT:
 	{
 		int sobjd, cobjd, loglevel_value;
-		char name[LTTNG_UST_SYM_NAME_LEN], *sig, *model_emf_uri;
+		char name[LTTNG_UST_SYM_NAME_LEN], *sig, *model_emf_uri, *key;
 		size_t nr_fields;
 		struct ustctl_field *fields;
 
@@ -6478,7 +7769,7 @@ int ust_app_recv_notify(int sock)
 
 		ret = ustctl_recv_register_event(sock, &sobjd, &cobjd, name,
 				&loglevel_value, &sig, &nr_fields, &fields,
-				&model_emf_uri);
+				&model_emf_uri, &key);
 		if (ret < 0) {
 			if (ret != -EPIPE && ret != -LTTNG_UST_ERR_EXITING) {
 				ERR("UST app recv event failed with ret %d", ret);

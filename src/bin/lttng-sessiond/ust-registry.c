@@ -359,7 +359,7 @@ static void destroy_event_rcu(struct rcu_head *head)
  *
  * On success, the event pointer is returned else NULL.
  */
-struct ust_registry_event *ust_registry_find_event(
+struct ust_registry_event *ust_registry_chan_find_event(
 		struct ust_registry_channel *chan, char *name, char *sig)
 {
 	struct lttng_ht_node_u64 *node;
@@ -398,7 +398,7 @@ end:
  *
  * Should be called with session registry mutex held.
  */
-int ust_registry_create_event(struct ust_registry_session *session,
+int ust_registry_chan_create_event(struct ust_registry_session *session,
 		uint64_t chan_key, int session_objd, int channel_objd, char *name,
 		char *sig, size_t nr_fields, struct ustctl_field *fields,
 		int loglevel_value, char *model_emf_uri, int buffer_type,
@@ -510,7 +510,7 @@ error_unlock:
  * For a given event in a registry, delete the entry and destroy the event.
  * This MUST be called within a RCU read side lock section.
  */
-void ust_registry_destroy_event(struct ust_registry_channel *chan,
+void ust_registry_chan_destroy_event(struct ust_registry_channel *chan,
 		struct ust_registry_event *event)
 {
 	int ret;
@@ -522,6 +522,29 @@ void ust_registry_destroy_event(struct ust_registry_channel *chan,
 	/* Delete the node first. */
 	iter.iter.node = &event->node.node;
 	ret = lttng_ht_del(chan->ht, &iter);
+	assert(!ret);
+
+	call_rcu(&event->node.head, destroy_event_rcu);
+
+	return;
+}
+
+/*
+ * For a given event in a registry, delete the entry and destroy the event.
+ * This MUST be called within a RCU read side lock section.
+ */
+void ust_registry_map_destroy_event(struct ust_registry_map *map,
+		struct ust_registry_event *event)
+{
+	int ret;
+	struct lttng_ht_iter iter;
+
+	assert(map);
+	assert(event);
+
+	/* Delete the node first. */
+	iter.iter.node = &event->node.node;
+	ret = lttng_ht_del(map->ht, &iter);
 	assert(!ret);
 
 	call_rcu(&event->node.head, destroy_event_rcu);
@@ -718,6 +741,24 @@ void destroy_channel_rcu(struct rcu_head *head)
 }
 
 /*
+ * We need to execute ht_destroy outside of RCU read-side critical
+ * section and outside of call_rcu thread, so we postpone its execution
+ * using ht_cleanup_push. It is simpler than to mapge the semantic of
+ * the many callers of delete_ust_app_session().
+ */
+static
+void destroy_map_rcu(struct rcu_head *head)
+{
+	struct ust_registry_map *map =
+		caa_container_of(head, struct ust_registry_map, rcu_head);
+
+	if (map->ht) {
+		ht_cleanup_push(map->ht);
+	}
+	free(map);
+}
+
+/*
  * Destroy every element of the registry and free the memory. This does NOT
  * free the registry pointer since it might not have been allocated before so
  * it's the caller responsability.
@@ -745,11 +786,35 @@ static void destroy_channel(struct ust_registry_channel *chan, bool notif)
 		cds_lfht_for_each_entry(
 				chan->ht->ht, &iter.iter, event, node.node) {
 			/* Delete the node from the ht and free it. */
-			ust_registry_destroy_event(chan, event);
+			ust_registry_chan_destroy_event(chan, event);
 		}
 		rcu_read_unlock();
 	}
 	call_rcu(&chan->rcu_head, destroy_channel_rcu);
+}
+
+/*
+ * Destroy every element of the registry and free the memory. This does NOT
+ * free the registry pointer since it might not have been allocated before so
+ * it's the caller responsability.
+ */
+static void destroy_map(struct ust_registry_map *map)
+{
+	struct lttng_ht_iter iter;
+	struct ust_registry_event *event;
+
+	assert(map);
+
+	if (map->ht) {
+		rcu_read_lock();
+		/* Destroy all event associated with this registry. */
+		cds_lfht_for_each_entry(map->ht->ht, &iter.iter, event, node.node) {
+			/* Delete the node from the ht and free it. */
+			ust_registry_map_destroy_event(map, event);
+		}
+	}
+	rcu_read_unlock();
+	call_rcu(&map->rcu_head, destroy_map_rcu);
 }
 
 /*
@@ -805,6 +870,58 @@ error_alloc:
 }
 
 /*
+ * Initialize registry with default values.
+ */
+int ust_registry_map_add(struct ust_registry_session *session,
+		uint64_t key)
+{
+	int ret = 0;
+	struct ust_registry_map *map;
+
+	assert(session);
+
+	map = zmalloc(sizeof(*map));
+	if (!map) {
+		PERROR("zmalloc ust registry map");
+		ret = -ENOMEM;
+		goto error_alloc;
+	}
+
+	map->ht = lttng_ht_new(0, LTTNG_HT_TYPE_STRING);
+	if (!map->ht) {
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	/* Set custom match function. */
+	map->ht->match_fct = ht_match_event;
+	map->ht->hash_fct = ht_hash_event;
+
+	/*
+	 * Assign a map ID right now since the event notification comes
+	 * *before* the map notify so the ID needs to be set at this point so
+	 * the metadata can be dumped for that event.
+	 */
+	if (ust_registry_is_max_id(session->used_map_id)) {
+		ret = -1;
+		goto error;
+	}
+	map->map_id = ust_registry_get_next_map_id(session);
+
+	rcu_read_lock();
+	lttng_ht_node_init_u64(&map->node, key);
+	lttng_ht_add_unique_u64(session->maps, &map->node);
+	rcu_read_unlock();
+
+	return 0;
+
+error:
+	destroy_map(map);
+error_alloc:
+	return ret;
+}
+
+/*
  * Find a channel in the given registry. RCU read side lock MUST be acquired
  * before calling this function and as long as the event reference is kept by
  * the caller.
@@ -835,6 +952,36 @@ end:
 }
 
 /*
+ * Find a map in the given registry. RCU read side lock MUST be acquired
+ * before calling this function and as long as the event reference is kept by
+ * the caller.
+ *
+ * On success, the pointer is returned else NULL.
+ */
+struct ust_registry_map *ust_registry_map_find(
+		struct ust_registry_session *session, uint64_t key)
+{
+	struct lttng_ht_node_u64 *node;
+	struct lttng_ht_iter iter;
+	struct ust_registry_map *map = NULL;
+
+	assert(session);
+	assert(session->maps);
+
+	DBG3("UST registry map finding key %" PRIu64, key);
+
+	lttng_ht_lookup(session->maps, &key, &iter);
+	node = lttng_ht_iter_get_node_u64(&iter);
+	if (!node) {
+		goto end;
+	}
+	map = caa_container_of(node, struct ust_registry_map, node);
+
+end:
+	return map;
+}
+
+/*
  * Remove channel using key from registry and free memory.
  */
 void ust_registry_channel_del_free(struct ust_registry_session *session,
@@ -858,6 +1005,35 @@ void ust_registry_channel_del_free(struct ust_registry_session *session,
 	assert(!ret);
 	rcu_read_unlock();
 	destroy_channel(chan, notif);
+
+end:
+	return;
+}
+
+/*
+ * Remove map using key from registry and free memory.
+ */
+void ust_registry_map_del_free(struct ust_registry_session *session,
+		uint64_t key)
+{
+	struct lttng_ht_iter iter;
+	struct ust_registry_map *map;
+	int ret;
+
+	assert(session);
+
+	rcu_read_lock();
+	map = ust_registry_map_find(session, key);
+	if (!map) {
+		rcu_read_unlock();
+		goto end;
+	}
+
+	iter.iter.node = &map->node.node;
+	ret = lttng_ht_del(session->maps, &iter);
+	assert(!ret);
+	rcu_read_unlock();
+	destroy_map(map);
 
 end:
 	return;
@@ -959,6 +1135,12 @@ int ust_registry_session_init(struct ust_registry_session **sessionp,
 
 	session->channels = lttng_ht_new(0, LTTNG_HT_TYPE_U64);
 	if (!session->channels) {
+		goto error;
+	}
+
+	session->maps = lttng_ht_new(0, LTTNG_HT_TYPE_U64);
+	if (!session->maps) {
+		lttng_ht_destroy(session->channels);
 		goto error;
 	}
 
