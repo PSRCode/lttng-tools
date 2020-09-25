@@ -481,7 +481,6 @@ PKG_CHECK_MODULES([POPT], [popt],
 AC_SUBST(POPT_LIBS)
 
 PKG_CHECK_MODULES([libxml2], [libxml-2.0 >= 2.7.6])
-PKG_CHECK_MODULES([msgpack], [msgpack])
 
 AC_CHECK_FUNC([clock_gettime], [AC_DEFINE_UNQUOTED([LTTNG_HAVE_CLOCK_GETTIME], 1, [Has clock_gettime() support.])])
 
@@ -1131,6 +1130,8 @@ AC_CONFIG_FILES([
 	src/bin/lttng-relayd/Makefile
 	src/bin/lttng/Makefile
 	src/bin/lttng-crash/Makefile
+	src/vendor/Makefile
+	src/vendor/msgpack/Makefile
 	tests/Makefile
 	tests/destructive/Makefile
 	tests/regression/Makefile
