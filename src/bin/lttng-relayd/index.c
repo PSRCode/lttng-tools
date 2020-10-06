@@ -105,12 +105,12 @@ static bool relay_index_get(struct relay_index *index)
 			(int) index->ref.refcount);
 
 	/* Confirm that the index refcount has not reached 0. */
-	pthread_mutex_lock(&index->reflock);
+	LTTNG_LOCK(&index->reflock);
 	if (index->ref.refcount != 0) {
 		has_ref = true;
 		urcu_ref_get(&index->ref);
 	}
-	pthread_mutex_unlock(&index->reflock);
+	LTTNG_UNLOCK(&index->reflock);
 
 	return has_ref;
 }
@@ -172,7 +172,7 @@ int relay_index_set_file(struct relay_index *index,
 {
 	int ret = 0;
 
-	pthread_mutex_lock(&index->lock);
+	LTTNG_LOCK(&index->lock);
 	if (index->index_file) {
 		ret = -1;
 		goto end;
@@ -181,7 +181,7 @@ int relay_index_set_file(struct relay_index *index,
 	index->index_file = index_file;
 	index->index_data.offset = data_offset;
 end:
-	pthread_mutex_unlock(&index->lock);
+	LTTNG_UNLOCK(&index->lock);
 	return ret;
 }
 
@@ -190,7 +190,7 @@ int relay_index_set_data(struct relay_index *index,
 {
 	int ret = 0;
 
-	pthread_mutex_lock(&index->lock);
+	LTTNG_LOCK(&index->lock);
 	if (index->has_index_data) {
 		ret = -1;
 		goto end;
@@ -204,7 +204,7 @@ int relay_index_set_data(struct relay_index *index,
 	index->index_data.stream_id = data->stream_id;
 	index->has_index_data = true;
 end:
-	pthread_mutex_unlock(&index->lock);
+	LTTNG_UNLOCK(&index->lock);
 	return ret;
 }
 
@@ -265,10 +265,10 @@ void relay_index_put(struct relay_index *index)
 	 * Index lock ensures that concurrent test and update of stream
 	 * ref is atomic.
 	 */
-	pthread_mutex_lock(&index->reflock);
+	LTTNG_LOCK(&index->reflock);
 	assert(index->ref.refcount != 0);
 	urcu_ref_put(&index->ref, index_release);
-	pthread_mutex_unlock(&index->reflock);
+	LTTNG_UNLOCK(&index->reflock);
 	rcu_read_unlock();
 }
 
@@ -285,7 +285,7 @@ int relay_index_try_flush(struct relay_index *index)
 	int ret = 1;
 	bool flushed = false;
 
-	pthread_mutex_lock(&index->lock);
+	LTTNG_LOCK(&index->lock);
 	if (index->flushed) {
 		goto skip;
 	}
@@ -300,7 +300,7 @@ int relay_index_try_flush(struct relay_index *index)
 	index->flushed = true;
 	ret = relay_index_file_write(index->index_file, &index->index_data);
 skip:
-	pthread_mutex_unlock(&index->lock);
+	LTTNG_UNLOCK(&index->lock);
 
 	if (flushed) {
 		/* Put self-ref from index now that it has been flushed. */

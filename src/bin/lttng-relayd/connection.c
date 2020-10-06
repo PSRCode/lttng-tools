@@ -29,12 +29,12 @@ bool connection_get(struct relay_connection *conn)
 {
 	bool has_ref = false;
 
-	pthread_mutex_lock(&conn->reflock);
+	LTTNG_LOCK(&conn->reflock);
 	if (conn->ref.refcount != 0) {
 		has_ref = true;
 		urcu_ref_get(&conn->ref);
 	}
-	pthread_mutex_unlock(&conn->reflock);
+	LTTNG_UNLOCK(&conn->reflock);
 
 	return has_ref;
 }
@@ -175,9 +175,9 @@ static void connection_release(struct urcu_ref *ref)
 void connection_put(struct relay_connection *conn)
 {
 	rcu_read_lock();
-	pthread_mutex_lock(&conn->reflock);
+	LTTNG_LOCK(&conn->reflock);
 	urcu_ref_put(&conn->ref, connection_release);
-	pthread_mutex_unlock(&conn->reflock);
+	LTTNG_UNLOCK(&conn->reflock);
 	rcu_read_unlock();
 }
 

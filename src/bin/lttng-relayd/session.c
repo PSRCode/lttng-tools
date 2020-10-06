@@ -59,9 +59,9 @@ struct relay_session *session_create(const char *session_name,
 		goto error;
 	}
 
-	pthread_mutex_lock(&last_relay_session_id_lock);
+	LTTNG_LOCK(&last_relay_session_id_lock);
 	session->id = ++last_relay_session_id;
-	pthread_mutex_unlock(&last_relay_session_id_lock);
+	LTTNG_UNLOCK(&last_relay_session_id_lock);
 
 	session->major = major;
 	session->minor = minor;
@@ -88,12 +88,12 @@ bool session_get(struct relay_session *session)
 {
 	bool has_ref = false;
 
-	pthread_mutex_lock(&session->reflock);
+	LTTNG_LOCK(&session->reflock);
 	if (session->ref.refcount != 0) {
 		has_ref = true;
 		urcu_ref_get(&session->ref);
 	}
-	pthread_mutex_unlock(&session->reflock);
+	LTTNG_UNLOCK(&session->reflock);
 
 	return has_ref;
 }
@@ -178,9 +178,9 @@ void session_release(struct urcu_ref *ref)
 void session_put(struct relay_session *session)
 {
 	rcu_read_lock();
-	pthread_mutex_lock(&session->reflock);
+	LTTNG_LOCK(&session->reflock);
 	urcu_ref_put(&session->ref, session_release);
-	pthread_mutex_unlock(&session->reflock);
+	LTTNG_UNLOCK(&session->reflock);
 	rcu_read_unlock();
 }
 
@@ -191,11 +191,11 @@ int session_close(struct relay_session *session)
 	struct lttng_ht_iter iter;
 	struct relay_stream *stream;
 
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	DBG("closing session %" PRIu64 ": is conn already closed %d",
 			session->id, session->connection_closed);
 	session->connection_closed = true;
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 
 	rcu_read_lock();
 	cds_lfht_for_each_entry(session->ctf_traces_ht->ht,
@@ -228,10 +228,10 @@ int session_abort(struct relay_session *session)
 		return 0;
 	}
 
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	DBG("aborting session %" PRIu64, session->id);
 	session->aborted = true;
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 	return ret;
 }
 

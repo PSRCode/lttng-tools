@@ -78,12 +78,12 @@ bool ctf_trace_get(struct ctf_trace *trace)
 	bool has_ref = false;
 
 	/* Confirm that the trace refcount has not reached 0. */
-	pthread_mutex_lock(&trace->reflock);
+	LTTNG_LOCK(&trace->reflock);
 	if (trace->ref.refcount != 0) {
 		has_ref = true;
 		urcu_ref_get(&trace->ref);
 	}
-	pthread_mutex_unlock(&trace->reflock);
+	LTTNG_UNLOCK(&trace->reflock);
 
 	return has_ref;
 }
@@ -115,9 +115,9 @@ static struct ctf_trace *ctf_trace_create(struct relay_session *session,
 
 	CDS_INIT_LIST_HEAD(&trace->stream_list);
 
-	pthread_mutex_lock(&last_relay_ctf_trace_id_lock);
+	LTTNG_LOCK(&last_relay_ctf_trace_id_lock);
 	trace->id = ++last_relay_ctf_trace_id;
-	pthread_mutex_unlock(&last_relay_ctf_trace_id_lock);
+	LTTNG_UNLOCK(&last_relay_ctf_trace_id_lock);
 
 	lttng_ht_node_init_str(&trace->node, path_name);
 	trace->session = session;
@@ -168,9 +168,9 @@ end:
 void ctf_trace_put(struct ctf_trace *trace)
 {
 	rcu_read_lock();
-	pthread_mutex_lock(&trace->reflock);
+	LTTNG_LOCK(&trace->reflock);
 	urcu_ref_put(&trace->ref, ctf_trace_release);
-	pthread_mutex_unlock(&trace->reflock);
+	LTTNG_UNLOCK(&trace->reflock);
 	rcu_read_unlock();
 }
 

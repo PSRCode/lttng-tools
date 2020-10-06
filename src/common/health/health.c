@@ -109,7 +109,7 @@ void health_app_destroy(struct health_app *ha)
  */
 static void state_lock(struct health_app *ha)
 {
-	pthread_mutex_lock(&ha->lock);
+	LTTNG_LOCK(&ha->lock);
 }
 
 /*
@@ -117,7 +117,7 @@ static void state_lock(struct health_app *ha)
  */
 static void state_unlock(struct health_app *ha)
 {
-	pthread_mutex_unlock(&ha->lock);
+	LTTNG_UNLOCK(&ha->lock);
 }
 
 /*

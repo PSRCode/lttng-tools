@@ -802,9 +802,9 @@ static int init_kernel_tracing(struct ltt_kernel_session *session)
 	if (session->consumer_fds_sent == 0 && session->consumer != NULL) {
 		cds_lfht_for_each_entry(session->consumer->socks->ht, &iter.iter,
 				socket, node.node) {
-			pthread_mutex_lock(socket->lock);
+			LTTNG_LOCK(socket->lock);
 			ret = kernel_consumer_send_session(socket, session);
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			if (ret < 0) {
 				ret = LTTNG_ERR_KERN_CONSUMER_FAIL;
 				goto error;
@@ -911,14 +911,14 @@ static int send_consumer_relayd_socket(enum lttng_domain_type domain,
 
 	/* Set the network sequence index if not set. */
 	if (consumer->net_seq_index == (uint64_t) -1ULL) {
-		pthread_mutex_lock(&relayd_net_seq_idx_lock);
+		LTTNG_LOCK(&relayd_net_seq_idx_lock);
 		/*
 		 * Increment net_seq_idx because we are about to transfer the
 		 * new relayd socket to the consumer.
 		 * Assign unique key so the consumer can match streams.
 		 */
 		consumer->net_seq_index = ++relayd_net_seq_idx;
-		pthread_mutex_unlock(&relayd_net_seq_idx_lock);
+		LTTNG_UNLOCK(&relayd_net_seq_idx_lock);
 	}
 
 	/* Send relayd socket to consumer. */
@@ -1028,12 +1028,12 @@ int cmd_setup_relayd(struct ltt_session *session)
 		/* For each consumer socket, send relayd sockets */
 		cds_lfht_for_each_entry(usess->consumer->socks->ht, &iter.iter,
 				socket, node.node) {
-			pthread_mutex_lock(socket->lock);
+			LTTNG_LOCK(socket->lock);
 			ret = send_consumer_relayd_sockets(LTTNG_DOMAIN_UST, session->id,
 					usess->consumer, socket,
 					session->name, session->hostname,
 					session->live_timer);
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			if (ret != LTTNG_OK) {
 				goto error;
 			}
@@ -1050,12 +1050,12 @@ int cmd_setup_relayd(struct ltt_session *session)
 			&& ksess->consumer->enabled) {
 		cds_lfht_for_each_entry(ksess->consumer->socks->ht, &iter.iter,
 				socket, node.node) {
-			pthread_mutex_lock(socket->lock);
+			LTTNG_LOCK(socket->lock);
 			ret = send_consumer_relayd_sockets(LTTNG_DOMAIN_KERNEL, session->id,
 					ksess->consumer, socket,
 					session->name, session->hostname,
 					session->live_timer);
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			if (ret != LTTNG_OK) {
 				goto error;
 			}
@@ -2855,9 +2855,9 @@ int cmd_register_consumer(struct ltt_session *session,
 		consumer_add_socket(socket, ksess->consumer);
 		rcu_read_unlock();
 
-		pthread_mutex_lock(&cdata->pid_mutex);
+		LTTNG_LOCK(&cdata->pid_mutex);
 		cdata->pid = -1;
-		pthread_mutex_unlock(&cdata->pid_mutex);
+		LTTNG_UNLOCK(&cdata->pid_mutex);
 
 		break;
 	}
@@ -3470,7 +3470,7 @@ int ust_regenerate_metadata(struct ltt_ust_session *usess)
 		session_reg = uid_reg->registry;
 		registry = session_reg->reg.ust;
 
-		pthread_mutex_lock(&registry->lock);
+		LTTNG_LOCK(&registry->lock);
 		registry->metadata_len_sent = 0;
 		memset(registry->metadata, 0, registry->metadata_alloc_len);
 		registry->metadata_len = 0;
@@ -3479,7 +3479,7 @@ int ust_regenerate_metadata(struct ltt_ust_session *usess)
 			/* Clear the metadata file's content. */
 			ret = clear_metadata_file(registry->metadata_fd);
 			if (ret) {
-				pthread_mutex_unlock(&registry->lock);
+				LTTNG_UNLOCK(&registry->lock);
 				goto end;
 			}
 		}
@@ -3487,7 +3487,7 @@ int ust_regenerate_metadata(struct ltt_ust_session *usess)
 		ret = ust_metadata_session_statedump(registry, NULL,
 				registry->major, registry->minor);
 		if (ret) {
-			pthread_mutex_unlock(&registry->lock);
+			LTTNG_UNLOCK(&registry->lock);
 			ERR("Failed to generate session metadata (err = %d)",
 					ret);
 			goto end;
@@ -3499,7 +3499,7 @@ int ust_regenerate_metadata(struct ltt_ust_session *usess)
 
 			ret = ust_metadata_channel_statedump(registry, chan);
 			if (ret) {
-				pthread_mutex_unlock(&registry->lock);
+				LTTNG_UNLOCK(&registry->lock);
 				ERR("Failed to generate channel metadata "
 						"(err = %d)", ret);
 				goto end;
@@ -3509,14 +3509,14 @@ int ust_regenerate_metadata(struct ltt_ust_session *usess)
 				ret = ust_metadata_event_statedump(registry,
 						chan, event);
 				if (ret) {
-					pthread_mutex_unlock(&registry->lock);
+					LTTNG_UNLOCK(&registry->lock);
 					ERR("Failed to generate event metadata "
 							"(err = %d)", ret);
 					goto end;
 				}
 			}
 		}
-		pthread_mutex_unlock(&registry->lock);
+		LTTNG_UNLOCK(&registry->lock);
 	}
 
 end:
@@ -3653,12 +3653,12 @@ static int set_relayd_for_snapshot(struct consumer_output *consumer,
 	rcu_read_lock();
 	cds_lfht_for_each_entry(snap_output->consumer->socks->ht, &iter.iter,
 			socket, node.node) {
-		pthread_mutex_lock(socket->lock);
+		LTTNG_LOCK(socket->lock);
 		ret = send_consumer_relayd_sockets(0, session->id,
 				snap_output->consumer, socket,
 				session->name, session->hostname,
 				session->live_timer);
-		pthread_mutex_unlock(socket->lock);
+		LTTNG_UNLOCK(socket->lock);
 		if (ret != LTTNG_OK) {
 			rcu_read_unlock();
 			goto error;
@@ -4057,9 +4057,9 @@ void cmd_init(void)
 	 * Set network sequence index to 1 for streams to match a relayd
 	 * socket on the consumer side.
 	 */
-	pthread_mutex_lock(&relayd_net_seq_idx_lock);
+	LTTNG_LOCK(&relayd_net_seq_idx_lock);
 	relayd_net_seq_idx = 1;
-	pthread_mutex_unlock(&relayd_net_seq_idx_lock);
+	LTTNG_UNLOCK(&relayd_net_seq_idx_lock);
 
 	DBG("Command subsystem initialized");
 }

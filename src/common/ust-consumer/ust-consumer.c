@@ -751,7 +751,7 @@ static int flush_channel(uint64_t chan_key)
 
 		health_code_update();
 
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 
 		/*
 		 * Protect against concurrent teardown of a stream.
@@ -765,7 +765,7 @@ static int flush_channel(uint64_t chan_key)
 			stream->quiescent = true;
 		}
 next:
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 	}
 error:
 	rcu_read_unlock();
@@ -805,9 +805,9 @@ static int clear_quiescent_channel(uint64_t chan_key)
 
 		health_code_update();
 
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 		stream->quiescent = false;
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 	}
 error:
 	rcu_read_unlock();
@@ -841,16 +841,16 @@ static int close_metadata(uint64_t chan_key)
 		goto error;
 	}
 
-	pthread_mutex_lock(&consumer_data.lock);
-	pthread_mutex_lock(&channel->lock);
+	LTTNG_LOCK(&consumer_data.lock);
+	LTTNG_LOCK(&channel->lock);
 	channel_monitor = channel->monitor;
 	if (cds_lfht_is_node_deleted(&channel->node.node)) {
 		goto error_unlock;
 	}
 
 	lttng_ustconsumer_close_metadata(channel);
-	pthread_mutex_unlock(&channel->lock);
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&channel->lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 
 	/*
 	 * The ownership of a metadata channel depends on the type of
@@ -886,8 +886,8 @@ static int close_metadata(uint64_t chan_key)
 
 	return ret;
 error_unlock:
-	pthread_mutex_unlock(&channel->lock);
-	pthread_mutex_unlock(&consumer_data.lock);
+	LTTNG_UNLOCK(&channel->lock);
+	LTTNG_UNLOCK(&consumer_data.lock);
 error:
 	return ret;
 }
@@ -1137,7 +1137,7 @@ static int snapshot_channel(uint64_t key, char *path, uint64_t relayd_id,
 		health_code_update();
 
 		/* Lock stream because we are about to change its state. */
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 		stream->relayd_id = relayd_id;
 
 		if (use_relayd) {
@@ -1267,7 +1267,7 @@ static int snapshot_channel(uint64_t key, char *path, uint64_t relayd_id,
 
 		/* Simply close the stream so we can use it on the next snapshot. */
 		consumer_stream_close(stream);
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 	}
 
 	rcu_read_unlock();
@@ -1280,7 +1280,7 @@ error_put_subbuf:
 error_close_stream:
 	consumer_stream_close(stream);
 error_unlock:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 error:
 	rcu_read_unlock();
 	return ret;
@@ -1322,7 +1322,7 @@ int lttng_ustconsumer_recv_metadata(int sock, uint64_t key, uint64_t offset,
 
 	health_code_update();
 
-	pthread_mutex_lock(&channel->metadata_cache->lock);
+	LTTNG_LOCK(&channel->metadata_cache->lock);
 	ret = consumer_metadata_cache_write(channel, offset, len, version,
 			metadata_str);
 	if (ret < 0) {
@@ -1333,10 +1333,10 @@ int lttng_ustconsumer_recv_metadata(int sock, uint64_t key, uint64_t offset,
 		 * not have been updated which could create an infinite loop below when
 		 * waiting for the metadata cache to be flushed.
 		 */
-		pthread_mutex_unlock(&channel->metadata_cache->lock);
+		LTTNG_UNLOCK(&channel->metadata_cache->lock);
 		goto end_free;
 	}
-	pthread_mutex_unlock(&channel->metadata_cache->lock);
+	LTTNG_UNLOCK(&channel->metadata_cache->lock);
 
 	if (!wait) {
 		goto end_free;
@@ -1818,7 +1818,7 @@ int lttng_ustconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 		DBG("UST consumer discarded events command for session id %"
 				PRIu64, id);
 		rcu_read_lock();
-		pthread_mutex_lock(&consumer_data.lock);
+		LTTNG_LOCK(&consumer_data.lock);
 
 		ht = consumer_data.stream_list_ht;
 
@@ -1839,7 +1839,7 @@ int lttng_ustconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 				break;
 			}
 		}
-		pthread_mutex_unlock(&consumer_data.lock);
+		LTTNG_UNLOCK(&consumer_data.lock);
 		rcu_read_unlock();
 
 		DBG("UST consumer discarded events command for session id %"
@@ -1869,7 +1869,7 @@ int lttng_ustconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 		DBG("UST consumer lost packets command for session id %"
 				PRIu64, id);
 		rcu_read_lock();
-		pthread_mutex_lock(&consumer_data.lock);
+		LTTNG_LOCK(&consumer_data.lock);
 
 		ht = consumer_data.stream_list_ht;
 
@@ -1889,7 +1889,7 @@ int lttng_ustconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 				break;
 			}
 		}
-		pthread_mutex_unlock(&consumer_data.lock);
+		LTTNG_UNLOCK(&consumer_data.lock);
 		rcu_read_unlock();
 
 		DBG("UST consumer lost packets command for session id %"
@@ -2051,12 +2051,12 @@ void lttng_ustconsumer_on_stream_hangup(struct lttng_consumer_stream *stream)
 	assert(stream);
 	assert(stream->ustream);
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	if (!stream->quiescent) {
 		ustctl_flush_buffer(stream->ustream, 0);
 		stream->quiescent = true;
 	}
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 	stream->hangup_flush_done = 1;
 }
 
@@ -2155,7 +2155,7 @@ int commit_one_metadata_packet(struct lttng_consumer_stream *stream)
 	ssize_t write_len;
 	int ret;
 
-	pthread_mutex_lock(&stream->chan->metadata_cache->lock);
+	LTTNG_LOCK(&stream->chan->metadata_cache->lock);
 	if (stream->chan->metadata_cache->max_offset ==
 	    stream->ust_metadata_pushed) {
 		/*
@@ -2216,7 +2216,7 @@ int commit_one_metadata_packet(struct lttng_consumer_stream *stream)
 	 */
 	ustctl_flush_buffer(stream->ustream, 1);
 end:
-	pthread_mutex_unlock(&stream->chan->metadata_cache->lock);
+	LTTNG_UNLOCK(&stream->chan->metadata_cache->lock);
 	return ret;
 }
 
@@ -2241,13 +2241,13 @@ int lttng_ustconsumer_sync_metadata(struct lttng_consumer_local_data *ctx,
 	assert(ctx);
 	assert(metadata);
 
-	pthread_mutex_unlock(&metadata->lock);
+	LTTNG_UNLOCK(&metadata->lock);
 	/*
 	 * Request metadata from the sessiond, but don't wait for the flush
 	 * because we locked the metadata thread.
 	 */
 	ret = lttng_ustconsumer_request_metadata(ctx, metadata->chan, 0, 0);
-	pthread_mutex_lock(&metadata->lock);
+	LTTNG_LOCK(&metadata->lock);
 	if (ret < 0) {
 		goto end;
 	}
@@ -2559,10 +2559,10 @@ static int get_next_subbuffer_metadata(struct lttng_consumer_stream *stream,
 				cache_empty = false;
 			}
 		} else {
-			pthread_mutex_lock(&stream->chan->metadata_cache->lock);
+			LTTNG_LOCK(&stream->chan->metadata_cache->lock);
 			cache_empty = stream->chan->metadata_cache->max_offset ==
 				      stream->ust_metadata_pushed;
-			pthread_mutex_unlock(&stream->chan->metadata_cache->lock);
+			LTTNG_UNLOCK(&stream->chan->metadata_cache->lock);
 		}
 	} while (!got_subbuffer);
 
@@ -2839,9 +2839,9 @@ void lttng_ustconsumer_close_all_metadata(struct lttng_ht *metadata_ht)
 
 		health_code_update();
 
-		pthread_mutex_lock(&stream->chan->lock);
+		LTTNG_LOCK(&stream->chan->lock);
 		lttng_ustconsumer_close_metadata(stream->chan);
-		pthread_mutex_unlock(&stream->chan->lock);
+		LTTNG_UNLOCK(&stream->chan->lock);
 
 	}
 	rcu_read_unlock();
@@ -2909,7 +2909,7 @@ int lttng_ustconsumer_request_metadata(struct lttng_consumer_local_data *ctx,
 			request.session_id, request.session_id_per_pid, request.uid,
 			request.key);
 
-	pthread_mutex_lock(&ctx->metadata_socket_lock);
+	LTTNG_LOCK(&ctx->metadata_socket_lock);
 
 	health_code_update();
 
@@ -2989,7 +2989,7 @@ int lttng_ustconsumer_request_metadata(struct lttng_consumer_local_data *ctx,
 end:
 	health_code_update();
 
-	pthread_mutex_unlock(&ctx->metadata_socket_lock);
+	LTTNG_UNLOCK(&ctx->metadata_socket_lock);
 	return ret;
 }
 

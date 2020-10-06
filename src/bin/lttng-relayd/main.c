@@ -1383,7 +1383,7 @@ static void publish_connection_local_streams(struct relay_connection *conn)
 	 * We publish all streams belonging to a session atomically wrt
 	 * session lock.
 	 */
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	rcu_read_lock();
 	cds_list_for_each_entry_rcu(stream, &session->recv_list,
 			recv_node) {
@@ -1397,7 +1397,7 @@ static void publish_connection_local_streams(struct relay_connection *conn)
 	if (session->viewer_attached) {
 		uatomic_set(&session->new_streams, 1);
 	}
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 }
 
 /*
@@ -1445,9 +1445,9 @@ static int relay_add_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 	}
 	/* This stream here has one reference on the trace. */
 
-	pthread_mutex_lock(&last_relay_stream_id_lock);
+	LTTNG_LOCK(&last_relay_stream_id_lock);
 	stream_handle = ++last_relay_stream_id;
-	pthread_mutex_unlock(&last_relay_stream_id_lock);
+	LTTNG_UNLOCK(&last_relay_stream_id_lock);
 
 	/* We pass ownership of path_name and channel_name. */
 	stream = stream_create(trace, stream_handle, path_name,
@@ -1526,9 +1526,9 @@ static int relay_close_stream(const struct lttcomm_relayd_hdr *recv_hdr,
 	 * Set last_net_seq_num before the close flag. Required by data
 	 * pending check.
 	 */
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	stream->last_net_seq_num = stream_info.last_net_seq_num;
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 
 	/*
 	 * This is one of the conditions which may trigger a stream close
@@ -1625,7 +1625,7 @@ int relay_reset_metadata(const struct lttcomm_relayd_hdr *recv_hdr,
 		ret = -1;
 		goto end;
 	}
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	if (!stream->is_metadata) {
 		ret = -1;
 		goto end_unlock;
@@ -1640,7 +1640,7 @@ int relay_reset_metadata(const struct lttcomm_relayd_hdr *recv_hdr,
 	}
 
 end_unlock:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 	stream_put(stream);
 
 end:
@@ -1781,7 +1781,7 @@ static int relay_recv_metadata(const struct lttcomm_relayd_hdr *recv_hdr,
 		goto end;
 	}
 
-	pthread_mutex_lock(&metadata_stream->lock);
+	LTTNG_LOCK(&metadata_stream->lock);
 
 	metadata_fd = stream_fd_get_fd(metadata_stream->stream_fd);
 	if (metadata_fd < 0) {
@@ -1811,7 +1811,7 @@ static int relay_recv_metadata(const struct lttcomm_relayd_hdr *recv_hdr,
 end_put_fd:
 	stream_fd_put_fd(metadata_stream->stream_fd);
 end_put:
-	pthread_mutex_unlock(&metadata_stream->lock);
+	LTTNG_UNLOCK(&metadata_stream->lock);
 	stream_put(metadata_stream);
 end:
 	return ret;
@@ -1925,7 +1925,7 @@ static int relay_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 		goto end;
 	}
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 
 	DBG("Data pending for stream id %" PRIu64 " prev_seq %" PRIu64
 			" and last_seq %" PRIu64, msg.stream_id,
@@ -1941,7 +1941,7 @@ static int relay_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 	}
 
 	stream->data_pending_check_done = true;
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 
 	stream_put(stream);
 end:
@@ -1998,9 +1998,9 @@ static int relay_quiescent_control(const struct lttcomm_relayd_hdr *recv_hdr,
 	if (!stream) {
 		goto reply;
 	}
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	stream->data_pending_check_done = true;
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 
 	DBG("Relay quiescent control pending flag set to %" PRIu64, msg.stream_id);
 	stream_put(stream);
@@ -2071,9 +2071,9 @@ static int relay_begin_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 			continue;
 		}
 		if (stream->trace->session->id == msg.session_id) {
-			pthread_mutex_lock(&stream->lock);
+			LTTNG_LOCK(&stream->lock);
 			stream->data_pending_check_done = false;
-			pthread_mutex_unlock(&stream->lock);
+			LTTNG_UNLOCK(&stream->lock);
 			DBG("Set begin data pending flag to stream %" PRIu64,
 					stream->stream_handle);
 		}
@@ -2150,18 +2150,18 @@ static int relay_end_data_pending(const struct lttcomm_relayd_hdr *recv_hdr,
 			stream_put(stream);
 			continue;
 		}
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 		if (!stream->data_pending_check_done) {
 			if (!stream->closed || !(((int64_t) (stream->prev_seq - stream->last_net_seq_num)) >= 0)) {
 				is_data_inflight = 1;
 				DBG("Data is still in flight for stream %" PRIu64,
 						stream->stream_handle);
-				pthread_mutex_unlock(&stream->lock);
+				LTTNG_UNLOCK(&stream->lock);
 				stream_put(stream);
 				break;
 			}
 		}
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 		stream_put(stream);
 	}
 	rcu_read_unlock();
@@ -2242,7 +2242,7 @@ static int relay_recv_index(const struct lttcomm_relayd_hdr *recv_hdr,
 		ret = -1;
 		goto end;
 	}
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 
 	/* Live beacon handling */
 	if (index_info.packet_size == 0) {
@@ -2297,7 +2297,7 @@ static int relay_recv_index(const struct lttcomm_relayd_hdr *recv_hdr,
 	}
 
 end_stream_put:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 	stream_put(stream);
 
 end:
@@ -2785,7 +2785,7 @@ static enum relay_connection_status relay_process_data_receive_header(
 		goto end;
 	}
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 
 	/* Check if a rotation is needed. */
 	if (stream->tracefile_size > 0 &&
@@ -2818,7 +2818,7 @@ static enum relay_connection_status relay_process_data_receive_header(
 
 	ret = 0;
 end_stream_unlock:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 	stream_put(stream);
 end:
 	return status;
@@ -2852,7 +2852,7 @@ static enum relay_connection_status relay_process_data_receive_payload(
 		goto end;
 	}
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 	session = stream->trace->session;
 	if (!conn->session) {
 		ret = connection_set_session(conn, session);
@@ -2970,15 +2970,15 @@ end_put_fd:
 	stream_fd_put_fd(stream->stream_fd);
 end_stream_unlock:
 	close_requested = stream->close_requested;
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 	if (close_requested && left_to_receive == 0) {
 		try_stream_close(stream);
 	}
 
 	if (new_stream) {
-		pthread_mutex_lock(&session->lock);
+		LTTNG_LOCK(&session->lock);
 		uatomic_set(&session->new_streams, 1);
-		pthread_mutex_unlock(&session->lock);
+		LTTNG_UNLOCK(&session->lock);
 	}
 
 	stream_put(stream);

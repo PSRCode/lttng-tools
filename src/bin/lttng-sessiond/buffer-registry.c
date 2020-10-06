@@ -429,10 +429,10 @@ void buffer_reg_stream_add(struct buffer_reg_stream *stream,
 	assert(stream);
 	assert(channel);
 
-	pthread_mutex_lock(&channel->stream_list_lock);
+	LTTNG_LOCK(&channel->stream_list_lock);
 	cds_list_add_tail(&stream->lnode, &channel->streams);
 	channel->stream_count++;
-	pthread_mutex_unlock(&channel->stream_list_lock);
+	LTTNG_UNLOCK(&channel->stream_list_lock);
 }
 
 /*

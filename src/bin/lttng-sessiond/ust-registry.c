@@ -950,9 +950,9 @@ int ust_registry_session_init(struct ust_registry_session **sessionp,
 		goto error;
 	}
 
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	ret = ust_metadata_session_statedump(session, app, major, minor);
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 	if (ret) {
 		ERR("Failed to generate session metadata (errno = %d)", ret);
 		goto error;

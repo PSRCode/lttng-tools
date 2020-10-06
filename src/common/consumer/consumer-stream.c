@@ -51,25 +51,25 @@ static void free_stream_rcu(struct rcu_head *head)
 
 static void consumer_stream_data_lock_all(struct lttng_consumer_stream *stream)
 {
-	pthread_mutex_lock(&stream->chan->lock);
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->chan->lock);
+	LTTNG_LOCK(&stream->lock);
 }
 
 static void consumer_stream_data_unlock_all(struct lttng_consumer_stream *stream)
 {
-	pthread_mutex_unlock(&stream->lock);
-	pthread_mutex_unlock(&stream->chan->lock);
+	LTTNG_UNLOCK(&stream->lock);
+	LTTNG_UNLOCK(&stream->chan->lock);
 }
 
 static void consumer_stream_metadata_lock_all(struct lttng_consumer_stream *stream)
 {
 	consumer_stream_data_lock_all(stream);
-	pthread_mutex_lock(&stream->metadata_rdv_lock);
+	LTTNG_LOCK(&stream->metadata_rdv_lock);
 }
 
 static void consumer_stream_metadata_unlock_all(struct lttng_consumer_stream *stream)
 {
-	pthread_mutex_unlock(&stream->metadata_rdv_lock);
+	LTTNG_UNLOCK(&stream->metadata_rdv_lock);
 	consumer_stream_data_unlock_all(stream);
 }
 
@@ -229,7 +229,7 @@ static int do_sync_metadata(struct lttng_consumer_stream *metadata,
 		 *   metadata thread
 		 * - Unlock the metadata_rdv_lock
 		 */
-		pthread_mutex_lock(&metadata->lock);
+		LTTNG_LOCK(&metadata->lock);
 
 		/*
 		 * There is a possibility that we were able to acquire a reference on the
@@ -280,26 +280,26 @@ static int do_sync_metadata(struct lttng_consumer_stream *metadata,
 		 * finishes consuming the metadata and continue execution.
 		 */
 
-		pthread_mutex_lock(&metadata->metadata_rdv_lock);
+		LTTNG_LOCK(&metadata->metadata_rdv_lock);
 
 		/*
 		 * Release metadata stream lock so the metadata thread can process it.
 		 */
-		pthread_mutex_unlock(&metadata->lock);
+		LTTNG_UNLOCK(&metadata->lock);
 
 		/*
 		 * Wait on the rendez-vous point. Once woken up, it means the metadata was
 		 * consumed and thus synchronization is achieved.
 		 */
 		pthread_cond_wait(&metadata->metadata_rdv, &metadata->metadata_rdv_lock);
-		pthread_mutex_unlock(&metadata->metadata_rdv_lock);
+		LTTNG_UNLOCK(&metadata->metadata_rdv_lock);
 	} while (ret == EAGAIN);
 
 	/* Success */
 	return 0;
 
 end_unlock_mutex:
-	pthread_mutex_unlock(&metadata->lock);
+	LTTNG_UNLOCK(&metadata->lock);
 	return ret;
 }
 
@@ -362,21 +362,21 @@ static int consumer_stream_sync_metadata_index(
 	int ret;
 
 	/* Block until all the metadata is sent. */
-	pthread_mutex_lock(&stream->metadata_timer_lock);
+	LTTNG_LOCK(&stream->metadata_timer_lock);
 	assert(!stream->missed_metadata_flush);
 	stream->waiting_on_metadata = true;
-	pthread_mutex_unlock(&stream->metadata_timer_lock);
+	LTTNG_UNLOCK(&stream->metadata_timer_lock);
 
 	ret = consumer_stream_sync_metadata(ctx, stream->session_id);
 
-	pthread_mutex_lock(&stream->metadata_timer_lock);
+	LTTNG_LOCK(&stream->metadata_timer_lock);
 	stream->waiting_on_metadata = false;
 	if (stream->missed_metadata_flush) {
 		stream->missed_metadata_flush = false;
-		pthread_mutex_unlock(&stream->metadata_timer_lock);
+		LTTNG_UNLOCK(&stream->metadata_timer_lock);
 		(void) stream->read_subbuffer_ops.send_live_beacon(stream);
 	} else {
-		pthread_mutex_unlock(&stream->metadata_timer_lock);
+		LTTNG_UNLOCK(&stream->metadata_timer_lock);
 	}
 	if (ret < 0) {
 		goto end;
@@ -567,7 +567,7 @@ void consumer_stream_relayd_close(struct lttng_consumer_stream *stream,
 	}
 
 	/* Closing streams requires to lock the control socket. */
-	pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+	LTTNG_LOCK(&relayd->ctrl_sock_mutex);
 	ret = relayd_send_close_stream(&relayd->control_sock,
 			stream->relayd_stream_id,
 			stream->next_net_seq_num - 1);
@@ -575,7 +575,7 @@ void consumer_stream_relayd_close(struct lttng_consumer_stream *stream,
 		ERR("Relayd send close stream failed. Cleaning up relayd %" PRIu64 ".", relayd->id);
 		lttng_consumer_cleanup_relayd(relayd);
 	}
-	pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+	LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 
 	/* Both conditions are met, we destroy the relayd. */
 	if (uatomic_read(&relayd->refcount) == 0 &&
@@ -811,9 +811,9 @@ void consumer_stream_destroy(struct lttng_consumer_stream *stream,
 		 * stream thus being globally visible.
 		 */
 		if (stream->globally_visible) {
-			pthread_mutex_lock(&consumer_data.lock);
-			pthread_mutex_lock(&stream->chan->lock);
-			pthread_mutex_lock(&stream->lock);
+			LTTNG_LOCK(&consumer_data.lock);
+			LTTNG_LOCK(&stream->chan->lock);
+			LTTNG_LOCK(&stream->lock);
 			/* Remove every reference of the stream in the consumer. */
 			consumer_stream_delete(stream, ht);
 
@@ -825,9 +825,9 @@ void consumer_stream_destroy(struct lttng_consumer_stream *stream,
 			/* Indicates that the consumer data state MUST be updated after this. */
 			consumer_data.need_update = 1;
 
-			pthread_mutex_unlock(&stream->lock);
-			pthread_mutex_unlock(&stream->chan->lock);
-			pthread_mutex_unlock(&consumer_data.lock);
+			LTTNG_UNLOCK(&stream->lock);
+			LTTNG_UNLOCK(&stream->chan->lock);
+			LTTNG_UNLOCK(&consumer_data.lock);
 		} else {
 			/*
 			 * If the stream is not visible globally, this needs to be done
@@ -866,7 +866,7 @@ int consumer_stream_write_index(struct lttng_consumer_stream *stream,
 
 		relayd = consumer_find_relayd(stream->relayd_id);
 		if (relayd) {
-			pthread_mutex_lock(&relayd->ctrl_sock_mutex);
+			LTTNG_LOCK(&relayd->ctrl_sock_mutex);
 			ret = relayd_send_index(&relayd->control_sock, element,
 				stream->relayd_stream_id, stream->next_net_seq_num - 1);
 			if (ret < 0) {
@@ -878,7 +878,7 @@ int consumer_stream_write_index(struct lttng_consumer_stream *stream,
 				lttng_consumer_cleanup_relayd(relayd);
 				ret = -1;
 			}
-			pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
+			LTTNG_UNLOCK(&relayd->ctrl_sock_mutex);
 		} else {
 			ERR("Stream %" PRIu64 " relayd ID %" PRIu64 " unknown. Can't write index.",
 					stream->key, stream->relayd_id);

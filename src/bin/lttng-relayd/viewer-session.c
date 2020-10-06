@@ -52,7 +52,7 @@ int viewer_session_attach(struct relay_viewer_session *vsession,
 		ret = -1;
 		goto end;
 	}
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	if (session->viewer_attached) {
 		ret = -1;
 	} else {
@@ -60,17 +60,17 @@ int viewer_session_attach(struct relay_viewer_session *vsession,
 	}
 
 	if (!ret) {
-		pthread_mutex_lock(&vsession->session_list_lock);
+		LTTNG_LOCK(&vsession->session_list_lock);
 		/* Ownership is transfered to the list. */
 		cds_list_add_rcu(&session->viewer_session_node,
 				&vsession->session_list);
-		pthread_mutex_unlock(&vsession->session_list_lock);
+		LTTNG_UNLOCK(&vsession->session_list_lock);
 	} else {
 		/* Put our local ref. */
 		session_put(session);
 	}
 	/* Safe since we know the session exists. */
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 end:
 	return ret;
 }
@@ -81,7 +81,7 @@ static int viewer_session_detach(struct relay_viewer_session *vsession,
 {
 	int ret = 0;
 
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	if (!session->viewer_attached) {
 		ret = -1;
 	} else {
@@ -89,14 +89,14 @@ static int viewer_session_detach(struct relay_viewer_session *vsession,
 	}
 
 	if (!ret) {
-		pthread_mutex_lock(&vsession->session_list_lock);
+		LTTNG_LOCK(&vsession->session_list_lock);
 		cds_list_del_rcu(&session->viewer_session_node);
-		pthread_mutex_unlock(&vsession->session_list_lock);
+		LTTNG_UNLOCK(&vsession->session_list_lock);
 		/* Release reference held by the list. */
 		session_put(session);
 	}
 	/* Safe since we know the session exists. */
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 	return ret;
 }
 
@@ -162,7 +162,7 @@ int viewer_session_is_attached(struct relay_viewer_session *vsession,
 	struct relay_session *iter;
 	int found = 0;
 
-	pthread_mutex_lock(&session->lock);
+	LTTNG_LOCK(&session->lock);
 	if (!vsession) {
 		goto end;
 	}
@@ -181,6 +181,6 @@ int viewer_session_is_attached(struct relay_viewer_session *vsession,
 end_rcu_unlock:
 	rcu_read_unlock();
 end:
-	pthread_mutex_unlock(&session->lock);
+	LTTNG_UNLOCK(&session->lock);
 	return found;
 }

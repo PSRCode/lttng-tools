@@ -69,7 +69,7 @@ struct relay_viewer_stream *viewer_stream_create(struct relay_stream *stream,
 	}
 	vstream->stream = stream;
 
-	pthread_mutex_lock(&stream->lock);
+	LTTNG_LOCK(&stream->lock);
 
 	if (stream->is_metadata && stream->trace->viewer_metadata_stream) {
 		ERR("Cannot attach viewer metadata stream to trace (busy).");
@@ -139,7 +139,7 @@ struct relay_viewer_stream *viewer_stream_create(struct relay_stream *stream,
 		rcu_assign_pointer(stream->trace->viewer_metadata_stream,
 				vstream);
 	}
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 
 	/* Globally visible after the add unique. */
 	lttng_ht_node_init_u64(&vstream->stream_n, stream->stream_handle);
@@ -150,7 +150,7 @@ struct relay_viewer_stream *viewer_stream_create(struct relay_stream *stream,
 	return vstream;
 
 error_unlock:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 error:
 	if (vstream) {
 		viewer_stream_destroy(vstream);
@@ -199,12 +199,12 @@ bool viewer_stream_get(struct relay_viewer_stream *vstream)
 {
 	bool has_ref = false;
 
-	pthread_mutex_lock(&vstream->reflock);
+	LTTNG_LOCK(&vstream->reflock);
 	if (vstream->ref.refcount != 0) {
 		has_ref = true;
 		urcu_ref_get(&vstream->ref);
 	}
-	pthread_mutex_unlock(&vstream->reflock);
+	LTTNG_UNLOCK(&vstream->reflock);
 
 	return has_ref;
 }
@@ -239,9 +239,9 @@ end:
 void viewer_stream_put(struct relay_viewer_stream *vstream)
 {
 	rcu_read_lock();
-	pthread_mutex_lock(&vstream->reflock);
+	LTTNG_LOCK(&vstream->reflock);
 	urcu_ref_put(&vstream->ref, viewer_stream_release);
-	pthread_mutex_unlock(&vstream->reflock);
+	LTTNG_UNLOCK(&vstream->reflock);
 	rcu_read_unlock();
 }
 

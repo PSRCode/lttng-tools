@@ -172,7 +172,7 @@ int lttng_kconsumer_snapshot_channel(uint64_t key, char *path,
 		/*
 		 * Lock stream because we are about to change its state.
 		 */
-		pthread_mutex_lock(&stream->lock);
+		LTTNG_LOCK(&stream->lock);
 
 		/*
 		 * Assign the received relayd ID so we can use it for streaming. The streams
@@ -340,7 +340,7 @@ int lttng_kconsumer_snapshot_channel(uint64_t key, char *path,
 			close_relayd_stream(stream);
 			stream->relayd_id = (uint64_t) -1ULL;
 		}
-		pthread_mutex_unlock(&stream->lock);
+		LTTNG_UNLOCK(&stream->lock);
 	}
 
 	/* All good! */
@@ -353,7 +353,7 @@ error_put_subbuf:
 		ERR("Snapshot kernctl_put_subbuf error path");
 	}
 end_unlock:
-	pthread_mutex_unlock(&stream->lock);
+	LTTNG_UNLOCK(&stream->lock);
 end:
 	rcu_read_unlock();
 	return ret;
@@ -388,7 +388,7 @@ static int lttng_kconsumer_snapshot_metadata(uint64_t key, char *path,
 
 	metadata_stream = metadata_channel->metadata_stream;
 	assert(metadata_stream);
-	pthread_mutex_lock(&metadata_stream->lock);
+	LTTNG_LOCK(&metadata_stream->lock);
 
 	/* Flag once that we have a valid relayd for the stream. */
 	if (relayd_id != (uint64_t) -1ULL) {
@@ -446,7 +446,7 @@ static int lttng_kconsumer_snapshot_metadata(uint64_t key, char *path,
 
 	ret = 0;
 error_snapshot:
-	pthread_mutex_unlock(&metadata_stream->lock);
+	LTTNG_UNLOCK(&metadata_stream->lock);
 	cds_list_del(&metadata_stream->send_node);
 	consumer_stream_destroy(metadata_stream, NULL);
 	metadata_channel->metadata_stream = NULL;
@@ -654,7 +654,7 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 
 		health_code_update();
 
-		pthread_mutex_lock(&channel->lock);
+		LTTNG_LOCK(&channel->lock);
 		new_stream = consumer_stream_create(
 				channel,
 				channel->key,
@@ -677,7 +677,7 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 				lttng_consumer_send_error(ctx, LTTCOMM_CONSUMERD_OUTFD_ERROR);
 				break;
 			}
-			pthread_mutex_unlock(&channel->lock);
+			LTTNG_UNLOCK(&channel->lock);
 			goto end_nosignal;
 		}
 
@@ -685,7 +685,7 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 		ret = kernctl_get_max_subbuf_size(new_stream->wait_fd,
 				&new_stream->max_sb_size);
 		if (ret < 0) {
-			pthread_mutex_unlock(&channel->lock);
+			LTTNG_UNLOCK(&channel->lock);
 			ERR("Failed to get kernel maximal subbuffer size");
 			goto end_nosignal;
 		}
@@ -732,7 +732,7 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 					"relayd id %" PRIu64, new_stream->name,
 					new_stream->relayd_id);
 			cds_list_add(&new_stream->send_node, &channel->streams.head);
-			pthread_mutex_unlock(&channel->lock);
+			LTTNG_UNLOCK(&channel->lock);
 			break;
 		}
 
@@ -741,7 +741,7 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 			ret = consumer_send_relayd_stream(new_stream,
 					new_stream->chan->pathname);
 			if (ret < 0) {
-				pthread_mutex_unlock(&channel->lock);
+				LTTNG_UNLOCK(&channel->lock);
 				consumer_stream_free(new_stream);
 				goto end_nosignal;
 			}
@@ -755,12 +755,12 @@ int lttng_kconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 				ret = consumer_send_relayd_streams_sent(
 						new_stream->relayd_id);
 				if (ret < 0) {
-					pthread_mutex_unlock(&channel->lock);
+					LTTNG_UNLOCK(&channel->lock);
 					goto end_nosignal;
 				}
 			}
 		}
-		pthread_mutex_unlock(&channel->lock);
+		LTTNG_UNLOCK(&channel->lock);
 
 		/* Get the right pipe where the stream will be sent. */
 		if (new_stream->metadata_flag) {

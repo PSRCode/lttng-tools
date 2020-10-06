@@ -1169,10 +1169,10 @@ int kernel_snapshot_record(struct ltt_kernel_session *ksess,
 		saved_output = ksess->consumer;
 		ksess->consumer = output->consumer;
 
-		pthread_mutex_lock(socket->lock);
+		LTTNG_LOCK(socket->lock);
 		/* This stream must not be monitored by the consumer. */
 		ret = kernel_consumer_add_metadata(socket, ksess, 0);
-		pthread_mutex_unlock(socket->lock);
+		LTTNG_UNLOCK(socket->lock);
 		/* Put back the saved consumer output into the session. */
 		ksess->consumer = saved_output;
 		if (ret < 0) {

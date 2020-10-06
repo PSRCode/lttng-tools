@@ -246,10 +246,10 @@ int consumer_metadata_cache_flushed(struct lttng_consumer_channel *channel,
 	 * taking this lock in a timer handler would cause a deadlock).
 	 */
 	if (!timer) {
-		pthread_mutex_lock(&channel->lock);
+		LTTNG_LOCK(&channel->lock);
 	}
-	pthread_mutex_lock(&channel->timer_lock);
-	pthread_mutex_lock(&channel->metadata_cache->lock);
+	LTTNG_LOCK(&channel->timer_lock);
+	LTTNG_LOCK(&channel->metadata_cache->lock);
 
 	metadata_stream = channel->metadata_stream;
 
@@ -270,10 +270,10 @@ int consumer_metadata_cache_flushed(struct lttng_consumer_channel *channel,
 		ret = 1;
 	}
 
-	pthread_mutex_unlock(&channel->metadata_cache->lock);
-	pthread_mutex_unlock(&channel->timer_lock);
+	LTTNG_UNLOCK(&channel->metadata_cache->lock);
+	LTTNG_UNLOCK(&channel->timer_lock);
 	if (!timer) {
-		pthread_mutex_unlock(&channel->lock);
+		LTTNG_UNLOCK(&channel->lock);
 	}
 
 	return ret;

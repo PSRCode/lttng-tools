@@ -211,7 +211,7 @@ int consumer_send_destroy_relayd(struct consumer_socket *sock,
 	msg.cmd_type = LTTNG_CONSUMER_DESTROY_RELAYD;
 	msg.u.destroy_relayd.net_seq_idx = consumer->net_seq_index;
 
-	pthread_mutex_lock(sock->lock);
+	LTTNG_LOCK(sock->lock);
 	ret = consumer_socket_send(sock, &msg, sizeof(msg));
 	if (ret < 0) {
 		goto error;
@@ -223,7 +223,7 @@ int consumer_send_destroy_relayd(struct consumer_socket *sock,
 	DBG2("Consumer send destroy relayd command done");
 
 error:
-	pthread_mutex_unlock(sock->lock);
+	LTTNG_UNLOCK(sock->lock);
 	return ret;
 }
 
@@ -1139,10 +1139,10 @@ int consumer_is_data_pending(uint64_t session_id,
 	rcu_read_lock();
 	cds_lfht_for_each_entry(consumer->socks->ht, &iter.iter, socket,
 			node.node) {
-		pthread_mutex_lock(socket->lock);
+		LTTNG_LOCK(socket->lock);
 		ret = consumer_socket_send(socket, &msg, sizeof(msg));
 		if (ret < 0) {
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			goto error_unlock;
 		}
 
@@ -1153,10 +1153,10 @@ int consumer_is_data_pending(uint64_t session_id,
 
 		ret = consumer_socket_recv(socket, &ret_code, sizeof(ret_code));
 		if (ret < 0) {
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			goto error_unlock;
 		}
-		pthread_mutex_unlock(socket->lock);
+		LTTNG_UNLOCK(socket->lock);
 
 		if (ret_code == 1) {
 			break;
@@ -1191,7 +1191,7 @@ int consumer_flush_channel(struct consumer_socket *socket, uint64_t key)
 	msg.cmd_type = LTTNG_CONSUMER_FLUSH_CHANNEL;
 	msg.u.flush_channel.key = key;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	ret = consumer_send_msg(socket, &msg);
@@ -1201,7 +1201,7 @@ int consumer_flush_channel(struct consumer_socket *socket, uint64_t key)
 
 end:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }
 
@@ -1223,7 +1223,7 @@ int consumer_clear_quiescent_channel(struct consumer_socket *socket, uint64_t ke
 	msg.cmd_type = LTTNG_CONSUMER_CLEAR_QUIESCENT_CHANNEL;
 	msg.u.clear_quiescent_channel.key = key;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	ret = consumer_send_msg(socket, &msg);
@@ -1233,7 +1233,7 @@ int consumer_clear_quiescent_channel(struct consumer_socket *socket, uint64_t ke
 
 end:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }
 
@@ -1257,7 +1257,7 @@ int consumer_close_metadata(struct consumer_socket *socket,
 	msg.cmd_type = LTTNG_CONSUMER_CLOSE_METADATA;
 	msg.u.close_metadata.key = metadata_key;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	ret = consumer_send_msg(socket, &msg);
@@ -1267,7 +1267,7 @@ int consumer_close_metadata(struct consumer_socket *socket,
 
 end:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }
 
@@ -1290,7 +1290,7 @@ int consumer_setup_metadata(struct consumer_socket *socket,
 	msg.cmd_type = LTTNG_CONSUMER_SETUP_METADATA;
 	msg.u.setup_metadata.key = metadata_key;
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	health_code_update();
 
 	ret = consumer_send_msg(socket, &msg);
@@ -1300,7 +1300,7 @@ int consumer_setup_metadata(struct consumer_socket *socket,
 
 end:
 	health_code_update();
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	return ret;
 }
 
@@ -1321,7 +1321,7 @@ int consumer_push_metadata(struct consumer_socket *socket,
 
 	DBG2("Consumer push metadata to consumer socket %d", *socket->fd_ptr);
 
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 
 	memset(&msg, 0, sizeof(msg));
 	msg.cmd_type = LTTNG_CONSUMER_PUSH_METADATA;
@@ -1351,7 +1351,7 @@ int consumer_push_metadata(struct consumer_socket *socket,
 	}
 
 end:
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	health_code_update();
 	return ret;
 }
@@ -1416,9 +1416,9 @@ int consumer_snapshot_channel(struct consumer_socket *socket, uint64_t key,
 	}
 
 	health_code_update();
-	pthread_mutex_lock(socket->lock);
+	LTTNG_LOCK(socket->lock);
 	ret = consumer_send_msg(socket, &msg);
-	pthread_mutex_unlock(socket->lock);
+	LTTNG_UNLOCK(socket->lock);
 	if (ret < 0) {
 		goto error;
 	}
@@ -1455,10 +1455,10 @@ int consumer_get_discarded_events(uint64_t session_id, uint64_t channel_key,
 	cds_lfht_for_each_entry(consumer->socks->ht, &iter.iter, socket,
 			node.node) {
 		uint64_t consumer_discarded = 0;
-		pthread_mutex_lock(socket->lock);
+		LTTNG_LOCK(socket->lock);
 		ret = consumer_socket_send(socket, &msg, sizeof(msg));
 		if (ret < 0) {
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			goto end;
 		}
 
@@ -1470,10 +1470,10 @@ int consumer_get_discarded_events(uint64_t session_id, uint64_t channel_key,
 				sizeof(consumer_discarded));
 		if (ret < 0) {
 			ERR("get discarded events");
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			goto end;
 		}
-		pthread_mutex_unlock(socket->lock);
+		LTTNG_UNLOCK(socket->lock);
 		*discarded += consumer_discarded;
 	}
 	ret = 0;
@@ -1512,10 +1512,10 @@ int consumer_get_lost_packets(uint64_t session_id, uint64_t channel_key,
 	cds_lfht_for_each_entry(consumer->socks->ht, &iter.iter, socket,
 			node.node) {
 		uint64_t consumer_lost = 0;
-		pthread_mutex_lock(socket->lock);
+		LTTNG_LOCK(socket->lock);
 		ret = consumer_socket_send(socket, &msg, sizeof(msg));
 		if (ret < 0) {
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			goto end;
 		}
 
@@ -1527,10 +1527,10 @@ int consumer_get_lost_packets(uint64_t session_id, uint64_t channel_key,
 				sizeof(consumer_lost));
 		if (ret < 0) {
 			ERR("get lost packets");
-			pthread_mutex_unlock(socket->lock);
+			LTTNG_UNLOCK(socket->lock);
 			goto end;
 		}
-		pthread_mutex_unlock(socket->lock);
+		LTTNG_UNLOCK(socket->lock);
 		*lost += consumer_lost;
 	}
 	ret = 0;

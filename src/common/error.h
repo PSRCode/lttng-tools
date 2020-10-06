@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include <urcu/tls-compat.h>
 #include <common/compat/time.h>
+#include <pthread.h>
 
 #ifndef _GNU_SOURCE
 #error "lttng-tools error.h needs _GNU_SOURCE"
@@ -235,5 +236,24 @@ const char *error_get_str(int32_t code);
  * printed in the log.
  */
 const char *log_add_time();
+
+#define LTTNG_LOCK(lock)                             \
+	do {                                         \
+		int ret;                             \
+		ret = pthread_mutex_trylock(lock);   \
+		if (ret == EBUSY) {                  \
+			DBG3("Lock is busy: " # lock " %p", lock); \
+			pthread_mutex_lock(lock);    \
+		} else if (ret) {                    \
+			abort();                     \
+		}                                    \
+		DBG3("Acquired lock " # lock " %p", lock); \
+	} while (0)
+
+#define LTTNG_UNLOCK(lock) \
+	do {               \
+	DBG3("Releasing lock " # lock " %p", lock); \
+	pthread_mutex_unlock(lock); \
+} while (0);
 
 #endif /* _ERROR_H */

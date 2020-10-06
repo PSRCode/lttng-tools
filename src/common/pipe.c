@@ -29,7 +29,7 @@
  */
 static void lock_read_side(struct lttng_pipe *pipe)
 {
-	pthread_mutex_lock(&pipe->read_mutex);
+	LTTNG_LOCK(&pipe->read_mutex);
 }
 
 /*
@@ -37,7 +37,7 @@ static void lock_read_side(struct lttng_pipe *pipe)
  */
 static void unlock_read_side(struct lttng_pipe *pipe)
 {
-	pthread_mutex_unlock(&pipe->read_mutex);
+	LTTNG_UNLOCK(&pipe->read_mutex);
 }
 
 /*
@@ -45,7 +45,7 @@ static void unlock_read_side(struct lttng_pipe *pipe)
  */
 static void lock_write_side(struct lttng_pipe *pipe)
 {
-	pthread_mutex_lock(&pipe->write_mutex);
+	LTTNG_LOCK(&pipe->write_mutex);
 }
 
 /*
@@ -53,7 +53,7 @@ static void lock_write_side(struct lttng_pipe *pipe)
  */
 static void unlock_write_side(struct lttng_pipe *pipe)
 {
-	pthread_mutex_unlock(&pipe->write_mutex);
+	LTTNG_UNLOCK(&pipe->write_mutex);
 }
 
 /*

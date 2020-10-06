@@ -1006,11 +1006,11 @@ static int update_kernel_stream(struct consumer_data *consumer_data, int fd)
 			rcu_read_lock();
 			cds_lfht_for_each_entry(ksess->consumer->socks->ht,
 					&iter.iter, socket, node.node) {
-				pthread_mutex_lock(socket->lock);
+				LTTNG_LOCK(socket->lock);
 				ret = kernel_consumer_send_channel_stream(socket,
 						channel, ksess,
 						session->output_traces ? 1 : 0);
-				pthread_mutex_unlock(socket->lock);
+				LTTNG_UNLOCK(socket->lock);
 				if (ret < 0) {
 					rcu_read_unlock();
 					goto error;
@@ -1231,7 +1231,7 @@ error_testpoint:
  */
 static void signal_consumer_condition(struct consumer_data *data, int state)
 {
-	pthread_mutex_lock(&data->cond_mutex);
+	LTTNG_LOCK(&data->cond_mutex);
 
 	/*
 	 * The state is set before signaling. It can be any value, it's the waiter
@@ -1246,7 +1246,7 @@ static void signal_consumer_condition(struct consumer_data *data, int state)
 	data->consumer_thread_is_ready = state;
 	(void) pthread_cond_signal(&data->cond);
 
-	pthread_mutex_unlock(&data->cond_mutex);
+	LTTNG_UNLOCK(&data->cond_mutex);
 }
 
 /*
@@ -1513,7 +1513,7 @@ error:
 	 * thread might be using them so get exclusive access which will abort all
 	 * other consumer command by other threads.
 	 */
-	pthread_mutex_lock(&consumer_data->lock);
+	LTTNG_LOCK(&consumer_data->lock);
 
 	/* Immediately set the consumerd state to stopped */
 	if (consumer_data->type == LTTNG_CONSUMER_KERNEL) {
@@ -1556,7 +1556,7 @@ error:
 
 	unlink(consumer_data->err_unix_sock_path);
 	unlink(consumer_data->cmd_unix_sock_path);
-	pthread_mutex_unlock(&consumer_data->lock);
+	LTTNG_UNLOCK(&consumer_data->lock);
 
 	/* Cleanup metadata socket mutex. */
 	if (consumer_data->metadata_sock.lock) {
@@ -2413,7 +2413,7 @@ static int spawn_consumer_thread(struct consumer_data *consumer_data)
 	}
 
 	/* We are about to wait on a pthread condition */
-	pthread_mutex_lock(&consumer_data->cond_mutex);
+	LTTNG_LOCK(&consumer_data->cond_mutex);
 
 	/* Get time for sem_timedwait absolute timeout */
 	clock_ret = lttng_clock_gettime(CLOCK_MONOTONIC, &timeout);
@@ -2451,7 +2451,7 @@ static int spawn_consumer_thread(struct consumer_data *consumer_data)
 	}
 
 	/* Release the pthread condition */
-	pthread_mutex_unlock(&consumer_data->cond_mutex);
+	LTTNG_UNLOCK(&consumer_data->cond_mutex);
 
 	if (ret != 0) {
 		errno = ret;
@@ -2476,13 +2476,13 @@ static int spawn_consumer_thread(struct consumer_data *consumer_data)
 		goto error;
 	}
 
-	pthread_mutex_lock(&consumer_data->pid_mutex);
+	LTTNG_LOCK(&consumer_data->pid_mutex);
 	if (consumer_data->pid == 0) {
 		ERR("Consumerd did not start");
-		pthread_mutex_unlock(&consumer_data->pid_mutex);
+		LTTNG_UNLOCK(&consumer_data->pid_mutex);
 		goto error;
 	}
-	pthread_mutex_unlock(&consumer_data->pid_mutex);
+	LTTNG_UNLOCK(&consumer_data->pid_mutex);
 
 	return 0;
 
@@ -2694,23 +2694,23 @@ static int start_consumerd(struct consumer_data *consumer_data)
 		goto error;
 	}
 
-	pthread_mutex_lock(&consumer_data->pid_mutex);
+	LTTNG_LOCK(&consumer_data->pid_mutex);
 	if (consumer_data->pid != 0) {
-		pthread_mutex_unlock(&consumer_data->pid_mutex);
+		LTTNG_UNLOCK(&consumer_data->pid_mutex);
 		goto end;
 	}
 
 	ret = spawn_consumerd(consumer_data);
 	if (ret < 0) {
 		ERR("Spawning consumerd failed");
-		pthread_mutex_unlock(&consumer_data->pid_mutex);
+		LTTNG_UNLOCK(&consumer_data->pid_mutex);
 		goto error;
 	}
 
 	/* Setting up the consumer_data pid */
 	consumer_data->pid = ret;
 	DBG2("Consumer pid %d", consumer_data->pid);
-	pthread_mutex_unlock(&consumer_data->pid_mutex);
+	LTTNG_UNLOCK(&consumer_data->pid_mutex);
 
 	DBG2("Spawning consumer control thread");
 	ret = spawn_consumer_thread(consumer_data);
@@ -3060,13 +3060,13 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int sock,
 
 	/* Deny register consumer if we already have a spawned consumer. */
 	if (cmd_ctx->lsm->cmd_type == LTTNG_REGISTER_CONSUMER) {
-		pthread_mutex_lock(&kconsumer_data.pid_mutex);
+		LTTNG_LOCK(&kconsumer_data.pid_mutex);
 		if (kconsumer_data.pid > 0) {
 			ret = LTTNG_ERR_KERN_CONSUMER_FAIL;
-			pthread_mutex_unlock(&kconsumer_data.pid_mutex);
+			LTTNG_UNLOCK(&kconsumer_data.pid_mutex);
 			goto error;
 		}
-		pthread_mutex_unlock(&kconsumer_data.pid_mutex);
+		LTTNG_UNLOCK(&kconsumer_data.pid_mutex);
 	}
 
 	/*
@@ -3198,10 +3198,10 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int sock,
 			}
 
 			/* Start the kernel consumer daemon */
-			pthread_mutex_lock(&kconsumer_data.pid_mutex);
+			LTTNG_LOCK(&kconsumer_data.pid_mutex);
 			if (kconsumer_data.pid == 0 &&
 					cmd_ctx->lsm->cmd_type != LTTNG_REGISTER_CONSUMER) {
-				pthread_mutex_unlock(&kconsumer_data.pid_mutex);
+				LTTNG_UNLOCK(&kconsumer_data.pid_mutex);
 				ret = start_consumerd(&kconsumer_data);
 				if (ret < 0) {
 					ret = LTTNG_ERR_KERN_CONSUMER_FAIL;
@@ -3209,7 +3209,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int sock,
 				}
 				uatomic_set(&kernel_consumerd_state, CONSUMER_STARTED);
 			} else {
-				pthread_mutex_unlock(&kconsumer_data.pid_mutex);
+				LTTNG_UNLOCK(&kconsumer_data.pid_mutex);
 			}
 
 			/*
@@ -3251,11 +3251,11 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int sock,
 
 			/* Start the UST consumer daemons */
 			/* 64-bit */
-			pthread_mutex_lock(&ustconsumer64_data.pid_mutex);
+			LTTNG_LOCK(&ustconsumer64_data.pid_mutex);
 			if (consumerd64_bin[0] != '\0' &&
 					ustconsumer64_data.pid == 0 &&
 					cmd_ctx->lsm->cmd_type != LTTNG_REGISTER_CONSUMER) {
-				pthread_mutex_unlock(&ustconsumer64_data.pid_mutex);
+				LTTNG_UNLOCK(&ustconsumer64_data.pid_mutex);
 				ret = start_consumerd(&ustconsumer64_data);
 				if (ret < 0) {
 					ret = LTTNG_ERR_UST_CONSUMER64_FAIL;
@@ -3266,7 +3266,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int sock,
 				uatomic_set(&ust_consumerd64_fd, ustconsumer64_data.cmd_sock);
 				uatomic_set(&ust_consumerd_state, CONSUMER_STARTED);
 			} else {
-				pthread_mutex_unlock(&ustconsumer64_data.pid_mutex);
+				LTTNG_UNLOCK(&ustconsumer64_data.pid_mutex);
 			}
 
 			/*
@@ -3280,11 +3280,11 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int sock,
 			}
 
 			/* 32-bit */
-			pthread_mutex_lock(&ustconsumer32_data.pid_mutex);
+			LTTNG_LOCK(&ustconsumer32_data.pid_mutex);
 			if (consumerd32_bin[0] != '\0' &&
 					ustconsumer32_data.pid == 0 &&
 					cmd_ctx->lsm->cmd_type != LTTNG_REGISTER_CONSUMER) {
-				pthread_mutex_unlock(&ustconsumer32_data.pid_mutex);
+				LTTNG_UNLOCK(&ustconsumer32_data.pid_mutex);
 				ret = start_consumerd(&ustconsumer32_data);
 				if (ret < 0) {
 					ret = LTTNG_ERR_UST_CONSUMER32_FAIL;
@@ -3295,7 +3295,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int sock,
 				uatomic_set(&ust_consumerd32_fd, ustconsumer32_data.cmd_sock);
 				uatomic_set(&ust_consumerd_state, CONSUMER_STARTED);
 			} else {
-				pthread_mutex_unlock(&ustconsumer32_data.pid_mutex);
+				LTTNG_UNLOCK(&ustconsumer32_data.pid_mutex);
 			}
 
 			/*
