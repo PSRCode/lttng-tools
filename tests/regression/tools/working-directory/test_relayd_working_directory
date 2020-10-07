@@ -62,6 +62,7 @@ function test_relayd()
 	# If we are here the test passed
 	pass "Working directory changed"
 
+	RELAYD_PIDS=$pid
 	stop_lttng_relayd
 	rm -rf "$working_dir"
 }
@@ -85,6 +86,7 @@ function test_relayd_daemon()
 
 	is "$cwd" "$working_dir" "Working directory changed"
 
+	RELAYD_PIDS=$pid
 	stop_lttng_relayd
 	rm -rf "$working_dir"
 }
@@ -106,6 +108,7 @@ function test_relayd_daemon_no_working_dir()
 
 	is "$cwd" "$expected_working_dir" "Working directory is $expected_working_dir"
 
+	RELAYD_PIDS=$pid
 	stop_lttng_relayd
 	rm -rf "$working_dir"
 }
@@ -129,6 +132,7 @@ function test_relayd_background()
 
 	is "$cwd" "$working_dir" "Working directory changed"
 
+	RELAYD_PIDS=$pid
 	stop_lttng_relayd
 	rm -rf "$working_dir"
 }
@@ -150,6 +154,7 @@ function test_relayd_background_no_working_dir()
 
 	is "$cwd" "$expected_working_dir" "Working directory is $expected_working_dir"
 
+	RELAYD_PIDS=$pid
 	stop_lttng_relayd
 	rm -rf "$working_dir"
 }
@@ -168,7 +173,7 @@ function test_relayd_debug_permission()
 
 	skip $is_user "Skipping permission debug output test; operation can't fail as root" 6 ||
 	{
-		local output_pattern='Working directory \".*\" is not writable'
+		local output_pattern='Working directory is not writable'
 		local working_dir
 		local cwd
 		local pid
@@ -192,6 +197,7 @@ function test_relayd_debug_permission()
 		grep -q "$output_pattern" "$ERROR_OUTPUT_DEST"
 		ok $? "Warning about missing write permission is present"
 
+		RELAYD_PIDS=$pid
 		stop_lttng_relayd
 		rm "$ERROR_OUTPUT_DEST"
 		rm -rf "$working_dir" "$ERROR_OUTPUT_DEST"
@@ -201,7 +207,7 @@ function test_relayd_debug_permission()
 
 function test_relayd_failure()
 {
-	local output_pattern='Failed to change working directory to'
+	local output_pattern='Failed to change working directory'
 	local relayd_bin_path="$DIR/../src/bin/lttng-relayd/$RELAYD_BIN"
 
 	local working_dir
@@ -224,6 +230,7 @@ function test_relayd_failure()
 		pass "No lttng-relayd present"
 	else
 		fail "No lttng-relayd present"
+		RELAYD_PIDS=$pid
 		stop_lttng_relayd_notap
 	fi
 
@@ -255,6 +262,7 @@ function test_relayd_env()
 
 	is "$cwd" "$working_dir" "Working directory changed"
 
+	RELAYD_PIDS=$pid
 	stop_lttng_relayd
 	rm -rf "$working_dir"
 	unset LTTNG_RELAYD_WORKING_DIRECTORY
@@ -282,6 +290,7 @@ function test_relayd_cmdline_overwrite_env()
 
 	is "$cwd" "$working_dir_cmdline" "Working directory is the one from command line"
 
+	RELAYD_PIDS=$pid
 	stop_lttng_relayd
 	rm -rf "$working_dir_env" "$working_dir_cmdline"
 	unset LTTNG_RELAYD_WORKING_DIRECTORY
