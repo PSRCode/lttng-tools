@@ -33,10 +33,10 @@
 _syscall0(pid_t, gettid)
 #elif defined(__NR_gettid)
 #include <unistd.h>
-static inline pid_t gettid(void)
-{
-	return syscall(__NR_gettid);
-}
+///static inline pid_t gettid(void)
+///{
+///	return syscall(__NR_gettid);
+///}
 #else
 #include <sys/types.h>
 #include <unistd.h>
