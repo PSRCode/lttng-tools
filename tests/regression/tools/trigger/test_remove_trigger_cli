@@ -82,12 +82,14 @@ cat > "${tmp_expected_stdout}" <<- EOF
   user id: ${uid}
   condition: event rule hit
     rule: aaa (type: tracepoint, domain: ust, filter: p == 2)
+    tracer notifications discarded: 0
   actions:
     notify
 - id: T0
   user id: ${uid}
   condition: event rule hit
     rule: * (type: tracepoint, domain: ust)
+    tracer notifications discarded: 0
   actions:
     notify
 EOF
@@ -100,6 +102,7 @@ cat > "${tmp_expected_stdout}" <<- EOF
   user id: ${uid}
   condition: event rule hit
     rule: * (type: tracepoint, domain: ust)
+    tracer notifications discarded: 0
   actions:
     notify
 EOF
