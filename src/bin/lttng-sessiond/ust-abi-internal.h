@@ -103,9 +103,10 @@ struct lttng_ust_event {
 	} u;
 } LTTNG_PACKED;
 
-#define LTTNG_UST_EVENT_NOTIFIER_PADDING	40
+#define LTTNG_UST_EVENT_NOTIFIER_PADDING	32
 struct lttng_ust_event_notifier {
 	struct lttng_ust_event event;
+	uint64_t error_counter_idx;
 	char padding[LTTNG_UST_EVENT_NOTIFIER_PADDING];
 } LTTNG_PACKED;
 
