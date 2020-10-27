@@ -36,6 +36,7 @@ EXTRA_DIST = mi-lttng-4.0.xsd
 libcommon_la_SOURCES = \
 	actions/action.c \
 	actions/group.c \
+	actions/incr-value.c \
 	actions/notify.c \
 	actions/rotate-session.c \
 	actions/snapshot-session.c \
@@ -75,6 +76,7 @@ libcommon_la_SOURCES = \
 	location.c \
 	log-level-rule.c \
 	map.c \
+	map-key/map-key.c \
 	mi-lttng.c mi-lttng.h \
 	notification.c \
 	optional.h \
