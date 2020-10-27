@@ -18,6 +18,16 @@
 #include "lttng/condition/on-event-internal.h"
 /* For lttng_domain_type_str(). */
 #include "lttng/domain-internal.h"
+#include "lttng/event-rule/event-rule-internal.h"
+#include "lttng/event-rule/kernel-probe.h"
+#include "lttng/event-rule/kernel-probe-internal.h"
+#include "lttng/event-rule/syscall.h"
+#include "lttng/event-rule/tracepoint.h"
+#include "lttng/event-rule/userspace-probe.h"
+#include "lttng/map-key.h"
+#include "lttng/map-key-internal.h"
+#include "lttng/trigger/trigger-internal.h"
+#include "lttng/kernel-probe.h"
 
 #ifdef LTTNG_EMBED_HELP
 static const char help_msg[] =
@@ -415,6 +425,79 @@ void print_condition_on_event(const struct lttng_condition *condition)
 }
 
 static
+void print_map_key(const struct lttng_map_key *key)
+{
+	unsigned int i, token_count;
+	enum lttng_map_key_status key_status;
+
+	_MSG("       key: `");
+	key_status = lttng_map_key_get_token_count(key, &token_count);
+	assert(key_status == LTTNG_MAP_KEY_STATUS_OK);
+
+	for (i = 0; i < token_count; i++) {
+		const struct lttng_map_key_token *token =
+				lttng_map_key_get_token_at_index(key, i);
+		assert(token);
+
+		switch (token->type) {
+		case LTTNG_MAP_KEY_TOKEN_TYPE_STRING:
+		{
+			const struct lttng_map_key_token_string *str_token;
+			str_token = (typeof(str_token)) token;
+			_MSG("%s", str_token->string);
+			break;
+		}
+		case LTTNG_MAP_KEY_TOKEN_TYPE_VARIABLE:
+		{
+			const struct lttng_map_key_token_variable *var_token;
+			var_token = (typeof(var_token)) token;
+
+			switch (var_token->type) {
+			case LTTNG_MAP_KEY_TOKEN_VARIABLE_TYPE_EVENT_NAME:
+				_MSG("${EVENT_NAME}");
+				break;
+			case LTTNG_MAP_KEY_TOKEN_VARIABLE_TYPE_PROVIDER_NAME:
+				_MSG("${PROVIDER_NAME}");
+				break;
+			default:
+				abort();
+			}
+
+			break;
+		}
+		default:
+			abort();
+		}
+	}
+	MSG("`");
+}
+
+static
+void print_one_incr_value_action(const struct lttng_action *action)
+{
+	enum lttng_action_status action_status;
+	const char *session_name, *map_name;
+	const struct lttng_map_key *key;
+
+	action_status = lttng_action_incr_value_get_session_name(
+		action, &session_name);
+	assert(action_status == LTTNG_ACTION_STATUS_OK);
+
+	action_status = lttng_action_incr_value_get_map_name(
+		action, &map_name);
+	assert(action_status == LTTNG_ACTION_STATUS_OK);
+
+	action_status = lttng_action_incr_value_get_key(
+		action, &key);
+	assert(action_status == LTTNG_ACTION_STATUS_OK);
+
+	MSG("increment value:");
+	MSG("       session: `%s`", session_name);
+	MSG("       map: `%s`", map_name);
+	print_map_key(key);
+}
+
+static
 void print_one_action(const struct lttng_action *action)
 {
 	enum lttng_action_type action_type;
@@ -425,6 +508,9 @@ void print_one_action(const struct lttng_action *action)
 	assert(action_type != LTTNG_ACTION_TYPE_GROUP);
 
 	switch (action_type) {
+	case LTTNG_ACTION_TYPE_INCREMENT_VALUE:
+		print_one_incr_value_action(action);
+		break;
 	case LTTNG_ACTION_TYPE_NOTIFY:
 		MSG("notify");
 		break;
