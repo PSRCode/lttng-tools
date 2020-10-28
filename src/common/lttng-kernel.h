@@ -186,6 +186,40 @@ struct lttng_kernel_event_notifier {
 	char padding[LTTNG_KERNEL_EVENT_NOTIFIER_PADDING];
 } LTTNG_PACKED;
 
+enum lttng_kernel_key_token_type {
+	LTTNG_KERNEL_KEY_TOKEN_STRING = 0,	/* arg: strtab_offset. */
+	LTTNG_KERNEL_KEY_TOKEN_EVENT_NAME = 1,	/* no arg. */
+};
+
+#define LTTNG_KERNEL_KEY_ARG_PADDING1		60
+#define LTTNG_KERNEL_KEY_TOKEN_STRING_LEN_MAX	256
+struct lttng_kernel_key_token {
+	uint32_t type;	/* enum lttng_kernel_key_token_type */
+	union {
+		uint64_t string_ptr;
+		char padding[LTTNG_KERNEL_KEY_ARG_PADDING1];
+	} arg;
+} LTTNG_PACKED;
+
+#define LTTNG_KERNEL_NR_KEY_TOKEN 4
+struct lttng_kernel_counter_key_dimension {
+	uint32_t nr_key_tokens;
+	struct lttng_kernel_key_token key_tokens[LTTNG_KERNEL_NR_KEY_TOKEN];
+} LTTNG_PACKED;
+
+#define LTTNG_KERNEL_COUNTER_DIMENSION_MAX 4
+struct lttng_kernel_counter_key {
+	uint32_t nr_dimensions;
+	struct lttng_kernel_counter_key_dimension key_dimensions[LTTNG_KERNEL_COUNTER_DIMENSION_MAX];
+} LTTNG_PACKED;
+
+#define LTTNG_KERNEL_COUNTER_EVENT_PADDING1	16
+struct lttng_kernel_counter_event {
+	struct lttng_kernel_event event;
+	struct lttng_kernel_counter_key key;
+	char padding[LTTNG_KERNEL_COUNTER_EVENT_PADDING1];
+} LTTNG_PACKED;
+
 enum lttng_kernel_counter_arithmetic {
 	LTTNG_KERNEL_COUNTER_ARITHMETIC_MODULAR = 0,
 };
@@ -203,7 +237,6 @@ struct lttng_kernel_counter_dimension {
 	uint8_t has_overflow;
 } LTTNG_PACKED;
 
-#define LTTNG_KERNEL_COUNTER_DIMENSION_MAX 4
 struct lttng_kernel_counter_conf {
 	uint32_t arithmetic;	/* enum lttng_kernel_counter_arithmetic */
 	uint32_t bitness;	/* enum lttng_kernel_counter_bitness */

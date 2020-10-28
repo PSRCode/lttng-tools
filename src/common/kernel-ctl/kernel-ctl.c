@@ -430,6 +430,11 @@ int kernctl_create_event_notifier_group(int fd)
 			LTTNG_KERNEL_EVENT_NOTIFIER_GROUP_CREATE);
 }
 
+int kernctl_create_counter_event(int fd, struct lttng_kernel_counter_event *ev)
+{
+	return LTTNG_IOCTL_NO_CHECK(fd, LTTNG_KERNEL_COUNTER_EVENT, ev);
+}
+
 int kernctl_create_event_notifier_group_notification_fd(int group_fd)
 {
 	return LTTNG_IOCTL_NO_CHECK(group_fd,

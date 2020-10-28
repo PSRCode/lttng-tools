@@ -78,6 +78,15 @@ struct ltt_kernel_event_notifier_rule {
 	struct rcu_head rcu_node;
 };
 
+/* Kernel event counter */
+struct ltt_kernel_event_counter {
+	int fd;
+	int enabled;
+	struct lttng_kernel_event *event;
+	struct lttng_event_rule *event_rule;
+	struct cds_list_head list;
+};
+
 /* Kernel channel */
 struct ltt_kernel_channel {
 	int fd;
@@ -99,6 +108,7 @@ struct ltt_kernel_channel {
 /* Kernel map */
 struct ltt_kernel_map {
 	int fd;
+	uint64_t key; /* Key to reference this map with the notification thread. */
 	int enabled;
 	struct lttng_map *map;
 	struct lttng_kernel_counter_conf counter_conf;
@@ -217,6 +227,8 @@ void trace_kernel_destroy_event(struct ltt_kernel_event *event);
 void trace_kernel_destroy_stream(struct ltt_kernel_stream *stream);
 void trace_kernel_destroy_context(struct ltt_kernel_context *ctx);
 void trace_kernel_destroy_event_notifier_rule(struct ltt_kernel_event_notifier_rule *rule);
+void trace_kernel_destroy_event_counter(
+		struct ltt_kernel_event_counter *event_counter);
 void trace_kernel_free_session(struct ltt_kernel_session *session);
 
 #endif /* _LTT_TRACE_KERNEL_H */

@@ -108,7 +108,8 @@ enum lttcomm_sessiond_command {
 	LTTNG_CLEAR_SESSION                             = 50,
 	LTTNG_LIST_TRIGGERS                             = 51,
 	LTTNG_ADD_MAP					= 52,
-	LTTNG_REMOVE_MAP				= 53,
+	LTTNG_ENABLE_MAP				= 53,
+	LTTNG_DISABLE_MAP				= 54,
 };
 
 static inline
@@ -201,8 +202,10 @@ const char *lttcomm_sessiond_command_str(enum lttcomm_sessiond_command cmd)
 		return "LTTNG_LIST_TRIGGERS";
 	case LTTNG_ADD_MAP:
 		return "LTTNG_ADD_MAP";
-	case LTTNG_REMOVE_MAP:
-		return "LTTNG_REMOVE_MAP";
+	case LTTNG_ENABLE_MAP:
+		return "LTTNG_ENABLE_MAP";
+	case LTTNG_DISABLE_MAP:
+		return "LTTNG_DISABLE_MAP";
 	default:
 		abort();
 	}
@@ -423,10 +426,14 @@ struct lttcomm_session_msg {
 		struct {
 			uint32_t length;
 		} LTTNG_PACKED add_map;
-		/* Remove map */
+		/* Enable map */
 		struct {
 			char map_name[LTTNG_SYMBOL_NAME_LEN];
-		} LTTNG_PACKED remove_map;
+		} LTTNG_PACKED enable_map;
+		/* Disable map */
+		struct {
+			char map_name[LTTNG_SYMBOL_NAME_LEN];
+		} LTTNG_PACKED disable_map;
 		/* Context */
 		struct {
 			char channel_name[LTTNG_SYMBOL_NAME_LEN];

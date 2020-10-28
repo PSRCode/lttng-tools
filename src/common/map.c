@@ -112,6 +112,19 @@ enum lttng_map_status lttng_map_create(const char *name,
 	map->bitness = bitness;
 	map->boundary_policy = boundary_policy;
 
+	lttng_map_set_is_enabled(map, true);
+
+	switch (lttng_map_get_buffer_type(map)) {
+	case LTTNG_BUFFER_PER_UID:
+		lttng_map_set_uid(map, 0);
+		break;
+	case LTTNG_BUFFER_PER_PID:
+		lttng_map_set_pid(map, 0);
+		break;
+	default:
+		abort();
+	}
+
 	urcu_ref_init(&map->ref);
 
 	*map_out = map;

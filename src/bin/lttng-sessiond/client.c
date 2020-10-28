@@ -887,7 +887,8 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	case LTTNG_REGISTER_TRIGGER:
 	case LTTNG_UNREGISTER_TRIGGER:
 	case LTTNG_ADD_MAP:
-	case LTTNG_REMOVE_MAP:
+	case LTTNG_ENABLE_MAP:
+	case LTTNG_DISABLE_MAP:
 		need_consumerd = false;
 		break;
 	default:
@@ -988,7 +989,6 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	switch (cmd_ctx->lsm.cmd_type) {
 	case LTTNG_DISABLE_CHANNEL:
 	case LTTNG_DISABLE_EVENT:
-	case LTTNG_REMOVE_MAP:
 		switch (cmd_ctx->lsm.domain.type) {
 		case LTTNG_DOMAIN_KERNEL:
 			if (!cmd_ctx->session->kernel_session) {
@@ -1363,9 +1363,14 @@ error_add_context:
 
 		break;
 	}
-	case LTTNG_REMOVE_MAP:
+	case LTTNG_ENABLE_MAP:
+		ret = cmd_enable_map(cmd_ctx->session, cmd_ctx->lsm.domain.type,
+				cmd_ctx->lsm.u.enable_map.map_name);
+		break;
+	case LTTNG_DISABLE_MAP:
 	{
-		ret = cmd_remove_map(cmd_ctx, *sock);
+		ret = cmd_disable_map(cmd_ctx->session, cmd_ctx->lsm.domain.type,
+				cmd_ctx->lsm.u.disable_map.map_name);
 
 		break;
 	}

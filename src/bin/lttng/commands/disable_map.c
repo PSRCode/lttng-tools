@@ -14,7 +14,7 @@
 #include "../command.h"
 #ifdef LTTNG_EMBED_HELP
 static const char help_msg[] =
-#include <lttng-remove-map.1.h>
+#include <lttng-disable-map.1.h>
 ;
 #endif
 
@@ -26,7 +26,7 @@ enum {
 };
 
 static const
-struct argpar_opt_descr remove_trigger_options[] = {
+struct argpar_opt_descr disable_map_options[] = {
 	{ OPT_HELP, 'h', "help", false },
 	{ OPT_SESSION, 's', "session", true },
 	{ OPT_USERSPACE, 'u', "userspace", false },
@@ -60,7 +60,7 @@ end:
 	return ret;
 }
 
-int cmd_remove_map(int argc, const char **argv)
+int cmd_disable_map(int argc, const char **argv)
 {
 	int ret, i;
 	struct argpar_parse_ret argpar_parse_ret = { 0 };
@@ -72,7 +72,7 @@ int cmd_remove_map(int argc, const char **argv)
 	struct lttng_handle *handle;
 
 	argpar_parse_ret = argpar_parse(argc - 1, argv + 1,
-		remove_trigger_options, true);
+		disable_map_options, true);
 	if (!argpar_parse_ret.items) {
 		ERR("%s", argpar_parse_ret.error);
 		goto error;
@@ -154,14 +154,13 @@ int cmd_remove_map(int argc, const char **argv)
 		goto error;
 	}
 
-
-	error_code_ret = lttng_remove_map(handle, opt_map_name);
+	error_code_ret = lttng_disable_map(handle, opt_map_name);
 	if (error_code_ret != LTTNG_OK) {
-		ERR("Error removing map \"%s\"", opt_map_name);
+		ERR("Error disabling map \"%s\"", opt_map_name);
 		goto error;
 	}
 
-	MSG("Removed map `%s`.", opt_map_name);
+	MSG("Disabled map `%s`.", opt_map_name);
 
 	ret = 0;
 	goto end;

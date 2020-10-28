@@ -172,6 +172,17 @@ struct ust_registry_channel {
 	struct rcu_head rcu_head;
 };
 
+struct ust_registry_map_key_ht_entry {
+	const struct lttng_map_key *key;
+	struct lttng_ht_node_u64 node;
+};
+
+struct ust_registry_map_index_ht_entry {
+	uint64_t index;
+	char *formated_key;
+	struct lttng_ht_node_str node;
+};
+
 struct ust_registry_map {
 	uint64_t key;
 	/* Id set when replying to a register map. */
@@ -184,11 +195,16 @@ struct ust_registry_map {
 	 * Hash table containing events sent by the UST tracer. MUST be accessed
 	 * with a RCU read side lock acquired.
 	 */
-	struct lttng_ht *ht;
+	struct lttng_ht *events_ht;
 	/* Next event ID available for a newly registered event. */
 	uint32_t next_event_id;
 	/* Once this value reaches UINT32_MAX, no more id can be allocated. */
 	uint32_t used_event_id;
+
+	/* tracer_token -> ust_registry_map_key_ht_entry */
+	struct lttng_ht *tracer_token_to_map_key_ht;
+	/* format key -> ust_registry_map_index_ht_entry */
+	struct lttng_ht *key_string_to_bucket_index_ht;
 
 	struct lttng_ht_node_u64 node;
 	/* For delayed reclaim */
@@ -203,7 +219,7 @@ struct ust_registry_event {
 	int id;
 	/* Both objd are set by the tracer. */
 	int session_objd;
-	int channel_objd;
+	int container_objd;
 	/* Name of the event returned by the tracer. */
 	char name[LTTNG_UST_SYM_NAME_LEN];
 	char *signature;
@@ -253,8 +269,28 @@ static inline int ust_registry_is_max_id(uint32_t id)
  * Return a unique channel ID. If max is reached, the used_event_id counter is
  * returned.
  */
-static inline uint32_t ust_registry_get_next_event_id(
+static inline uint32_t ust_registry_channel_get_next_event_id(
 		struct ust_registry_channel *r)
+{
+	if (ust_registry_is_max_id(r->used_event_id)) {
+		return r->used_event_id;
+	}
+
+	r->used_event_id++;
+	return r->next_event_id++;
+}
+
+/*
+ * Return next available event id and increment the used counter. The
+ * ust_registry_is_max_id function MUST be called before in order to validate
+ * if the maximum number of IDs have been reached. If not, it is safe to call
+ * this function.
+ *
+ * Return a unique map ID. If max is reached, the used_event_id counter is
+ * returned.
+ */
+static inline uint32_t ust_registry_map_get_next_event_id(
+		struct ust_registry_map *r)
 {
 	if (ust_registry_is_max_id(r->used_event_id)) {
 		return r->used_event_id;
@@ -334,6 +370,9 @@ int ust_registry_map_add(struct ust_registry_session *session,
 		uint64_t key);
 void ust_registry_map_del_free(struct ust_registry_session *session,
 		uint64_t key);
+int ust_registry_map_add_token_key_mapping(struct ust_registry_session *session,
+		uint64_t map_key, uint64_t tracer_token,
+		const struct lttng_map_key *key);
 
 int ust_registry_session_init(struct ust_registry_session **sessionp,
 		struct ust_app *app,
@@ -368,7 +407,7 @@ int ust_registry_map_create_event(struct ust_registry_session *session,
 		uint64_t map_key, int session_objd, int map_objd, char *name,
 		char *sig, size_t nr_fields, struct ustctl_field *fields,
 		int loglevel_value, char *model_emf_uri, int buffer_type,
-		uint32_t *event_id_p, struct ust_app *app);
+		uint64_t tracer_token, uint64_t *counter_index_p, struct ust_app *app);
 struct ust_registry_event *ust_registry_map_find_event(
 		struct ust_registry_map *map, char *name, char *sig);
 void ust_registry_map_destroy_event(struct ust_registry_map *map,

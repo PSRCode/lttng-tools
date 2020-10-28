@@ -1025,6 +1025,8 @@ bool action_type_needs_tracer_notifier(enum lttng_action_type action_type)
 	case LTTNG_ACTION_TYPE_SNAPSHOT_SESSION:
 	case LTTNG_ACTION_TYPE_ROTATE_SESSION:
 		return true;
+	case LTTNG_ACTION_TYPE_INCREMENT_VALUE:
+		return false;
 	case LTTNG_ACTION_TYPE_GROUP:
 	case LTTNG_ACTION_TYPE_UNKNOWN:
 	default:

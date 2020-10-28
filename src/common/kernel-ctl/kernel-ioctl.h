@@ -192,6 +192,7 @@
 	_IOWR(0xF6, 0xC1, struct lttng_kernel_counter_aggregate)
 #define LTTNG_KERNEL_COUNTER_CLEAR		\
 	_IOW(0xF6, 0xC2, struct lttng_kernel_counter_clear)
-
+#define LTTNG_KERNEL_COUNTER_EVENT		\
+	_IOW(0xF6, 0xC5, struct lttng_kernel_counter_event)
 
 #endif /* _LTT_KERNEL_IOCTL_H */

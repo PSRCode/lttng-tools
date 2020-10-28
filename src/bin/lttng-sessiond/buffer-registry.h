@@ -60,7 +60,7 @@ struct buffer_reg_channel {
 struct buffer_reg_map {
 	/* This key is the same as a tracing map key. */
 	uint32_t key;
-	/* Stream registry object of this map registry. */
+	/* Per cpu counter registry object of this map registry. */
 	struct cds_list_head counters;
 	/* Total number of stream in the list. */
 	uint64_t counter_count;
@@ -72,6 +72,8 @@ struct buffer_reg_map {
 		/* Original object data that MUST be copied over. */
 		struct lttng_ust_object_data *ust;
 	} obj;
+
+	struct ustctl_daemon_counter *daemon_counter;
 };
 
 struct buffer_reg_session {

@@ -9,6 +9,7 @@
 #define _LTT_EVENT_H
 
 #include "trace-kernel.h"
+#include "trace-ust.h"
 
 struct agent;
 
@@ -25,11 +26,31 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 		struct lttng_bytecode *filter,
 		struct lttng_event_exclusion *exclusion,
 		bool internal_event);
+
+int map_event_ust_enable_tracepoint(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap,
+		uint64_t tracer_token,
+		char *ev_name,
+		const struct lttng_map_key *key,
+		enum lttng_event_type ev_type,
+		enum lttng_loglevel_type ev_loglevel_type,
+		int ev_loglevel_value,
+		char *filter_expression,
+		struct lttng_bytecode *filter,
+		struct lttng_event_exclusion *exclusion,
+		bool internal_event);
+
 int event_ust_disable_tracepoint(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan, const char *event_name);
 
+int map_event_ust_disable_tracepoint(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap, const char *event_name);
+
 int event_ust_disable_all_tracepoints(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan);
+
+int map_event_ust_disable_all_tracepoints(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap);
 
 int event_agent_enable(struct ltt_ust_session *usess, struct agent *agt,
 		struct lttng_event *event, struct lttng_bytecode *filter,

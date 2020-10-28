@@ -1700,7 +1700,7 @@ end:
 	return ret_code;
 }
 
-enum lttng_error_code lttng_remove_map(struct lttng_handle *handle,
+enum lttng_error_code lttng_enable_map(struct lttng_handle *handle,
 		const char *map_name)
 {
 	int ret;
@@ -1716,7 +1716,7 @@ enum lttng_error_code lttng_remove_map(struct lttng_handle *handle,
 	lttng_payload_init(&reply);
 
 	memset(&lsm, 0, sizeof(lsm));
-	lsm.cmd_type = LTTNG_REMOVE_MAP;
+	lsm.cmd_type = LTTNG_ENABLE_MAP;
 
 	COPY_DOMAIN_PACKED(lsm.domain, handle->domain);
 
@@ -1727,8 +1727,61 @@ enum lttng_error_code lttng_remove_map(struct lttng_handle *handle,
 		goto end;
 	}
 
-	ret = lttng_strncpy(lsm.u.remove_map.map_name, map_name,
-			sizeof(lsm.u.remove_map.map_name));
+	ret = lttng_strncpy(lsm.u.enable_map.map_name, map_name,
+			sizeof(lsm.u.enable_map.map_name));
+	if (ret) {
+		ret_code = LTTNG_ERR_INVALID;
+		goto end;
+	}
+
+	ret = lttng_dynamic_buffer_append(&message.buffer, &lsm, sizeof(lsm));
+	if (ret) {
+		ret_code = LTTNG_ERR_NOMEM;
+		goto end;
+	}
+
+	ret = lttng_ctl_ask_sessiond_payload(&lsm_view, &reply);
+	if (ret < 0) {
+		ret_code = LTTNG_ERR_UNK;
+		goto end;
+	}
+
+	ret_code = LTTNG_OK;
+
+end:
+	lttng_payload_reset(&message);
+	return ret_code;
+}
+
+enum lttng_error_code lttng_disable_map(struct lttng_handle *handle,
+		const char *map_name)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	struct lttcomm_session_msg lsm;
+	struct lttng_payload message;
+	struct lttng_payload_view lsm_view =
+			lttng_payload_view_init_from_buffer(
+				(const char *) &lsm, 0, sizeof(lsm));
+	struct lttng_payload reply;
+
+	lttng_payload_init(&message);
+	lttng_payload_init(&reply);
+
+	memset(&lsm, 0, sizeof(lsm));
+	lsm.cmd_type = LTTNG_DISABLE_MAP;
+
+	COPY_DOMAIN_PACKED(lsm.domain, handle->domain);
+
+	ret = lttng_strncpy(lsm.session.name, handle->session_name,
+			sizeof(lsm.session.name));
+	if (ret) {
+		ret_code = LTTNG_ERR_INVALID;
+		goto end;
+	}
+
+	ret = lttng_strncpy(lsm.u.disable_map.map_name, map_name,
+			sizeof(lsm.u.disable_map.map_name));
 	if (ret) {
 		ret_code = LTTNG_ERR_INVALID;
 		goto end;

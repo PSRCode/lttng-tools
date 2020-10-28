@@ -238,7 +238,6 @@ static int action_executor_start_session_handler(struct action_executor *executo
 	if (!is_trigger_allowed_for_session(work_item->trigger, session)) {
 		goto error_dispose_session;
 	}
-
 	cmd_ret = cmd_start_trace(session);
 	switch (cmd_ret) {
 	case LTTNG_OK:

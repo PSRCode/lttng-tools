@@ -6,6 +6,7 @@
  *
  */
 
+#include "lttng/event.h"
 #define _LGPL_SOURCE
 #include <urcu/list.h>
 #include <string.h>
@@ -162,6 +163,12 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 	int ret = LTTNG_OK, to_create = 0;
 	struct ltt_ust_event *uevent;
 
+	/*
+	 * FIXME: Frdeso. The tracer token should probably me set for regular
+	 * events too.
+	 */
+	uint64_t tracer_token = 0;
+
 	assert(usess);
 	assert(uchan);
 	assert(event);
@@ -172,7 +179,7 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 			(enum lttng_ust_loglevel_type) event->loglevel_type,
 			event->loglevel, exclusion);
 	if (!uevent) {
-		ret = trace_ust_create_event(event->name, event->type,
+		ret = trace_ust_create_event(tracer_token, event->name, NULL, event->type,
 				event->loglevel_type, event->loglevel,
 				filter_expression, filter, exclusion,
 				internal_event, &uevent);
@@ -207,10 +214,10 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 
 	if (to_create) {
 		/* Create event on all UST registered apps for session */
-		ret = ust_app_create_event_glb(usess, uchan, uevent);
+		ret = ust_app_create_channel_event_glb(usess, uchan, uevent);
 	} else {
 		/* Enable event on all UST registered apps for session */
-		ret = ust_app_enable_event_glb(usess, uchan, uevent);
+		ret = ust_app_enable_channel_event_glb(usess, uchan, uevent);
 	}
 
 	if (ret < 0) {
@@ -239,6 +246,118 @@ error:
 	/*
 	 * Only destroy event on creation time (not enabling time) because if the
 	 * event is found in the channel (to_create == 0), it means that at some
+	 * point the enable_event worked and it's thus valid to keep it alive.
+	 * Destroying it also implies that we also destroy it's shadow copy to sync
+	 * everyone up.
+	 */
+	if (to_create) {
+		/* In this code path, the uevent was not added to the hash table */
+		trace_ust_destroy_event(uevent);
+	}
+	rcu_read_unlock();
+	free(filter_expression);
+	free(filter);
+	free(exclusion);
+	return ret;
+}
+
+/*
+ * Enable UST tracepoint event for a map from a UST session.
+ * We own filter_expression, filter, and exclusion.
+ */
+int map_event_ust_enable_tracepoint(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap,
+		uint64_t tracer_token,
+		char *ev_name,
+		const struct lttng_map_key *key,
+		enum lttng_event_type ev_type,
+		enum lttng_loglevel_type ev_loglevel_type,
+		int ev_loglevel_value,
+		char *filter_expression,
+		struct lttng_bytecode *filter,
+		struct lttng_event_exclusion *exclusion,
+		bool internal_event)
+{
+	int ret = LTTNG_OK, to_create = 0;
+	struct ltt_ust_event *uevent;
+
+	assert(usess);
+	assert(umap);
+
+	rcu_read_lock();
+
+	uevent = trace_ust_find_event(umap->events, ev_name, filter,
+			(enum lttng_ust_loglevel_type) ev_loglevel_type,
+			ev_loglevel_value, exclusion);
+	if (!uevent) {
+		ret = trace_ust_create_event(tracer_token, ev_name, key, ev_type,
+				ev_loglevel_type, ev_loglevel_value,
+				filter_expression, filter, exclusion,
+				internal_event, &uevent);
+		/* We have passed ownership */
+		key = NULL;
+		filter_expression = NULL;
+		filter = NULL;
+		exclusion = NULL;
+		if (ret != LTTNG_OK) {
+			goto error;
+		}
+
+		/* Valid to set it after the goto error since uevent is still NULL */
+		to_create = 1;
+	}
+
+	if (uevent->enabled) {
+		/* It's already enabled so everything is OK */
+		assert(!to_create);
+		ret = LTTNG_ERR_UST_EVENT_ENABLED;
+		goto end;
+	}
+
+	uevent->enabled = 1;
+	if (to_create) {
+		/* Add ltt ust event to map */
+		add_unique_ust_event(umap->events, uevent);
+	}
+
+	if (!usess->active) {
+		goto end;
+	}
+
+	if (to_create) {
+		/* Create event on all UST registered apps for session */
+		ret = ust_app_create_map_event_glb(usess, umap, uevent);
+	} else {
+		/* Enable event on all UST registered apps for session */
+		ret = ust_app_enable_map_event_glb(usess, umap, uevent);
+	}
+
+	if (ret < 0) {
+		if (ret == -LTTNG_UST_ERR_EXIST) {
+			ret = LTTNG_ERR_UST_EVENT_EXIST;
+			goto end;
+		} else {
+			ret = LTTNG_ERR_UST_ENABLE_FAIL;
+			goto error;
+		}
+	}
+
+	DBG("Event UST %s %s in map %s", uevent->attr.name,
+			to_create ? "created" : "enabled", umap->name);
+
+	ret = LTTNG_OK;
+
+end:
+	rcu_read_unlock();
+	free(filter_expression);
+	free(filter);
+	free(exclusion);
+	return ret;
+
+error:
+	/*
+	 * Only destroy event on creation time (not enabling time) because if the
+	 * event is found in the map (to_create == 0), it means that at some
 	 * point the enable_event worked and it's thus valid to keep it alive.
 	 * Destroying it also implies that we also destroy it's shadow copy to sync
 	 * everyone up.
@@ -302,7 +421,7 @@ int event_ust_disable_tracepoint(struct ltt_ust_session *usess,
 		if (!usess->active) {
 			goto next;
 		}
-		ret = ust_app_disable_event_glb(usess, uchan, uevent);
+		ret = ust_app_disable_channel_event_glb(usess, uchan, uevent);
 		if (ret < 0 && ret != -LTTNG_UST_ERR_EXIST) {
 			ret = LTTNG_ERR_UST_DISABLE_FAIL;
 			goto error;
@@ -317,6 +436,56 @@ next:
 	ret = LTTNG_OK;
 
 error:
+	rcu_read_unlock();
+	return ret;
+}
+
+/*
+ * Disable UST tracepoint of a map from a UST session.
+ */
+int map_event_ust_disable_tracepoint(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap, const char *event_name)
+{
+	int ret;
+	struct ltt_ust_event *uevent;
+
+	assert(usess);
+	assert(umap);
+	assert(event_name);
+
+	rcu_read_lock();
+
+	/*
+	 * FIXME: frdeso: We need to pass all the parameters to find the right
+	 * event.
+	 */
+	uevent = trace_ust_find_event(umap->events, (char *) event_name, NULL,
+			LTTNG_UST_LOGLEVEL_ALL, -1, NULL, 0);
+	assert(uevent);
+
+	if (uevent->enabled == 0) {
+		ret = LTTNG_OK;
+		goto end;
+	}
+
+	uevent->enabled = 0;
+	DBG2("Event UST %s disabled in map %s", uevent->attr.name,
+		umap->name);
+
+	if (!usess->active) {
+		ret = LTTNG_OK;
+		goto end;
+	}
+
+	ret = ust_app_disable_map_event_glb(usess, umap, uevent);
+	if (ret < 0 && ret != -LTTNG_UST_ERR_EXIST) {
+		ret = LTTNG_ERR_UST_DISABLE_FAIL;
+		goto end;
+	}
+
+	ret = LTTNG_OK;
+
+end:
 	rcu_read_unlock();
 	return ret;
 }
@@ -359,6 +528,59 @@ int event_ust_disable_all_tracepoints(struct ltt_ust_session *usess,
 
 	for (i = 0; i < size; i++) {
 		ret = event_ust_disable_tracepoint(usess, uchan,
+				events[i].name);
+		if (ret < 0) {
+			/* Continue to disable the rest... */
+			error = LTTNG_ERR_UST_DISABLE_FAIL;
+			continue;
+		}
+	}
+
+	ret = error ? error : LTTNG_OK;
+error:
+	rcu_read_unlock();
+	free(events);
+	return ret;
+}
+
+/*
+ * Disable all UST tracepoints for a map from a UST session.
+ */
+int map_event_ust_disable_all_tracepoints(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap)
+{
+	int ret, i, size, error = 0;
+	struct lttng_ht_iter iter;
+	struct ltt_ust_event *uevent = NULL;
+	struct lttng_event *events = NULL;
+
+	assert(usess);
+	assert(umap);
+
+	rcu_read_lock();
+
+	/* Disabling existing events */
+	cds_lfht_for_each_entry(umap->events->ht, &iter.iter, uevent,
+			node.node) {
+		if (uevent->enabled == 1) {
+			ret = map_event_ust_disable_tracepoint(usess, umap,
+					uevent->attr.name);
+			if (ret < 0) {
+				error = LTTNG_ERR_UST_DISABLE_FAIL;
+				continue;
+			}
+		}
+	}
+
+	/* Get all UST available events */
+	size = ust_app_list_events(&events);
+	if (size < 0) {
+		ret = LTTNG_ERR_UST_LIST_FAIL;
+		goto error;
+	}
+
+	for (i = 0; i < size; i++) {
+		ret = map_event_ust_disable_tracepoint(usess, umap,
 				events[i].name);
 		if (ret < 0) {
 			/* Continue to disable the rest... */
@@ -787,7 +1009,7 @@ static int event_agent_disable_one(struct ltt_ust_session *usess,
 	assert(uevent);
 
 	if (usess->active) {
-		ret = ust_app_disable_event_glb(usess, uchan, uevent);
+		ret = ust_app_disable_channel_event_glb(usess, uchan, uevent);
 		if (ret < 0 && ret != -LTTNG_UST_ERR_EXIST) {
 			ret = LTTNG_ERR_UST_DISABLE_FAIL;
 			goto error;

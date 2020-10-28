@@ -777,12 +777,12 @@ void buffer_reg_map_destroy(struct buffer_reg_map *regp,
 	case LTTNG_DOMAIN_UST:
 	{
 		int ret;
-		struct buffer_reg_stream *sreg, *stmp;
+		struct buffer_reg_map_counter *map_counter_reg, *tmp;
 		/* Wipe counter */
-		cds_list_for_each_entry_safe(sreg, stmp, &regp->counters, lnode) {
-			cds_list_del(&sreg->lnode);
+		cds_list_for_each_entry_safe(map_counter_reg, tmp, &regp->counters, lnode) {
+			cds_list_del(&map_counter_reg->lnode);
 			regp->counter_count--;
-			//buffer_reg_counter_destroy(sreg, domain);
+			buffer_reg_map_counter_destroy(map_counter_reg, domain);
 		}
 
 		if (regp->obj.ust) {

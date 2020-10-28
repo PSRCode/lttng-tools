@@ -50,7 +50,12 @@ int cmd_enable_channel(struct ltt_session *session,
 		const struct lttng_domain *domain, const struct lttng_channel *attr,
 		int wpipe);
 enum lttng_error_code cmd_add_map(struct command_ctx *cmd_ctx, int sock);
-enum lttng_error_code cmd_remove_map(struct command_ctx *cmd_ctx, int sock);
+
+enum lttng_error_code cmd_enable_map(struct ltt_session *session,
+		enum lttng_domain_type domain, char *map_name);
+
+enum lttng_error_code cmd_disable_map(struct ltt_session *session,
+		enum lttng_domain_type domain, char *map_name);
 
 /* Process attribute tracker commands */
 enum lttng_error_code cmd_process_attr_tracker_get_tracking_policy(

@@ -209,9 +209,19 @@ void session_unlock(struct ltt_session *session);
  * In other words, it prevents tracer configurations from changing while they
  * are being transmitted to the various applications.
  */
-void session_lock_list(void);
+void _session_lock_list(void);
+
+#define session_lock_list() do { \
+	DBG("🔒 session_lock_list %s:%d", __FILE__, __LINE__);\
+	_session_lock_list(); \
+} while(0);
+
 int session_trylock_list(void);
-void session_unlock_list(void);
+void _session_unlock_list(void);
+#define session_unlock_list() do { \
+	DBG("🔓 session_unlock_list %s:%d", __FILE__, __LINE__);\
+	_session_unlock_list(); \
+} while(0);
 
 void session_destroy(struct ltt_session *session);
 int session_add_destroy_notifier(struct ltt_session *session,

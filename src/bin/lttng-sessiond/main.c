@@ -1263,6 +1263,7 @@ static void destroy_all_sessions_and_wait(void)
 			goto unlock_session;
 		}
 		(void) cmd_stop_trace(session);
+
 		(void) cmd_destroy_session(session, notification_thread_handle,
 				NULL);
 	unlock_session:

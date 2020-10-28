@@ -363,6 +363,7 @@ error:
 	process_attr_tracker_destroy(lus->tracker_vuid);
 	process_attr_tracker_destroy(lus->tracker_vgid);
 	ht_cleanup_push(lus->domain_global.channels);
+	ht_cleanup_push(lus->domain_global.maps);
 	ht_cleanup_push(lus->agents);
 	free(lus);
 error_alloc:
@@ -529,7 +530,9 @@ end:
  *
  * Return an lttng_error_code
  */
-enum lttng_error_code trace_ust_create_event(const char *ev_name,
+enum lttng_error_code trace_ust_create_event(uint64_t tracer_token,
+		const char *ev_name,
+		const struct lttng_map_key *key,
 		enum lttng_event_type ev_type,
 		enum lttng_loglevel_type ev_loglevel_type,
 		enum lttng_loglevel ev_loglevel,
@@ -555,6 +558,7 @@ enum lttng_error_code trace_ust_create_event(const char *ev_name,
 	}
 
 	local_ust_event->internal = internal_event;
+	local_ust_event->attr.token = tracer_token;
 
 	switch (ev_type) {
 	case LTTNG_EVENT_PROBE:
@@ -599,6 +603,7 @@ enum lttng_error_code trace_ust_create_event(const char *ev_name,
 	}
 
 	/* Same layout. */
+	local_ust_event->key = key;
 	local_ust_event->filter_expression = filter_expression;
 	local_ust_event->filter = filter;
 	local_ust_event->exclusion = exclusion;
@@ -606,8 +611,9 @@ enum lttng_error_code trace_ust_create_event(const char *ev_name,
 	/* Init node */
 	lttng_ht_node_init_str(&local_ust_event->node, local_ust_event->attr.name);
 
-	DBG2("Trace UST event %s, loglevel (%d,%d) created",
-		local_ust_event->attr.name, local_ust_event->attr.loglevel_type,
+	DBG2("Trace UST event %s, tracer token %"PRIu64", loglevel (%d,%d) created",
+		local_ust_event->attr.name, local_ust_event->attr.token,
+		local_ust_event->attr.loglevel_type,
 		local_ust_event->attr.loglevel);
 
 	*ust_event = local_ust_event;

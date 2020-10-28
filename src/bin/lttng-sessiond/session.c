@@ -151,7 +151,7 @@ void session_list_wait_empty(void)
 /*
  * Acquire session list lock
  */
-void session_lock_list(void)
+void _session_lock_list(void)
 {
 	pthread_mutex_lock(&ltt_session_list.lock);
 }
@@ -167,7 +167,7 @@ int session_trylock_list(void)
 /*
  * Release session list lock
  */
-void session_unlock_list(void)
+void _session_unlock_list(void)
 {
 	pthread_mutex_unlock(&ltt_session_list.lock);
 }

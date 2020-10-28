@@ -19,6 +19,13 @@
 /* For lttng_event_rule_type_str(). */
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/lttng.h>
+#include "lttng/event-rule/kernel-probe.h"
+#include "lttng/event-rule/syscall.h"
+#include <lttng/event-rule/tracepoint.h>
+#include "lttng/event-rule/userspace-probe.h"
+#include "lttng/kernel-probe.h"
+#include "lttng/log-level-rule.h"
+#include "lttng/map-key-internal.h"
 #include "common/filter/filter-ast.h"
 #include "common/filter/filter-ir.h"
 #include "common/dynamic-array.h"
@@ -68,6 +75,10 @@ enum {
 	OPT_CTRL_URL,
 	OPT_URL,
 	OPT_PATH,
+
+	OPT_SESSION_NAME,
+	OPT_MAP_NAME,
+	OPT_KEY,
 
 	OPT_CAPTURE,
 };
@@ -1752,6 +1763,139 @@ end:
 	return action;
 }
 
+static const struct argpar_opt_descr incr_value_action_opt_descrs[] = {
+	{ OPT_SESSION_NAME, 's', "session", true },
+	{ OPT_MAP_NAME, 'm', "map", true },
+	{ OPT_KEY, '\0', "key", true },
+	ARGPAR_OPT_DESCR_SENTINEL
+};
+
+static
+struct lttng_action *handle_action_incr_value(int *argc,
+		const char ***argv)
+{
+	struct lttng_action *action = NULL;
+	struct argpar_state *state = NULL;
+	struct argpar_item *item = NULL;
+	struct lttng_map_key *key = NULL;
+	char *session_name_arg = NULL, *map_name_arg = NULL;
+	char *key_arg = NULL;
+	char *error = NULL;
+	enum lttng_action_status action_status;
+
+	state = argpar_state_create(*argc, *argv, incr_value_action_opt_descrs);
+	if (!state) {
+		ERR("Failed to allocate an argpar state.");
+		goto error;
+	}
+
+	while (true) {
+		enum argpar_state_parse_next_status status;
+
+		ARGPAR_ITEM_DESTROY_AND_RESET(item);
+		status = argpar_state_parse_next(state, &item, &error);
+		if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR) {
+			ERR("%s", error);
+			goto error;
+		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_ERROR_UNKNOWN_OPT) {
+			/* Just stop parsing here. */
+			break;
+		} else if (status == ARGPAR_STATE_PARSE_NEXT_STATUS_END) {
+			break;
+		}
+
+		assert(status == ARGPAR_STATE_PARSE_NEXT_STATUS_OK);
+
+		if (item->type == ARGPAR_ITEM_TYPE_OPT) {
+			struct argpar_item_opt *item_opt =
+				(struct argpar_item_opt *) item;
+
+			switch (item_opt->descr->id) {
+			case OPT_SESSION_NAME:
+				if (!assign_string(&session_name_arg, item_opt->arg, "--session/-s")) {
+					goto error;
+				}
+				break;
+			case OPT_MAP_NAME:
+				if (!assign_string(&map_name_arg, item_opt->arg, "--map/-m")) {
+					goto error;
+				}
+				break;
+			case OPT_KEY:
+				if (!assign_string(&key_arg, item_opt->arg, "--key")) {
+					goto error;
+				}
+				break;
+			default:
+				abort();
+			}
+		}
+	}
+
+	*argc -= argpar_state_get_ingested_orig_args(state);
+	*argv += argpar_state_get_ingested_orig_args(state);
+
+	if (!session_name_arg) {
+		ERR("Missing session name.");
+		goto error;
+	}
+
+	if (!map_name_arg) {
+		ERR("Missing map name.");
+		goto error;
+	}
+
+	if (!key_arg) {
+		ERR("Missing key");
+		goto error;
+	}
+
+	key = lttng_map_key_parse_from_string(key_arg);
+	if (!key) {
+		ERR("Error parsing key argument");
+		goto error;
+	}
+
+	action = lttng_action_incr_value_create();
+	if (!action) {
+		ERR("Failed to allocate incr-value action.");
+		goto error;
+	}
+
+	action_status = lttng_action_incr_value_set_session_name(action,
+			session_name_arg);
+	if (action_status != LTTNG_ACTION_STATUS_OK) {
+		ERR("Failed to set action incr-value's session name.");
+		goto error;
+	}
+
+	action_status = lttng_action_incr_value_set_map_name(action,
+			map_name_arg);
+	if (action_status != LTTNG_ACTION_STATUS_OK) {
+		ERR("Failed to set action incr-value's map name.");
+		goto error;
+	}
+
+	action_status = lttng_action_incr_value_set_key(action, key);
+	if (action_status != LTTNG_ACTION_STATUS_OK) {
+		ERR("Failed to set action incr-value's key");
+		goto error;
+	}
+
+	goto end;
+
+error:
+	lttng_action_destroy(action);
+	action = NULL;
+
+end:
+	lttng_map_key_destroy(key);
+	free(session_name_arg);
+	free(map_name_arg);
+	free(key_arg);
+	return action;
+}
+
 struct action_descr {
 	const char *name;
 	struct lttng_action *(*handler) (int *argc, const char ***argv);
@@ -1764,6 +1908,7 @@ struct action_descr action_descrs[] = {
 	{ "stop-session", handle_action_stop_session },
 	{ "rotate-session", handle_action_rotate_session },
 	{ "snapshot-session", handle_action_snapshot_session },
+	{ "incr-value", handle_action_incr_value },
 };
 
 static

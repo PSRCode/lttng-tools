@@ -19,6 +19,11 @@ int map_kernel_remove(struct ltt_kernel_session *ksession,
 
 int map_ust_add(struct ltt_ust_session *usession,
 		struct lttng_map *map);
+int map_ust_enable(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap);
+int map_ust_disable(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap);
+
 int map_ust_remove(struct ltt_ust_session *usession,
 		const char *map_name);
 
