@@ -47,6 +47,7 @@
 #include "notification-thread-commands.h"
 #include "lttng-sessiond.h"
 #include "kernel.h"
+#include "event.h"
 
 #define CLIENT_POLL_MASK_IN (LPOLLIN | LPOLLERR | LPOLLHUP | LPOLLRDHUP)
 #define CLIENT_POLL_MASK_IN_OUT (CLIENT_POLL_MASK_IN | LPOLLOUT)
@@ -1721,7 +1722,6 @@ error:
 	session_info_put(session_info);
 	return 1;
 }
-
 static
 void free_channel_trigger_list_rcu(struct rcu_head *node)
 {

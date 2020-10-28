@@ -120,6 +120,7 @@ struct lttng_ust_event_notifier_notification {
 enum lttng_ust_key_token_type {
 	LTTNG_UST_KEY_TOKEN_STRING = 0,		/* arg: strtab_offset. */
 	LTTNG_UST_KEY_TOKEN_EVENT_NAME = 1,	/* no arg. */
+	LTTNG_UST_KEY_TOKEN_PROVIDER_NAME = 2,	/* no arg. */
 };
 
 #define LTTNG_UST_KEY_ARG_PADDING1		256

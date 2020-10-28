@@ -485,6 +485,7 @@ int init_thread_state(struct notification_thread_handle *handle,
 	if (!state->channels_ht) {
 		goto error;
 	}
+
 	state->sessions_ht = cds_lfht_new(DEFAULT_HT_SIZE,
 			1, 0, CDS_LFHT_AUTO_RESIZE | CDS_LFHT_ACCOUNTING, NULL);
 	if (!state->sessions_ht) {

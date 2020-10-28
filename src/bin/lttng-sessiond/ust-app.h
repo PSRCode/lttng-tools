@@ -206,9 +206,8 @@ struct ust_app_map {
 	/* Counters were sent to the UST tracer. */
 	int is_sent;
 	/*
-	 * Unique key used to identify the channel on the consumer side.
-	 * 0 is a reserved 'invalid' value used to indicate that the consumer
-	 * does not know about this channel (i.e. an error occurred).
+	 * FIXME what is difference between key and tracing_map_id
+	 * Unique key used to identify the map.
 	 */
 	uint64_t key;
 	/* Id of the tracing map set on creation. */
@@ -342,7 +341,11 @@ struct ust_app {
 	/*
 	 * Hash table containing ust_app_channel indexed by channel objd.
 	 */
-	struct lttng_ht *ust_objd;
+	struct lttng_ht *ust_chan_objd;
+	/*
+	 * Hash table containing ust_app_map indexed by map objd.
+	 */
+	struct lttng_ht *ust_map_objd;
 	/*
 	 * Hash table containing ust_app_session indexed by objd.
 	 */
@@ -392,16 +395,30 @@ int ust_app_stop_trace_all(struct ltt_ust_session *usess);
 int ust_app_destroy_trace_all(struct ltt_ust_session *usess);
 int ust_app_list_events(struct lttng_event **events);
 int ust_app_list_event_fields(struct lttng_event_field **fields);
-int ust_app_create_event_glb(struct ltt_ust_session *usess,
+int ust_app_create_channel_event_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan, struct ltt_ust_event *uevent);
 int ust_app_disable_channel_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan);
 int ust_app_enable_channel_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan);
-int ust_app_enable_event_glb(struct ltt_ust_session *usess,
+int ust_app_enable_channel_event_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan, struct ltt_ust_event *uevent);
-int ust_app_disable_event_glb(struct ltt_ust_session *usess,
+int ust_app_disable_channel_event_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan, struct ltt_ust_event *uevent);
+int ust_app_disable_map_event_glb(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap, struct ltt_ust_event *uevent);
+
+int ust_app_enable_map_glb(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap);
+int ust_app_disable_map_glb(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap);
+int ust_app_create_map_event_glb(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap, struct ltt_ust_event *uevent);
+int ust_app_enable_map_event_glb(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap, struct ltt_ust_event *uevent);
+int ust_app_disable_map_event_glb(struct ltt_ust_session *usess,
+		struct ltt_ust_map *umap, struct ltt_ust_event *uevent);
+
 int ust_app_add_ctx_channel_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_channel *uchan, struct ltt_ust_context *uctx);
 void ust_app_global_update(struct ltt_ust_session *usess, struct ust_app *app);

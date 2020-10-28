@@ -363,6 +363,7 @@ error:
 	process_attr_tracker_destroy(lus->tracker_vuid);
 	process_attr_tracker_destroy(lus->tracker_vgid);
 	ht_cleanup_push(lus->domain_global.channels);
+	ht_cleanup_push(lus->domain_global.maps);
 	ht_cleanup_push(lus->agents);
 	free(lus);
 error_alloc:
@@ -530,6 +531,7 @@ end:
  * Return an lttng_error_code
  */
 enum lttng_error_code trace_ust_create_event(const char *ev_name,
+		const struct lttng_map_key *key,
 		enum lttng_event_type ev_type,
 		enum lttng_loglevel_type ev_loglevel_type,
 		enum lttng_loglevel ev_loglevel,
@@ -599,6 +601,7 @@ enum lttng_error_code trace_ust_create_event(const char *ev_name,
 	}
 
 	/* Same layout. */
+	local_ust_event->key = key;
 	local_ust_event->filter_expression = filter_expression;
 	local_ust_event->filter = filter;
 	local_ust_event->exclusion = exclusion;

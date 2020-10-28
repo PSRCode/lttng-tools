@@ -36,6 +36,23 @@
 #include "lttng-sessiond.h"
 #include "notification-thread-commands.h"
 
+/* Next available map key. Access under next_map_key_lock. */
+static uint64_t _next_map_key;
+static pthread_mutex_t next_map_key_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/*
+ * Return the incremented value of next_map_key.
+ */
+static uint64_t get_next_map_key(void)
+{
+	uint64_t ret;
+
+	pthread_mutex_lock(&next_map_key_lock);
+	ret = ++_next_map_key;
+	pthread_mutex_unlock(&next_map_key_lock);
+	return ret;
+}
+
 /*
  * Find the channel name for the given kernel session.
  */
@@ -60,6 +77,35 @@ struct ltt_kernel_channel *trace_kernel_get_channel_by_name(
 		if (strcmp(name, chan->channel->name) == 0) {
 			DBG("Found channel by name %s", name);
 			return chan;
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * Find the map name for the given kernel session.
+ */
+struct ltt_kernel_map *trace_kernel_get_map_by_name(
+		const char *name, struct ltt_kernel_session *session)
+{
+	struct ltt_kernel_map *map;
+
+	assert(session);
+	assert(name);
+
+	DBG("Trying to find map %s", name);
+
+	cds_list_for_each_entry(map, &session->map_list.head, list) {
+		enum lttng_map_status status;
+		const char *cur_map_name;
+
+		status = lttng_map_get_name(map->map, &cur_map_name);
+		assert(status == LTTNG_MAP_STATUS_OK);
+
+		if (strcmp(name, cur_map_name) == 0) {
+			DBG("Found map by name %s", name);
+			return map;
 		}
 	}
 
@@ -161,6 +207,7 @@ struct ltt_kernel_session *trace_kernel_create_session(void)
 	lks->fd = -1;
 	lks->metadata_stream_fd = -1;
 	lks->channel_count = 0;
+	lks->map_count = 0;
 	lks->stream_count_global = 0;
 	lks->metadata = NULL;
 	CDS_INIT_LIST_HEAD(&lks->channel_list.head);
@@ -329,6 +376,7 @@ struct ltt_kernel_map *trace_kernel_create_map(
 
 	kernel_map->fd = -1;
 	kernel_map->enabled = 1;
+	kernel_map->key = get_next_map_key();
 
 	/* Init linked list */
 	CDS_INIT_LIST_HEAD(&kernel_map->event_counters_list.head);
@@ -923,6 +971,34 @@ void trace_kernel_destroy_event(struct ltt_kernel_event *event)
 }
 
 /*
+ * Cleanup kernel event counter structure.
+ */
+void trace_kernel_destroy_event_counter(
+		struct ltt_kernel_event_counter *event_counter)
+{
+	assert(event_counter);
+
+	if (event_counter->fd >= 0) {
+		int ret;
+
+		DBG("[trace] Closing event counter fd %d", event_counter->fd);
+		/* Close kernel fd */
+		ret = close(event_counter->fd);
+		if (ret) {
+			PERROR("close");
+		}
+	} else {
+		DBG("[trace] Tearing down event counter (no associated fd)");
+	}
+
+	/* Remove from event_counter list */
+	cds_list_del(&event_counter->list);
+
+	free(event_counter->event);
+	free(event_counter);
+}
+
+/*
  * Cleanup kernel event structure.
  */
 static void free_token_event_rule_rcu(struct rcu_head *rcu_node)
@@ -1025,6 +1101,8 @@ void trace_kernel_destroy_channel(struct ltt_kernel_channel *channel)
 void trace_kernel_destroy_map(struct ltt_kernel_map *map)
 {
 	int ret;
+	struct ltt_kernel_event_counter *event_counter, *etmp;
+	enum lttng_error_code status;
 
 	assert(map);
 
@@ -1037,8 +1115,17 @@ void trace_kernel_destroy_map(struct ltt_kernel_map *map)
 		}
 	}
 
+	/* For each event counter in the map list */
+	cds_list_for_each_entry_safe(event_counter, etmp,
+			&map->event_counters_list.head, list) {
+		trace_kernel_destroy_event_counter(event_counter);
+	}
+
 	/* Remove from map list */
 	cds_list_del(&map->list);
+
+	if (notification_thread_handle) {
+	}
 
 	free(map);
 }

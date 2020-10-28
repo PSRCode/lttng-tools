@@ -87,4 +87,8 @@ enum lttng_map_key_token_variable_type lttng_map_key_token_variable_get_type(
 LTTNG_HIDDEN
 const char *lttng_map_key_token_string_get_string(
 		const struct lttng_map_key_token_string *token);
+
+LTTNG_HIDDEN
+struct lttng_map_key *lttng_map_key_parse_from_string(const char *key_str);
+
 #endif /* LTTNG_MAP_KEY_INTERNAL_H */

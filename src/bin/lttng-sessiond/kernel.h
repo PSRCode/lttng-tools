@@ -87,11 +87,28 @@ enum lttng_error_code kernel_create_event_notifier_group_notification_fd(
 enum lttng_error_code kernel_destroy_event_notifier_group_notification_fd(
 		int event_notifier_group_notification_fd);
 
+enum lttng_error_code kernel_register_event_counter(
+		int map_fd,
+		const struct lttng_condition *condition,
+		const struct lttng_event_rule *event_rule,
+		uint64_t tracer_token,
+		const struct lttng_map_key *key,
+		const struct lttng_credentials *cmd_creds);
+
+enum lttng_error_code kernel_register_incr_value_action(
+		struct ltt_session *session,
+		const struct lttng_condition *condition,
+		const char *map_name,
+		uint64_t tracer_token,
+		const struct lttng_map_key *key);
+
 enum lttng_error_code kernel_register_event_notifier(
 		struct lttng_trigger *trigger,
 		const struct lttng_credentials *cmd_creds);
 enum lttng_error_code kernel_unregister_event_notifier(
 		const struct lttng_trigger *trigger);
+
+enum lttng_error_code kernel_synchronize_tracer_executed_action(void);
 
 int kernel_get_notification_fd(void);
 

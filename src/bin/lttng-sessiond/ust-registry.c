@@ -5,6 +5,7 @@
  *
  */
 
+#include "bin/lttng-sessiond/event-notifier-error-accounting.h"
 #define _LGPL_SOURCE
 #include <assert.h>
 #include <inttypes.h>
@@ -12,6 +13,8 @@
 #include <common/common.h>
 #include <common/hashtable/utils.h>
 #include <lttng/lttng.h>
+#include <lttng/map-key.h>
+#include <lttng/map-key-internal.h>
 
 #include "ust-registry.h"
 #include "ust-app.h"
@@ -284,7 +287,7 @@ int validate_event_fields(size_t nr_fields, struct ustctl_field *fields,
  * registry.
  */
 static struct ust_registry_event *alloc_event(int session_objd,
-		int channel_objd, char *name, char *sig, size_t nr_fields,
+		int container_objd, char *name, char *sig, size_t nr_fields,
 		struct ustctl_field *fields, int loglevel_value,
 		char *model_emf_uri, struct ust_app *app)
 {
@@ -304,7 +307,7 @@ static struct ust_registry_event *alloc_event(int session_objd,
 	}
 
 	event->session_objd = session_objd;
-	event->channel_objd = channel_objd;
+	event->container_objd = container_objd;
 	/* Allocated by ustctl. */
 	event->signature = sig;
 	event->nr_fields = nr_fields;
@@ -447,7 +450,7 @@ int ust_registry_chan_create_event(struct ust_registry_session *session,
 
 	DBG3("UST registry creating event with event: %s, sig: %s, id: %u, "
 			"chan_objd: %u, sess_objd: %u, chan_id: %u", event->name,
-			event->signature, event->id, event->channel_objd,
+			event->signature, event->id, event->container_objd,
 			event->session_objd, chan->chan_id);
 
 	/*
@@ -472,13 +475,13 @@ int ust_registry_chan_create_event(struct ust_registry_session *session,
 			ERR("UST registry create event add unique failed for event: %s, "
 					"sig: %s, id: %u, chan_objd: %u, sess_objd: %u",
 					event->name, event->signature, event->id,
-					event->channel_objd, event->session_objd);
+					event->container_objd, event->session_objd);
 			ret = -EINVAL;
 			goto error_unlock;
 		}
 	} else {
 		/* Request next event id if the node was successfully added. */
-		event_id = event->id = ust_registry_get_next_event_id(chan);
+		event_id = event->id = ust_registry_channel_get_next_event_id(chan);
 	}
 
 	*event_id_p = event_id;
@@ -505,6 +508,325 @@ error_unlock:
 	destroy_event(event);
 	return ret;
 }
+
+static
+int format_event_key(const struct lttng_map_key *key,
+		const char *full_event_name, char **formated_key)
+{
+	int ret;
+	char _key[LTTNG_UST_KEY_TOKEN_STRING_LEN_MAX] = {0};
+	enum lttng_map_key_status key_status;
+	unsigned int i, token_count;
+	char *cloned_full_event_name;
+	const char *provider_name, *event_name;
+
+	assert(key);
+	assert(full_event_name);
+
+	cloned_full_event_name = strdup(full_event_name);
+
+	provider_name = strtok(cloned_full_event_name, ":");
+	event_name = strtok(NULL, ":");
+
+	key_status = lttng_map_key_get_token_count(key, &token_count);
+	if (key_status != LTTNG_MAP_KEY_STATUS_OK) {
+		ERR("Error getting map key token count");
+		ret = -1;
+		goto end;
+	}
+
+	if (token_count == 0) {
+		ERR("Map key token number is zero");
+		ret = -1;
+		goto end;
+	}
+
+	for (i = 0; i < token_count; i++) {
+		const struct lttng_map_key_token *token =
+				lttng_map_key_get_token_at_index(key, i);
+		switch (token->type) {
+		case LTTNG_MAP_KEY_TOKEN_TYPE_STRING:
+		{
+			struct lttng_map_key_token_string *str_token =
+					(struct lttng_map_key_token_string *) token;
+			DBG("Appending a string type key token: str = '%s'", str_token->string);
+
+			strcat(_key, lttng_map_key_token_string_get_string(str_token));
+
+			break;
+		}
+		case LTTNG_MAP_KEY_TOKEN_TYPE_VARIABLE:
+		{
+			struct lttng_map_key_token_variable *var_token =
+					(struct lttng_map_key_token_variable *) token;
+
+			switch (var_token->type) {
+			case LTTNG_MAP_KEY_TOKEN_VARIABLE_TYPE_EVENT_NAME:
+				DBG("Serializing a event name variable type key token: event_name = '%s'",
+						event_name);
+				strcat(_key, event_name);
+				break;
+			case LTTNG_MAP_KEY_TOKEN_VARIABLE_TYPE_PROVIDER_NAME:
+				DBG("Serializing a provider name variable type key token: provider_name = '%s'",
+						provider_name);
+				strcat(_key, provider_name);
+				break;
+			default:
+				abort();
+			}
+			break;
+		}
+		default:
+			abort();
+		}
+	}
+
+	*formated_key = strdup(_key);
+
+	ret = 0;
+end:
+	free(cloned_full_event_name);
+	return ret;
+}
+
+int ust_registry_map_add_token_key_mapping(struct ust_registry_session *session,
+		uint64_t map_key, uint64_t tracer_token,
+		const struct lttng_map_key *key)
+{
+	int ret;
+	struct ust_registry_map_key_ht_entry *key_entry;
+	struct ust_registry_map *map;
+
+	DBG("📢Appending tracer token %"PRIu64" to token to map key mapping", tracer_token);
+	rcu_read_lock();
+	map = ust_registry_map_find(session, map_key);
+	if (!map) {
+		ret = -EINVAL;
+		goto end;
+	}
+	rcu_read_unlock();
+
+	key_entry = zmalloc(sizeof(struct ust_registry_map_key_ht_entry));
+	if (!key_entry) {
+		ret = -ENOMEM;
+		goto end;
+	}
+	key_entry->key = key;
+
+	rcu_read_lock();
+
+	lttng_ht_node_init_u64(&key_entry->node, tracer_token);
+	lttng_ht_add_unique_u64(map->tracer_token_to_map_key_ht,
+			&key_entry->node);
+
+	rcu_read_unlock();
+
+
+	ret = 0;
+end:
+	return ret;
+
+}
+
+static
+const struct lttng_map_key *ust_registry_map_find_key_for_token(
+		struct ust_registry_map *map,
+		uint64_t tracer_token)
+{
+	struct lttng_ht_iter iter;
+	struct lttng_ht_node_u64 *key_node;
+	struct ust_registry_map_key_ht_entry *key_entry;
+	const struct lttng_map_key *key = NULL;;
+
+	assert(map);
+	lttng_ht_lookup(map->tracer_token_to_map_key_ht,
+			(void *) &tracer_token, &iter);
+
+	key_node = lttng_ht_iter_get_node_u64(&iter);
+	if (!key_node) {
+		goto end;
+	}
+
+	/*
+	 * It's already mapped. Return the key we allocated already.
+	 */
+	key_entry = caa_container_of(key_node,
+		struct ust_registry_map_key_ht_entry, node);
+	assert(key_entry);
+
+	key = key_entry->key;
+
+	DBG("Returning key associated to the tracer token: key = %p, tracer_token = %"PRIu64,
+		key_entry->key, tracer_token);
+
+end:
+	return key;
+}
+
+static
+int ust_registry_map_find_or_create_index_for_key(struct ust_registry_map *map,
+		const char *formated_key, uint64_t *index)
+{
+	int ret;
+	struct lttng_ht_iter iter;
+	struct lttng_ht_node_str *index_node;
+	struct ust_registry_map_index_ht_entry *index_entry;
+
+	assert(map);
+	assert(formated_key);
+
+	/*
+	 * First try to check if we already mapped this formated key to an
+	 * index.
+	 */
+	lttng_ht_lookup(map->key_string_to_bucket_index_ht,
+			(void *) formated_key, &iter);
+
+	index_node = lttng_ht_iter_get_node_str(&iter);
+	if (index_node) {
+		/*
+		 * It's already mapped. Return the index we allocated already.
+		 */
+		index_entry = caa_container_of(index_node,
+				struct ust_registry_map_index_ht_entry, node);
+		assert(index_entry);
+
+		*index = index_entry->index;
+
+		DBG("Returning an already allocated index for formated key: key = '%s', index = %"PRIu64,
+				formated_key, *index);
+	} else {
+		/*
+		 * It's not mapped. Create a new mapping, add it to the
+		 * hashtable and return it.
+		 */
+		index_entry = zmalloc(sizeof(struct ust_registry_map_index_ht_entry));
+		if (!index_entry) {
+			ret = -1;
+			goto end;
+		}
+
+		index_entry->index = ust_registry_map_get_next_event_id(map);
+		index_entry->formated_key = strdup(formated_key);
+		lttng_ht_node_init_str(&index_entry->node, index_entry->formated_key);
+
+		lttng_ht_add_unique_str(map->key_string_to_bucket_index_ht,
+				&index_entry->node);
+
+		*index = index_entry->index;
+		DBG("Allocated counter index for new formated_key: key = '%s', index = %"PRIu64,
+				formated_key, *index);
+	}
+
+	ret = 0;
+end:
+	return ret;
+}
+
+/*
+ * Create a ust_registry_event from the given parameters and add it to the
+ * registry hash table. If event_id is valid, it is set with the newly created
+ * event id.
+ *
+ * On success, return 0 else a negative value. The created event MUST be unique
+ * so on duplicate entry -EINVAL is returned. On error, event_id is untouched.
+ *
+ * Should be called with session registry mutex held.
+ */
+int ust_registry_map_create_event(struct ust_registry_session *session,
+		uint64_t map_key, int session_objd, int map_objd, char *name,
+		char *sig, size_t nr_fields, struct ustctl_field *fields,
+		int loglevel_value, char *model_emf_uri, int buffer_type,
+		uint64_t tracer_token, uint64_t *counter_index_p,
+		struct ust_app *app)
+{
+	int ret;
+	uint64_t counter_index;
+	struct ust_registry_event *event = NULL;
+	struct ust_registry_map *map;
+	char *formated_key;
+	const struct lttng_map_key *key;
+
+	assert(session);
+	assert(name);
+	assert(sig);
+	assert(counter_index_p);
+
+	rcu_read_lock();
+
+	/*
+	 * This should not happen but since it comes from the UST tracer, an
+	 * external party, don't assert and simply validate values.
+	 */
+	if (session_objd < 0 || map_objd < 0) {
+		ret = -EINVAL;
+		goto error_free;
+	}
+
+	map = ust_registry_map_find(session, map_key);
+	if (!map) {
+		ret = -EINVAL;
+		goto error_free;
+	}
+
+	/* Check if we've reached the maximum possible id. */
+	if (ust_registry_is_max_id(map->used_event_id)) {
+		ret = -ENOENT;
+		goto error_free;
+	}
+
+	event = alloc_event(session_objd, map_objd, name, sig, nr_fields,
+			fields, loglevel_value, model_emf_uri, app);
+	if (!event) {
+		ret = -ENOMEM;
+		goto error_free;
+	}
+
+	key = ust_registry_map_find_key_for_token(map, tracer_token);
+	if (!key) {
+		ERR("Tracer token %"PRIu64" not found for map id = %"PRIu32,
+				tracer_token, map->map_id);
+		ret = -EINVAL;
+		goto error_unlock;
+	}
+
+	ret = format_event_key(key, event->name, &formated_key);
+	if (ret) {
+		ERR("Error formating key");
+		ret = -EINVAL;
+		goto error_unlock;
+	}
+
+	ret = ust_registry_map_find_or_create_index_for_key(map, formated_key,
+			&counter_index);
+	if (ret) {
+		ERR("Error finding or creating index for formated_key = '%s'",
+				formated_key);
+		free(formated_key);
+		ret = -EINVAL;
+		goto error_unlock;
+	}
+
+	DBG3("UST registry creating event with event: %s, sig: %s, id: %u, "
+			"map_objd: %u, sess_objd: %u, map_id: %u", event->name,
+			event->signature, event->id, event->container_objd,
+			event->session_objd, map->map_id);
+
+	*counter_index_p = counter_index;
+
+	rcu_read_unlock();
+	return 0;
+
+error_free:
+	free(sig);
+	free(fields);
+	free(model_emf_uri);
+error_unlock:
+	rcu_read_unlock();
+	destroy_event(event);
+	return ret;
+}
+
 
 /*
  * For a given event in a registry, delete the entry and destroy the event.
@@ -544,7 +866,7 @@ void ust_registry_map_destroy_event(struct ust_registry_map *map,
 
 	/* Delete the node first. */
 	iter.iter.node = &event->node.node;
-	ret = lttng_ht_del(map->ht, &iter);
+	ret = lttng_ht_del(map->events_ht, &iter);
 	assert(!ret);
 
 	call_rcu(&event->node.head, destroy_event_rcu);
@@ -752,9 +1074,18 @@ void destroy_map_rcu(struct rcu_head *head)
 	struct ust_registry_map *map =
 		caa_container_of(head, struct ust_registry_map, rcu_head);
 
-	if (map->ht) {
-		ht_cleanup_push(map->ht);
+	if (map->events_ht) {
+		ht_cleanup_push(map->events_ht);
 	}
+
+	if (map->tracer_token_to_map_key_ht) {
+		ht_cleanup_push(map->tracer_token_to_map_key_ht);
+	}
+
+	if (map->key_string_to_bucket_index_ht) {
+		ht_cleanup_push(map->key_string_to_bucket_index_ht);
+	}
+
 	free(map);
 }
 
@@ -802,16 +1133,29 @@ static void destroy_map(struct ust_registry_map *map)
 {
 	struct lttng_ht_iter iter;
 	struct ust_registry_event *event;
+	enum lttng_error_code cmd_ret;
 
 	assert(map);
 
-	if (map->ht) {
-		rcu_read_lock();
+	rcu_read_lock();
+	if (map->events_ht) {
 		/* Destroy all event associated with this registry. */
-		cds_lfht_for_each_entry(map->ht->ht, &iter.iter, event, node.node) {
+		cds_lfht_for_each_entry(map->events_ht->ht, &iter.iter, event, node.node) {
 			/* Delete the node from the ht and free it. */
 			ust_registry_map_destroy_event(map, event);
 		}
+	}
+
+	/* Destroy all event associated with this registry. */
+	cds_lfht_for_each_entry(map->tracer_token_to_map_key_ht->ht,
+			&iter.iter, event, node.node) {
+#warning free map key object
+	}
+
+	/* Destroy all event associated with this registry. */
+	cds_lfht_for_each_entry(map->key_string_to_bucket_index_ht->ht,
+			&iter.iter, event, node.node) {
+#warning free indexes
 	}
 	rcu_read_unlock();
 	call_rcu(&map->rcu_head, destroy_map_rcu);
@@ -887,15 +1231,27 @@ int ust_registry_map_add(struct ust_registry_session *session,
 		goto error_alloc;
 	}
 
-	map->ht = lttng_ht_new(0, LTTNG_HT_TYPE_STRING);
-	if (!map->ht) {
+	map->events_ht = lttng_ht_new(0, LTTNG_HT_TYPE_STRING);
+	if (!map->events_ht) {
 		ret = -ENOMEM;
 		goto error;
 	}
 
 	/* Set custom match function. */
-	map->ht->match_fct = ht_match_event;
-	map->ht->hash_fct = ht_hash_event;
+	map->events_ht->match_fct = ht_match_event;
+	map->events_ht->hash_fct = ht_hash_event;
+
+	map->tracer_token_to_map_key_ht = lttng_ht_new(0, LTTNG_HT_TYPE_U64);
+	if (!map->tracer_token_to_map_key_ht) {
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	map->key_string_to_bucket_index_ht = lttng_ht_new(0, LTTNG_HT_TYPE_STRING);
+	if (!map->key_string_to_bucket_index_ht) {
+		ret = -ENOMEM;
+		goto error;
+	}
 
 	/*
 	 * Assign a map ID right now since the event notification comes

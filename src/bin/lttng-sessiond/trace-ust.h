@@ -45,6 +45,7 @@ struct ltt_ust_event {
 	char *filter_expression;
 	struct lttng_bytecode *filter;
 	struct lttng_event_exclusion *exclusion;
+	const struct lttng_map_key *key;
 	/*
 	 * An internal event is an event which was created by the session daemon
 	 * through which, for example, events emitted in Agent domains are
@@ -213,6 +214,7 @@ struct ltt_ust_channel *trace_ust_create_channel(struct lttng_channel *attr,
 		enum lttng_domain_type domain);
 struct ltt_ust_map *trace_ust_create_map(const struct lttng_map *map);
 enum lttng_error_code trace_ust_create_event(const char *ev_name,
+		const struct lttng_map_key *key,
 		enum lttng_event_type ev_type,
 		enum lttng_loglevel_type ev_loglevel_type,
 		enum lttng_loglevel ev_loglevel,
