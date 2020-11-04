@@ -1948,6 +1948,30 @@ struct argpar_opt_descr add_trigger_options[] = {
 };
 
 static
+bool action_is_tracer_executed(const struct lttng_action *action)
+{
+	bool is_tracer_executed;
+	switch (lttng_action_get_type(action)) {
+	case LTTNG_ACTION_TYPE_NOTIFY:
+	case LTTNG_ACTION_TYPE_START_SESSION:
+	case LTTNG_ACTION_TYPE_STOP_SESSION:
+	case LTTNG_ACTION_TYPE_ROTATE_SESSION:
+	case LTTNG_ACTION_TYPE_SNAPSHOT_SESSION:
+		is_tracer_executed = false;
+		goto end;
+	case LTTNG_ACTION_TYPE_INCREMENT_VALUE:
+		is_tracer_executed = true;
+		goto end;
+	case LTTNG_ACTION_TYPE_GROUP:
+	default:
+		abort();
+	}
+
+end:
+	return is_tracer_executed;
+}
+
+static
 void lttng_actions_destructor(void *p)
 {
 	struct lttng_action *action = p;
@@ -2134,6 +2158,18 @@ int cmd_add_trigger(int argc, const char **argv)
 		enum lttng_action_status status;
 
 		action = lttng_dynamic_pointer_array_steal_pointer(&actions, i);
+		if (action_is_tracer_executed(action)) {
+			if (fire_every_str || fire_once_after_str) {
+				/*
+				 * Firing policy with tracer-executed actions
+				 * (`incr-value`) is not supported at the
+				 * moment. It's not clear how the tracers will
+				 * handle the different policies efficiently.
+				 */
+				ERR("Can't use --fire-once-after or --fire-every with tracer executed action (incr-value)");
+				goto error;
+			}
+		}
 
 		status = lttng_action_group_add_action(action_group, action);
 		if (status != LTTNG_ACTION_STATUS_OK) {
