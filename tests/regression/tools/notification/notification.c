@@ -33,7 +33,7 @@
 #include <lttng/domain.h>
 #include <lttng/endpoint.h>
 #include <lttng/event-field-value.h>
-#include <lttng/event-rule/kprobe.h>
+#include <lttng/event-rule/kernel-probe.h>
 #include <lttng/event-rule/syscall.h>
 #include <lttng/event-rule/tracepoint.h>
 #include <lttng/event-rule/uprobe.h>
