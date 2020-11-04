@@ -13,7 +13,7 @@
 #include "lttng/event-internal.h"
 #include "lttng/event-expr.h"
 #include <lttng/event-rule/event-rule-internal.h>
-#include "lttng/event-rule/kprobe.h"
+#include "lttng/event-rule/kernel-probe.h"
 #include "lttng/event-rule/syscall.h"
 #include <lttng/event-rule/tracepoint.h>
 #include "lttng/event-rule/uprobe.h"
