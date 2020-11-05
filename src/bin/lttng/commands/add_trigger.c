@@ -16,7 +16,7 @@
 #include "lttng/event-rule/kernel-probe.h"
 #include "lttng/event-rule/syscall.h"
 #include <lttng/event-rule/tracepoint.h>
-#include "lttng/event-rule/uprobe.h"
+#include "lttng/event-rule/userspace-probe.h"
 #include "lttng/kernel-probe.h"
 #include "common/filter/filter-ast.h"
 #include "common/filter/filter-ir.h"

@@ -14,7 +14,7 @@
 #include "lttng/event-rule/kernel-probe-internal.h"
 #include "lttng/event-rule/syscall.h"
 #include "lttng/event-rule/tracepoint.h"
-#include "lttng/event-rule/uprobe.h"
+#include "lttng/event-rule/userspace-probe.h"
 #include "lttng/trigger/trigger-internal.h"
 #include "lttng/kernel-probe.h"
 

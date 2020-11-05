@@ -39,7 +39,7 @@
 #include <lttng/event-rule/kernel-probe.h>
 #include <lttng/event-rule/syscall.h>
 #include <lttng/event-rule/tracepoint.h>
-#include <lttng/event-rule/uprobe.h>
+#include <lttng/event-rule/userspace-probe.h>
 #include <lttng/event.h>
 #include <lttng/event-expr.h>
 #include <lttng/event-field-value.h>
