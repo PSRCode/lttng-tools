@@ -29,7 +29,7 @@
 #include <lttng/condition/buffer-usage.h>
 #include <lttng/condition/condition.h>
 #include <lttng/condition/evaluation.h>
-#include <lttng/condition/event-rule.h>
+#include <lttng/condition/on-event.h>
 #include <lttng/domain.h>
 #include <lttng/endpoint.h>
 #include <lttng/event-field-value.h>

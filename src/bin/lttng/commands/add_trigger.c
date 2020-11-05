@@ -9,7 +9,7 @@
 #include "common/dynamic-array.h"
 #include "common/string-utils/string-utils.h"
 #include "common/utils.h"
-#include "lttng/condition/event-rule.h"
+#include "lttng/condition/on-event.h"
 #include "lttng/event-internal.h"
 #include "lttng/event-expr.h"
 #include <lttng/event-rule/event-rule-internal.h>

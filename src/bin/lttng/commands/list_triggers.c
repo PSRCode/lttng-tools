@@ -7,7 +7,7 @@
 #include "lttng/action/action.h"
 #include "lttng/action/action-internal.h"
 #include "lttng/condition/condition-internal.h"
-#include "lttng/condition/event-rule.h"
+#include "lttng/condition/on-event.h"
 #include "lttng/domain-internal.h"
 #include "lttng/event-rule/event-rule-internal.h"
 #include "lttng/event-rule/kernel-probe.h"
