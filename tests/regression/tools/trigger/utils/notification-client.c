@@ -69,7 +69,7 @@ static bool is_expected_trigger_name(const char *expected_trigger_name,
 	case LTTNG_CONDITION_TYPE_SESSION_ROTATION_ONGOING:
 	case LTTNG_CONDITION_TYPE_SESSION_ROTATION_COMPLETED:
 		break;
-	case LTTNG_CONDITION_TYPE_EVENT_RULE_HIT:
+	case LTTNG_CONDITION_TYPE_ON_EVENT:
 	{
 		const char *trigger_name;
 		enum lttng_evaluation_status evaluation_status;
