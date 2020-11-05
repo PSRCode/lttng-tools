@@ -167,7 +167,7 @@ int main(int argc, char **argv)
 		evaluation = lttng_notification_get_evaluation(notification);
 		type = lttng_evaluation_get_type(evaluation);
 
-		if (type != LTTNG_CONDITION_TYPE_EVENT_RULE_HIT) {
+		if (type != LTTNG_CONDITION_TYPE_ON_EVENT) {
 			assert(0);
 		}
 

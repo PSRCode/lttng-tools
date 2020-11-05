@@ -254,7 +254,7 @@ static int print_array(const struct lttng_condition *condition,
 	for (unsigned int i = 0; i < captured_field_count; i++) {
 		const struct lttng_event_field_value *captured_field = NULL;
 		const struct lttng_event_expr *expr =
-				lttng_condition_event_rule_get_capture_descriptor_at_index(
+				lttng_condition_on_event_get_capture_descriptor_at_index(
 						condition, i);
 		assert(expr);
 
@@ -309,10 +309,10 @@ static int print_captures(struct lttng_notification *notification)
 	unsigned int captured_field_count;
 
 	assert(lttng_evaluation_get_type(evaluation) ==
-			LTTNG_CONDITION_TYPE_EVENT_RULE_HIT);
+			LTTNG_CONDITION_TYPE_ON_EVENT);
 
 	condition_status =
-			lttng_condition_event_rule_get_capture_descriptor_count(
+			lttng_condition_on_event_get_capture_descriptor_count(
 					condition,
 					&expected_capture_field_count);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
@@ -360,7 +360,7 @@ static int print_notification(struct lttng_notification *notification)
 	case LTTNG_CONDITION_TYPE_SESSION_ROTATION_COMPLETED:
 		printf("Received session rotation completed notification\n");
 		break;
-	case LTTNG_CONDITION_TYPE_EVENT_RULE_HIT:
+	case LTTNG_CONDITION_TYPE_ON_EVENT:
 	{
 		const char *trigger_name;
 		enum lttng_evaluation_status evaluation_status;

@@ -361,20 +361,20 @@ void print_one_event_expr(const struct lttng_event_expr *event_expr)
 }
 
 static
-void print_condition_event_rule_hit(const struct lttng_condition *condition)
+void print_condition_on_event(const struct lttng_condition *condition)
 {
 	const struct lttng_event_rule *event_rule;
 	enum lttng_condition_status condition_status;
 	unsigned int cap_desc_count, i;
 
 	condition_status =
-		lttng_condition_event_rule_get_rule(condition, &event_rule);
+		lttng_condition_on_event_get_rule(condition, &event_rule);
 	assert(condition_status == LTTNG_CONDITION_STATUS_OK);
 
 	print_event_rule(event_rule);
 
 	condition_status
-		= lttng_condition_event_rule_get_capture_descriptor_count(
+		= lttng_condition_on_event_get_capture_descriptor_count(
 			condition, &cap_desc_count);
 	assert(condition_status == LTTNG_CONDITION_STATUS_OK);
 
@@ -383,7 +383,7 @@ void print_condition_event_rule_hit(const struct lttng_condition *condition)
 
 		for (i = 0; i < cap_desc_count; i++) {
 			const struct lttng_event_expr *cap_desc =
-				lttng_condition_event_rule_get_capture_descriptor_at_index(
+				lttng_condition_on_event_get_capture_descriptor_at_index(
 					condition, i);
 
 			_MSG("      - ");
@@ -541,8 +541,8 @@ void print_one_trigger(const struct lttng_trigger *trigger)
 		lttng_condition_type_str(condition_type));
 
 	switch (condition_type) {
-	case LTTNG_CONDITION_TYPE_EVENT_RULE_HIT:
-		print_condition_event_rule_hit(condition);
+	case LTTNG_CONDITION_TYPE_ON_EVENT:
+		print_condition_on_event(condition);
 		break;
 
 	default:
