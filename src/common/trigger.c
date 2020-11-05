@@ -14,6 +14,7 @@
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/event-expr-internal.h>
 #include <lttng/action/action-internal.h>
+#include <lttng/action/group.h>
 #include <common/credentials.h>
 #include <common/payload.h>
 #include <common/payload-view.h>
@@ -91,7 +92,6 @@ const struct lttng_condition *lttng_trigger_get_const_condition(
 {
 	return trigger ? trigger->condition : NULL;
 }
-
 
 /*
  * Note: the lack of reference counting 'get' on the action object is normal.
@@ -1012,4 +1012,87 @@ struct lttng_trigger *lttng_trigger_copy(const struct lttng_trigger *trigger)
 end:
 	lttng_payload_reset(&copy_buffer);
 	return copy;
+}
+
+
+static
+bool action_type_needs_tracer_notifier(enum lttng_action_type action_type)
+{
+	switch (action_type) {
+	case LTTNG_ACTION_TYPE_NOTIFY:
+	case LTTNG_ACTION_TYPE_START_SESSION:
+	case LTTNG_ACTION_TYPE_STOP_SESSION:
+	case LTTNG_ACTION_TYPE_SNAPSHOT_SESSION:
+	case LTTNG_ACTION_TYPE_ROTATE_SESSION:
+		return true;
+	case LTTNG_ACTION_TYPE_GROUP:
+	case LTTNG_ACTION_TYPE_UNKNOWN:
+	default:
+		abort();
+	}
+}
+
+static
+bool action_needs_tracer_notifier(const struct lttng_action *action)
+{
+	bool needs_tracer_notifier = false;
+	unsigned int i, count;
+	enum lttng_action_status action_status;
+	enum lttng_action_type action_type;
+
+	assert(action);
+	/* If there is only one action. Check if it needs a tracer notifier. */
+	action_type = lttng_action_get_type(action);
+	if (action_type != LTTNG_ACTION_TYPE_GROUP) {
+		needs_tracer_notifier = action_type_needs_tracer_notifier(
+				action_type);
+		goto end;
+	}
+
+	/*
+	 * Iterate over all the actions of the action group and check if any of
+	 * them needs a tracer notifier.
+	 */
+	action_status = lttng_action_group_get_count(action, &count);
+	assert(action_status == LTTNG_ACTION_STATUS_OK);
+	for (i = 0; i < count; i++) {
+		const struct lttng_action *inner_action =
+				lttng_action_group_get_at_index(action, i);
+
+		action_type = lttng_action_get_type(inner_action);
+		if (action_type_needs_tracer_notifier(action_type)) {
+			needs_tracer_notifier = true;
+			goto end;
+		}
+	}
+
+end:
+	return needs_tracer_notifier;
+}
+
+LTTNG_HIDDEN
+bool lttng_trigger_needs_tracer_notifier(const struct lttng_trigger *trigger)
+{
+	bool needs_tracer_notifier = false;
+	const struct lttng_condition *condition =
+			lttng_trigger_get_const_condition(trigger);
+	const struct lttng_action *action =
+			lttng_trigger_get_const_action(trigger);
+
+	switch (lttng_condition_get_type(condition)) {
+	case LTTNG_CONDITION_TYPE_ON_EVENT:
+		needs_tracer_notifier = action_needs_tracer_notifier(action);
+		goto end;
+	case LTTNG_CONDITION_TYPE_SESSION_CONSUMED_SIZE:
+	case LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH:
+	case LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW:
+	case LTTNG_CONDITION_TYPE_SESSION_ROTATION_ONGOING:
+	case LTTNG_CONDITION_TYPE_SESSION_ROTATION_COMPLETED:
+		goto end;
+	case LTTNG_CONDITION_TYPE_UNKNOWN:
+	default:
+		abort();
+	}
+end:
+	return needs_tracer_notifier;
 }
