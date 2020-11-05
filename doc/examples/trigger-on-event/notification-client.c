@@ -5,7 +5,7 @@
  *
  */
 
-#include <lttng/condition/event-rule.h>
+#include <lttng/condition/on-event.h>
 #include <lttng/lttng.h>
 
 #include <assert.h>
