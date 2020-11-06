@@ -47,6 +47,7 @@
 #include <lttng/health.h>
 #include <lttng/load.h>
 #include <lttng/location.h>
+#include <lttng/log-level-rule.h>
 #include <lttng/notification/channel.h>
 #include <lttng/notification/notification.h>
 #include <lttng/rotation.h>
