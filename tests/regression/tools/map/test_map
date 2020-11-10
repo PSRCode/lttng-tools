@@ -5,7 +5,17 @@
 # SPDX-License-Identifier: LGPL-2.1-only
 
 CURDIR=$(dirname "$0")/
-TESTDIR=$CURDIR/../../../
+TESTDIR=$CURDIR/../../..
+NR_ITER=5
+NR_USEC_WAIT=1000000
+TESTAPP_PATH="$TESTDIR/utils/testapp"
+TESTAPP_NAME="gen-ust-events"
+TESTAPP_BIN="$TESTAPP_PATH/$TESTAPP_NAME/$TESTAPP_NAME"
+EVENT_NAME="tp:tptest"
+
+UST_NUM_TESTS=10
+KERNEL_NUM_TESTS=19
+NUM_TESTS=$(($UST_NUM_TESTS + $KERNEL_NUM_TESTS))
 
 TMPDIR=$(mktemp -d)
 
@@ -17,100 +27,149 @@ source "$TESTDIR/utils/utils.sh"
 
 FULL_LTTNG_BIN="${TESTDIR}/../src/bin/lttng/${LTTNG_BIN}"
 
-UST_NUM_TESTS=10
-KERNEL_NUM_TESTS=19
-NUM_TESTS=$(($UST_NUM_TESTS + $KERNEL_NUM_TESTS))
+if [ ! -x "$TESTAPP_BIN" ]; then
+	BAIL_OUT "No UST events binary detected."
+fi
 
 plan_tests $NUM_TESTS
 
 function test_map_ust_create()
 {
-	local map_name="map_name"
-	local map_name_2="map_name2"
-	local sess_name="map_name"
+	local MAP_NAME="my_map_name"
+	local MAP_NAME_2="my_map_name2"
+	local SESSION_NAME="my_session_name"
 
-	create_lttng_session_ok "$sess_name"
+	create_lttng_session_ok "$SESSION_NAME"
 
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 32 --session "wrong_session_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 32 --session "wrong_session_name" "$MAP_NAME"
 	isnt $? 0 "Map creation failed on wrong session name"
 
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 42 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 42 --session "$SESSION_NAME" "$MAP_NAME"
 	isnt $? 0 "Map creation failed \"--bitness\" wrong value as expected"
 
-	"$FULL_LTTNG_BIN" add-map --userspace --session "SESS_DOESNT_EXIST" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --session "SESS_DOESNT_EXIST" "$MAP_NAME"
 	isnt $? 0 "Failed to add map to session that doesn't exist"
 
-	"$FULL_LTTNG_BIN" remove-map --userspace --session "$sess_name" "MAP_DOESNT_EXIST"
+	"$FULL_LTTNG_BIN" remove-map --userspace --session "$SESSION_NAME" "MAP_DOESNT_EXIST"
 	isnt $? 0 "Failed to remove map that doesn't exist"
 
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME"
 	ok $? "Map with 64bit bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --userspace "$map_name"
+	"$FULL_LTTNG_BIN" remove-map --userspace "$MAP_NAME"
 	ok $? "Map removed succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --buffers-pid --session "$sess_name" "$map_name_2"
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --buffers-pid --session "$SESSION_NAME" "$MAP_NAME_2"
 	ok $? "Map per-pid 64bit bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --userspace "$map_name_2"
+	"$FULL_LTTNG_BIN" remove-map --userspace "$MAP_NAME_2"
 	ok $? "Map removed succesfully"
 
-	destroy_lttng_session_ok "$sess_name"
+	destroy_lttng_session_ok "$SESSION_NAME"
+}
+
+function test_map_ust_view_empty()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 32 --session "$SESSION_NAME" "$MAP_NAME"
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" view-map "$MAP_NAME" > /dev/null
+	ok $? "Map viewed succesfully"
+
+	"$FULL_LTTNG_BIN" remove-map --userspace "$MAP_NAME"
+	ok $? "Map removed succesfully"
+
+	"$FULL_LTTNG_BIN" view-map "$MAP_NAME" > /dev/null
+	isnt $? 0 "Map view failed as expected"
+
+	destroy_lttng_session_ok "$SESSION_NAME"
+}
+
+function test_map_ust_destroy_started()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 32 --session "$SESSION_NAME" "$MAP_NAME"
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--condition \
+			on-event --userspace "$EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "foo"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	destroy_lttng_session_ok $SESSION_NAME
 }
 
 
 function test_map_kernel_create()
 {
-	local map_name="map_name"
-	local sess_name="map_name"
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
 
-	create_lttng_session_ok "$sess_name"
+	create_lttng_session_ok "$SESSION_NAME"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "wrong_session_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "wrong_session_name" "$MAP_NAME"
 	isnt $? 0 "Map creation failed on wrong session name"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 42 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 42 --session "$SESSION_NAME" "$MAP_NAME"
 	isnt $? 0 "Map creation failed \"--bitness\" wrong value as expected"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "SESS_DOESNT_EXIST" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --session "SESS_DOESNT_EXIST" "$MAP_NAME"
 	isnt $? 0 "Failed to add map to session that doesn't exist"
 
 	"$FULL_LTTNG_BIN" remove-map --kernel "MAP_DOESNT_EXIST"
 	isnt $? 0 "Failed to remove map that doesn't exist"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 64 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 64 --session "$SESSION_NAME" "$MAP_NAME"
 	ok $? "Map with 64bit bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	"$FULL_LTTNG_BIN" remove-map --kernel "$MAP_NAME"
 	ok $? "Map removed succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "$SESSION_NAME" "$MAP_NAME"
 	ok $? "Map with 32bit bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$SESSION_NAME" "$MAP_NAME"
 	isnt $? 0 "Duplicated map fails to create as expected"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	"$FULL_LTTNG_BIN" remove-map --kernel "$MAP_NAME"
 	ok $? "Map removed succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$SESSION_NAME" "$MAP_NAME"
 	ok $? "Map with default bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	"$FULL_LTTNG_BIN" remove-map --kernel "$MAP_NAME"
 	ok $? "Map removed succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" --max-key-count 212 "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$SESSION_NAME" --max-key-count 212 "$MAP_NAME"
 	ok $? "Map with max key count created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	"$FULL_LTTNG_BIN" remove-map --kernel "$MAP_NAME"
 	ok $? "Map removed succesfully"
 
-	destroy_lttng_session_ok "$sess_name"
+	destroy_lttng_session_ok "$SESSION_NAME"
 }
 
 start_lttng_sessiond_notap
 
 test_map_ust_create
+test_map_ust_view_empty
+test_map_ust_destroy_started
 
 if [ "$(id -u)" == "0" ]; then
 
@@ -118,7 +177,7 @@ if [ "$(id -u)" == "0" ]; then
 
 	modprobe lttng-test
 
-	test_map_kernel_create
+#	test_map_kernel_create
 
 	modprobe --remove lttng-test
 

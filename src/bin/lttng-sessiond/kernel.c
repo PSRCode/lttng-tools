@@ -33,6 +33,8 @@
 #include <lttng/event-rule/event-rule.h>
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/event-rule/userspace-probe-internal.h>
+#include <lttng/map/map.h>
+#include <lttng/map/map-internal.h>
 #include <lttng/map-key.h>
 #include <lttng/map-key-internal.h>
 
@@ -2776,6 +2778,80 @@ error:
 	rcu_read_unlock();
 
 	return error_code_ret;
+}
+
+enum lttng_error_code kernel_list_map_values(const struct ltt_kernel_map *map,
+		struct lttng_map_key_value_pair_list *kv_pair_list)
+{
+	enum lttng_map_status map_status;
+	enum lttng_error_code ret_code;;
+	const char *map_name = NULL;
+	uint64_t descr_count, i;
+	int ret;
+
+	map_status = lttng_map_get_name(map->map, &map_name);
+	assert(map_status == LTTNG_MAP_STATUS_OK);
+
+	DBG("Listing kernel map values: map-name = '%s'", map_name);
+
+	ret = kernctl_counter_map_descriptor_count(map->fd, &descr_count);
+	if (ret) {
+		ERR("Error getting map descriptor count");
+		ret_code = LTTNG_ERR_MAP_VALUES_LIST_FAIL;
+		goto end;
+	}
+
+	DBG("Querying kernel for all map values: map-name = '%s', key-value count = %"PRIu64,
+			map_name, descr_count);
+	for(i = 0; i < descr_count; i++) {
+		struct lttng_kernel_counter_map_descriptor descriptor = {0};
+		struct lttng_kernel_counter_aggregate value = {0};
+		struct lttng_map_key_value_pair *kv_pair;
+
+		DBG("Querying kernel for map key-value descriptor: map-name = '%s', descriptor = %"PRIu64,
+				map_name, i);
+		descriptor.descriptor_index = i;
+
+		ret = kernctl_counter_map_descriptor(map->fd, &descriptor);
+		if (ret) {
+			ERR("Error getting map descriptor %"PRIu64, i);
+			ret_code = LTTNG_ERR_MAP_VALUES_LIST_FAIL;
+			goto end;
+		}
+
+		value.index.number_dimensions = 1;
+		value.index.dimension_indexes[0] = descriptor.array_index;
+
+		DBG("Querying kernel for map descriptor value: map-name = '%s', counter-index = %"PRIu64,
+				map_name, descriptor.array_index);
+		ret = kernctl_counter_get_aggregate_value(map->fd, &value);
+		if (ret) {
+			ERR("Error getting value of map descriptor %"PRIu64, i);
+			ret_code = LTTNG_ERR_MAP_VALUES_LIST_FAIL;
+			goto end;
+		}
+
+		kv_pair = lttng_map_key_value_pair_create(descriptor.key, value.value.value);
+		if (!kv_pair) {
+			ERR("Error creating a kernel key-value pair");
+			ret_code = LTTNG_ERR_MAP_VALUES_LIST_FAIL;
+			goto end;
+		}
+
+
+		map_status = lttng_map_key_value_pair_list_append_key_value(kv_pair_list, kv_pair);
+		if (map_status != LTTNG_MAP_STATUS_OK) {
+			ERR("Error creating a kernel key-value pair");
+			lttng_map_key_value_pair_destroy(kv_pair);
+			ret_code = LTTNG_ERR_MAP_VALUES_LIST_FAIL;
+			goto end;
+		}
+	}
+
+	ret_code = LTTNG_OK;
+
+end:
+	return ret_code;
 }
 
 int kernel_get_notification_fd(void)

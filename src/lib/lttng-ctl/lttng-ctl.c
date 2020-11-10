@@ -3526,6 +3526,72 @@ end:
 }
 
 /*
+ * Ask the session daemon for all values for a given map.
+ * On error, returns a negative value.
+ */
+enum lttng_error_code lttng_list_map_key_value_pairs(
+		struct lttng_handle *handle, const char *map_name,
+		struct lttng_map_key_value_pair_list **kv_pairs)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	struct lttcomm_session_msg lsm;
+	struct lttng_map_key_value_pair_list *local_kv_pair_list = NULL;
+	struct lttng_payload_view lsm_view =
+			lttng_payload_view_init_from_buffer(
+				(const char *) &lsm, 0, sizeof(lsm));
+	struct lttng_payload reply;
+
+	lttng_payload_init(&reply);
+
+	memset(&lsm, 0, sizeof(lsm));
+	lsm.cmd_type = LTTNG_LIST_MAP_VALUES;
+
+	COPY_DOMAIN_PACKED(lsm.domain, handle->domain);
+
+	ret = lttng_strncpy(lsm.session.name, handle->session_name,
+			sizeof(lsm.session.name));
+	if (ret) {
+		ret_code = LTTNG_ERR_INVALID;
+		goto end;
+	}
+	ret = lttng_strncpy(lsm.u.list_map_values.map_name, map_name,
+			sizeof(lsm.u.list_map_values.map_name));
+	if (ret) {
+		ret_code = LTTNG_ERR_INVALID;
+		goto end;
+	}
+
+	ret = lttng_ctl_ask_sessiond_payload(&lsm_view, &reply);
+	if (ret < 0) {
+		ret_code = (enum lttng_error_code) -ret;
+		goto end;
+	}
+
+	{
+		struct lttng_payload_view reply_view =
+				lttng_payload_view_from_payload(
+						&reply, 0, reply.buffer.size);
+		ret = lttng_map_key_value_pair_list_create_from_payload(
+			&reply_view, &local_kv_pair_list);
+		if (ret < 0) {
+			ret_code = LTTNG_ERR_FATAL;
+			goto end;
+		}
+	}
+
+	*kv_pairs = local_kv_pair_list;
+	local_kv_pair_list = NULL;
+
+	ret_code = LTTNG_OK;
+	goto end;
+end:
+	lttng_payload_reset(&reply);
+	lttng_map_key_value_pair_list_destroy(local_kv_pair_list);
+	return ret_code;
+}
+
+/*
  * lib constructor.
  */
 static void __attribute__((constructor)) init(void)

@@ -44,6 +44,10 @@ int kernctl_counter_get_aggregate_value(int counter_fd,
 int kernctl_counter_clear(int counter_fd,
 		struct lttng_kernel_counter_clear *clear);
 
+int kernctl_counter_map_descriptor_count(int counter_fd, uint64_t *count);
+int kernctl_counter_map_descriptor(int counter_fd,
+		struct lttng_kernel_counter_map_descriptor *descriptor);
+
 /* Apply on event file descriptor. */
 int kernctl_filter(int fd, const struct lttng_bytecode *filter);
 int kernctl_add_callsite(int fd, struct lttng_kernel_event_callsite *callsite);

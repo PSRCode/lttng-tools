@@ -247,6 +247,7 @@ LTTNG_PTHREAD_GETNAME_NP
 # Check if clock_gettime, timer_create, timer_settime, and timer_delete are available in lib rt, and if so,
 # add -lrt to LIBS
 AC_CHECK_LIB([rt], [clock_gettime, timer_create, timer_settime, timer_delete])
+AC_CHECK_LIB([m], [floor, log10])
 
 # Checks for dl.
 AC_CHECK_LIB([dl], [dlopen], [

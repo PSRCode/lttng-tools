@@ -154,7 +154,6 @@ int cmd_remove_map(int argc, const char **argv)
 		goto error;
 	}
 
-
 	error_code_ret = lttng_remove_map(handle, opt_map_name);
 	if (error_code_ret != LTTNG_OK) {
 		ERR("Error removing map \"%s\"", opt_map_name);

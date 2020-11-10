@@ -179,6 +179,8 @@ enum lttng_error_code {
 	LTTNG_ERR_EVENT_NOTIFIER_ERROR_ACCOUNTING = 166, /* Error initializing event notifier error accounting. */
 	LTTNG_ERR_EVENT_NOTIFIER_ERROR_ACCOUNTING_FULL = 167, /* Error event notifier error accounting full. */
 	LTTNG_ERR_INVALID_MAP = 168, /* Invalid map provided. */
+	LTTNG_ERR_MAP_NOT_FOUND = 169, /* Map by name not found. */
+	LTTNG_ERR_MAP_VALUES_LIST_FAIL = 170,  /* Listing map values failed */
 
 	/* MUST be last element of the manually-assigned section of the enum */
 	LTTNG_ERR_NR,
