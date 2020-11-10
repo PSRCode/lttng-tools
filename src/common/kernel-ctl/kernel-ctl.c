@@ -462,6 +462,25 @@ int kernctl_counter_clear(int counter_fd,
 			clear);
 }
 
+int kernctl_counter_map_descriptor_count(int counter_fd, uint64_t *count)
+{
+	struct lttng_kernel_counter_map_nr_descriptors nr_desc;
+	int ret;
+
+	ret = LTTNG_IOCTL_NO_CHECK(counter_fd,
+			LTTNG_KERNEL_COUNTER_MAP_NR_DESCRIPTORS, &nr_desc);
+	*count = nr_desc.nr_descriptors;
+
+	return ret;
+}
+
+int kernctl_counter_map_descriptor(int counter_fd,
+		struct lttng_kernel_counter_map_descriptor *descriptor)
+{
+	return LTTNG_IOCTL_NO_CHECK(counter_fd,
+			LTTNG_KERNEL_COUNTER_MAP_DESCRIPTOR, descriptor);
+}
+
 int kernctl_create_event_notifier(int group_fd,
 		const struct lttng_kernel_event_notifier *event_notifier)
 {

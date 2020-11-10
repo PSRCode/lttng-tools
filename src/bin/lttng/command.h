@@ -67,6 +67,7 @@ DECL_COMMAND(add_context);
 DECL_COMMAND(set_session);
 DECL_COMMAND(version);
 DECL_COMMAND(view);
+DECL_COMMAND(view_map);
 DECL_COMMAND(enable_consumer);
 DECL_COMMAND(disable_consumer);
 DECL_COMMAND(snapshot);

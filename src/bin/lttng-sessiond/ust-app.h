@@ -13,6 +13,7 @@
 
 #include <common/index-allocator.h>
 #include <common/uuid.h>
+#include <lttng/map/map.h>
 
 #include "trace-ust.h"
 #include "ust-registry.h"
@@ -412,6 +413,10 @@ int ust_app_enable_map_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_map *umap);
 int ust_app_disable_map_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_map *umap);
+int ust_app_map_list_values(const struct ltt_ust_session *usess,
+		const struct ltt_ust_map *umap,
+		uint32_t app_bitness,
+		struct lttng_map_key_value_pair_list *kv_pair_list);
 int ust_app_create_map_event_glb(struct ltt_ust_session *usess,
 		struct ltt_ust_map *umap, struct ltt_ust_event *uevent);
 int ust_app_enable_map_event_glb(struct ltt_ust_session *usess,

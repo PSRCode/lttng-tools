@@ -5,7 +5,17 @@
 # SPDX-License-Identifier: LGPL-2.1-only
 
 CURDIR=$(dirname "$0")/
-TESTDIR=$CURDIR/../../../
+TESTDIR=$CURDIR/../../..
+NR_ITER=5
+NR_USEC_WAIT=100000
+TESTAPP_PATH="$TESTDIR/utils/testapp"
+TESTAPP_NAME="gen-ust-events"
+TESTAPP_BIN="$TESTAPP_PATH/$TESTAPP_NAME/$TESTAPP_NAME"
+UST_EVENT_NAME="tp:tptest"
+
+UST_NUM_TESTS=193
+KERNEL_NUM_TESTS=19
+NUM_TESTS=$(($UST_NUM_TESTS + $KERNEL_NUM_TESTS))
 
 TMPDIR=$(mktemp -d)
 
@@ -13,104 +23,550 @@ SH_TAP=1
 
 # shellcheck source=../../../utils/utils.sh
 source "$TESTDIR/utils/utils.sh"
-# shellcheck source=./util_event_generator.sh
 
 FULL_LTTNG_BIN="${TESTDIR}/../src/bin/lttng/${LTTNG_BIN}"
 
-UST_NUM_TESTS=10
-KERNEL_NUM_TESTS=19
-NUM_TESTS=$(($UST_NUM_TESTS + $KERNEL_NUM_TESTS))
+if [ ! -x "$TESTAPP_BIN" ]; then
+	BAIL_OUT "No UST events binary detected."
+fi
 
 plan_tests $NUM_TESTS
 
-function test_map_ust_create()
-{
-	local map_name="map_name"
-	local map_name_2="map_name2"
-	local sess_name="map_name"
+function remove_trigger_ok() {
+	local trigger_name="$1"
 
-	create_lttng_session_ok "$sess_name"
-
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 32 --session "wrong_session_name" "$map_name"
-	isnt $? 0 "Map creation failed on wrong session name"
-
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 42 --session "$sess_name" "$map_name"
-	isnt $? 0 "Map creation failed \"--bitness\" wrong value as expected"
-
-	"$FULL_LTTNG_BIN" add-map --userspace --session "SESS_DOESNT_EXIST" "$map_name"
-	isnt $? 0 "Failed to add map to session that doesn't exist"
-
-	"$FULL_LTTNG_BIN" remove-map --userspace --session "$sess_name" "MAP_DOESNT_EXIST"
-	isnt $? 0 "Failed to remove map that doesn't exist"
-
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$sess_name" "$map_name"
-	ok $? "Map with 64bit bitness created succesfully"
-
-	"$FULL_LTTNG_BIN" remove-map --userspace "$map_name"
-	ok $? "Map removed succesfully"
-
-	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --buffers-pid --session "$sess_name" "$map_name_2"
-	ok $? "Map per-pid 64bit bitness created succesfully"
-
-	"$FULL_LTTNG_BIN" remove-map --userspace "$map_name_2"
-	ok $? "Map removed succesfully"
-
-	destroy_lttng_session_ok "$sess_name"
+	"$FULL_LTTNG_BIN" remove-trigger "$trigger_name" > /dev/null
+	ok $? "Removed trigger '$TRIGGER_NAME${i}' succesfully"
 }
 
 
-function test_map_kernel_create()
+function view_map_ok() {
+	local map_name="$1"
+	local key="$2"
+	local expected_value="$3"
+	local extracted_value
+	local temp_view_output
+
+	temp_view_output=$(mktemp -t map_view_output.XXXXXX)
+
+	"$FULL_LTTNG_BIN" view-map "$map_name" > "$temp_view_output"
+	ok $? "Map '$map_name' viewed succesfully"
+
+	grep -q "$key" "$temp_view_output"
+	ok $? "Key '$key' found in view-map output"
+
+	# Get value
+	# TODO: this is based on the text output, ideally when mi is availabe we
+	# who should use it to parse the value!
+	# Sample output
+	# |key  | 5|
+	extracted_value=$(grep "$key" "$temp_view_output" | tr -d " " | cut -d "|" -f3)
+	# Necessary since the returned value can be non existent
+	extracted_value=${extracted_value:-"-1"}
+
+	is "$extracted_value" "$expected_value" "Key value is $expected_value as expected"
+
+	rm -f "$temp_view_output"
+}
+
+function test_map_ust_create()
 {
-	local map_name="map_name"
-	local sess_name="map_name"
+	local MAP_NAME="my_map_name"
+	local MAP_NAME_2="my_map_name2"
+	local MAP_NAME_3="my_map_name3"
+	local SESSION_NAME="my_session_name"
 
-	create_lttng_session_ok "$sess_name"
+	diag "Map creation"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "wrong_session_name" "$map_name"
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 32 --session "wrong_session_name" "$MAP_NAME"  > /dev/null
 	isnt $? 0 "Map creation failed on wrong session name"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 42 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 42 --session "$SESSION_NAME" "$MAP_NAME"  > /dev/null
 	isnt $? 0 "Map creation failed \"--bitness\" wrong value as expected"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "SESS_DOESNT_EXIST" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --session "SESS_DOESNT_EXIST" "$MAP_NAME"  > /dev/null
 	isnt $? 0 "Failed to add map to session that doesn't exist"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "MAP_DOESNT_EXIST"
-	isnt $? 0 "Failed to remove map that doesn't exist"
+	"$FULL_LTTNG_BIN" disable-map --userspace --session "$SESSION_NAME" "MAP_DOESNT_EXIST" > /dev/null
+	isnt $? 0 "Failed to disable map that doesn't exist"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 64 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME"  > /dev/null
 	ok $? "Map with 64bit bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
-	ok $? "Map removed succesfully"
+	"$FULL_LTTNG_BIN" disable-map --userspace "$MAP_NAME" > /dev/null
+	ok $? "Map disabled succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --buffers-pid --session "$SESSION_NAME" "$MAP_NAME_2"  > /dev/null
+	ok $? "Map per-pid 64bit bitness created succesfully"
+
+	"$FULL_LTTNG_BIN" disable-map --userspace "$MAP_NAME_2" > /dev/null
+	ok $? "Map disabled succesfully"
+
+	"$FULL_LTTNG_BIN" enable-map --userspace "$MAP_NAME_2" > /dev/null
+	ok $? "Map enabled succesfully"
+
+	destroy_lttng_session_ok "$SESSION_NAME"
+}
+
+function test_map_view_empty()
+{
+	local domain="$1"
+	local bitness="$2"
+	local buf_option="$3"
+
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+
+	diag "Map view empty: $domain bitness $bitness $buf_option"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map "$domain" --bitness "$bitness" "$buf_option" --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" view-map "$MAP_NAME" > /dev/null
+	ok $? "Map enabled viewed succesfully"
+
+	"$FULL_LTTNG_BIN" disable-map --userspace "$MAP_NAME" > /dev/null
+	ok $? "Map disabled succesfully"
+
+	"$FULL_LTTNG_BIN" view-map "$MAP_NAME" > /dev/null
+	ok $? "Map disabled viewed succesfully"
+
+
+	destroy_lttng_session_ok "$SESSION_NAME"
+}
+
+function test_map_base_scenario()
+{
+	local domain="$1"
+	local bitness="$2"
+	local buf_option="$3"
+	local event_name="$4"
+
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	diag "Map base tracing scenario: $domain bitness $bitness $buf_option"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map "$domain" --bitness "$bitness" "$buf_option" --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event "$domain" "$event_name" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_ust_two_apps()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	diag "Map with two apps"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event --userspace "$UST_EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$((NR_ITER * 2))"
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_ust_after_trigger()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	diag "Map creation after trigger creation"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event --userspace "$UST_EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_ust_n_triggers()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	local number_of_trigger=5
+
+	diag "Map with $number_of_trigger triggers"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	for i in $(seq 1 $number_of_trigger); do
+		"$FULL_LTTNG_BIN" add-trigger \
+			--id "${TRIGGER_NAME}${i}" \
+			--condition \
+				on-event --userspace "$UST_EVENT_NAME" \
+			--action \
+				incr-value --session "$SESSION_NAME" \
+				--map "$MAP_NAME" \
+				--key "${KEY}${i}" > /dev/null
+		ok $? "Trigger added succesfully"
+	done
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	for i in $(seq 1 $number_of_trigger); do
+		view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+	done
+
+	for i in $(seq 1 $number_of_trigger); do
+		remove_trigger_ok "$TRIGGER_NAME${i}"
+	done
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_ust_with_events()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	diag "Map with regular events"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	enable_ust_lttng_event_ok "$SESSION_NAME" "*"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event --userspace "$UST_EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_ust_remove_trigger_before_stop()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	diag "Map remove trigger before stop"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event --userspace "$UST_EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	# Confirm that the map content is unchanged after a stop.
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_ust_add_remove_add_trigger()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	diag "Map add-remove-add the same trigger"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event --userspace "$UST_EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event --userspace "$UST_EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$((NR_ITER * 2))"
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_ust_disable_enable()
+{
+	local MAP_NAME="my_map_name"
+	local SESSION_NAME="my_session_name"
+	local TRIGGER_NAME="my_trigger_name"
+	local KEY="foo"
+
+	diag "Map disable-enable"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --userspace --bitness 64 --session "$SESSION_NAME" "$MAP_NAME" > /dev/null
+	ok $? "Map created succesfully"
+
+	"$FULL_LTTNG_BIN" add-trigger \
+		--id "$TRIGGER_NAME" \
+		--condition \
+			on-event --userspace "$UST_EVENT_NAME" \
+		--action \
+			incr-value --session "$SESSION_NAME" --map "$MAP_NAME" --key "$KEY" > /dev/null
+	ok $? "Trigger added succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	"$FULL_LTTNG_BIN" disable-map -u "$MAP_NAME" > /dev/null
+	ok $? "Map disabled succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	# The values in the map should not have changed since the map is
+	# disabled.
+	view_map_ok "$MAP_NAME" "$KEY" "$NR_ITER"
+
+	"$FULL_LTTNG_BIN" enable-map -u "$MAP_NAME" > /dev/null
+	ok $? "Map enabled succesfully"
+
+	start_lttng_tracing_ok $SESSION_NAME
+
+	$TESTAPP_BIN -i $NR_ITER -w $NR_USEC_WAIT
+
+	stop_lttng_tracing_ok $SESSION_NAME
+
+	view_map_ok "$MAP_NAME" "$KEY" "$((NR_ITER * 2))"
+
+	remove_trigger_ok "$TRIGGER_NAME"
+
+	destroy_lttng_session_ok $SESSION_NAME
+}
+
+function test_map_kernel_create()
+{
+	local MAP_NAME="my_map_name"
+	local MAP_NAME_2="my_map_name2"
+	local MAP_NAME_3="my_map_name3"
+	local MAP_NAME_4="my_map_name4"
+	local SESSION_NAME="my_session_name"
+
+	create_lttng_session_ok "$SESSION_NAME"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "wrong_session_name" "$MAP_NAME"  > /dev/null
+	isnt $? 0 "Map creation failed on wrong session name"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 42 --session "$SESSION_NAME" "$MAP_NAME"  > /dev/null
+	isnt $? 0 "Map creation failed \"--bitness\" wrong value as expected"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --session "SESS_DOESNT_EXIST" "$MAP_NAME"  > /dev/null
+	isnt $? 0 "Failed to add map to session that doesn't exist"
+
+	"$FULL_LTTNG_BIN" disable-map --kernel "MAP_DOESNT_EXIST" > /dev/null
+	isnt $? 0 "Failed to disable map that doesn't exist"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 64 --session "$SESSION_NAME" "$MAP_NAME"  > /dev/null
+	ok $? "Map with 64bit bitness created succesfully"
+
+	"$FULL_LTTNG_BIN" disable-map --kernel "$MAP_NAME" > /dev/null
+	ok $? "Map disabled succesfully"
+
+	"$FULL_LTTNG_BIN" add-map --kernel --bitness 32 --session "$SESSION_NAME" "$MAP_NAME_2"  > /dev/null
 	ok $? "Map with 32bit bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$SESSION_NAME" "$MAP_NAME_2"  > /dev/null
 	isnt $? 0 "Duplicated map fails to create as expected"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
-	ok $? "Map removed succesfully"
+	"$FULL_LTTNG_BIN" disable-map --kernel "$MAP_NAME_2" > /dev/null
+	ok $? "Map disabled succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$SESSION_NAME" "$MAP_NAME_3"  > /dev/null
 	ok $? "Map with default bitness created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
+	"$FULL_LTTNG_BIN" disable-map --kernel "$MAP_NAME_3" > /dev/null
 	ok $? "Map removed succesfully"
 
-	"$FULL_LTTNG_BIN" add-map --kernel --session "$sess_name" --max-key-count 212 "$map_name"
+	"$FULL_LTTNG_BIN" add-map --kernel --session "$SESSION_NAME" --max-key-count 212 "$MAP_NAME_4"  > /dev/null
 	ok $? "Map with max key count created succesfully"
 
-	"$FULL_LTTNG_BIN" remove-map --kernel "$map_name"
-	ok $? "Map removed succesfully"
+	"$FULL_LTTNG_BIN" disable-map --kernel "$MAP_NAME_4" > /dev/null
+	ok $? "Map disabled succesfully"
 
-	destroy_lttng_session_ok "$sess_name"
+	"$FULL_LTTNG_BIN" enable-map --kernel "$MAP_NAME_4" > /dev/null
+	ok $? "Map enabled succesfully"
+
+	destroy_lttng_session_ok "$SESSION_NAME"
 }
 
 start_lttng_sessiond_notap
 
 test_map_ust_create
+
+test_map_view_empty "--userspace" "64" "--buffers-uid"
+test_map_view_empty "--userspace" "64" "--buffers-pid"
+test_map_view_empty "--userspace" "32" "--buffers-uid"
+test_map_view_empty "--userspace" "32" "--buffers-pid"
+
+test_map_base_scenario "--userspace" "64" "--buffers-uid" "$UST_EVENT_NAME"
+test_map_base_scenario "--userspace" "64" "--buffers-pid" "$UST_EVENT_NAME"
+test_map_base_scenario "--userspace" "32" "--buffers-uid" "$UST_EVENT_NAME"
+test_map_base_scenario "--userspace" "32" "--buffers-pid" "$UST_EVENT_NAME"
+
+test_map_ust_two_apps
+test_map_ust_with_events
+test_map_ust_after_trigger
+test_map_ust_remove_trigger_before_stop
+test_map_ust_add_remove_add_trigger
+test_map_ust_n_triggers
+test_map_ust_disable_enable
 
 if [ "$(id -u)" == "0" ]; then
 

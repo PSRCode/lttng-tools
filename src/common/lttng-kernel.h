@@ -277,6 +277,23 @@ struct lttng_kernel_counter_clear {
 	char padding[LTTNG_KERNEL_COUNTER_CLEAR_PADDING];
 } LTTNG_PACKED;
 
+#define LTTNG_KERNEL_COUNTER_MAP_NR_DESCRIPTORS_PADDING 32
+struct lttng_kernel_counter_map_nr_descriptors {
+	uint64_t nr_descriptors;
+};
+
+#define LTTNG_KERNEL_COUNTER_KEY_LEN 256
+#define LTTNG_KERNEL_COUNTER_MAP_DESCRIPTOR_PADDING 32
+struct lttng_kernel_counter_map_descriptor {
+	uint64_t descriptor_index;	/* input. [ 0 .. nr_descriptors - 1 ] */
+	uint32_t dimension;		/* outputs */
+	uint64_t array_index;
+	uint64_t user_token;
+	char key[LTTNG_KERNEL_COUNTER_KEY_LEN];
+
+	char padding[LTTNG_KERNEL_COUNTER_MAP_DESCRIPTOR_PADDING];
+} LTTNG_PACKED;
+
 #define LTTNG_KERNEL_EVENT_NOTIFIER_NOTIFICATION_PADDING 32
 struct lttng_kernel_event_notifier_notification {
 	uint64_t token;

@@ -33,6 +33,8 @@
 #include <lttng/condition/condition.h>
 #include <lttng/condition/on-event-internal.h>
 #include <lttng/condition/on-event.h>
+#include <lttng/map/map.h>
+#include <lttng/map/map-internal.h>
 #include <lttng/map-key.h>
 #include <lttng/map-key-internal.h>
 #include <lttng/trigger/trigger-internal.h>
@@ -6573,6 +6575,100 @@ int ust_app_create_channel_event_glb(struct ltt_ust_session *usess,
 	}
 
 	rcu_read_unlock();
+	return ret;
+}
+
+int ust_app_map_list_values(const struct ltt_ust_session *usess,
+		const struct ltt_ust_map *umap,
+		uint32_t app_bitness,
+		struct lttng_map_key_value_pair_list *kv_pair_list)
+{
+	int ret = 0;
+	uint32_t bitness;
+	struct lttng_ht_iter iter;
+	struct buffer_reg_uid *buf_reg_uid;
+	struct buffer_reg_map *buf_reg_map;
+	struct ust_registry_session *ust_reg_sess;
+	struct lttng_ht_node_u64 *ust_reg_map_node;
+	struct ust_registry_map *ust_reg_map;
+	struct ust_registry_map_index_ht_entry *map_index_entry;
+
+	buf_reg_uid = buffer_reg_uid_find(usess->id, app_bitness, usess->uid);
+	if (!buf_reg_uid) {
+		/*
+		 * Buffer registry entry for uid not found. Probably no app for
+		 * this UID at the moment.
+		 */
+		DBG("No buffer registry entry found for uid: ust-sess-id = %"PRIu64", bitness = %"PRIu32", uid = %d",
+				usess->id, app_bitness, usess->uid);
+		/*
+		 * Not an error. Leave the key value pair unchanged and return.
+		 */
+		ret = 0;
+		goto end;
+	}
+
+	buf_reg_map = buffer_reg_map_find(umap->id, buf_reg_uid);
+	if (!buf_reg_uid) {
+		ERR("Error getting per-uid map buffer registry entry: map-id = %"PRIu64,
+				umap->id);
+		ret = -1;
+		goto end;
+	}
+
+	ust_reg_sess = buf_reg_uid->registry->reg.ust;
+
+	/* Get the ust_reg map object from the registry */
+	lttng_ht_lookup(ust_reg_sess->maps, (void *) &umap->id, &iter);
+	ust_reg_map_node = lttng_ht_iter_get_node_u64(&iter);
+	if (!ust_reg_map_node) {
+		ERR("Error getting per-uid map buffer registry entry: map-id = %"PRIu64,
+				umap->id);
+		ret = -1;
+		goto end;
+	}
+	ust_reg_map = caa_container_of(ust_reg_map_node,
+			struct ust_registry_map, node);
+
+	/* Iterate over all the formated_key -> counter index */
+	cds_lfht_for_each_entry(ust_reg_map->key_string_to_bucket_index_ht->ht,
+			&iter.iter, map_index_entry, node.node) {
+		enum lttng_map_status map_status;
+		struct lttng_map_key_value_pair *kv_pair;
+		bool overflow = 0, underflow = 0;
+		int64_t local_value = 0;
+		size_t dimension_indexes[1] = {map_index_entry->index};
+
+		ret = ustctl_counter_aggregate(buf_reg_map->daemon_counter,
+			dimension_indexes, &local_value, &overflow,
+			&underflow);
+		if (ret) {
+			ERR("Error getting counter value from the tracer: key = '%s'",
+					map_index_entry->formated_key);
+			ret = -1;
+			goto end;
+		}
+
+		kv_pair = lttng_map_key_value_pair_create(
+				map_index_entry->formated_key, local_value);
+		if (!kv_pair) {
+			ERR("Error creating a key-value pair");
+			ret = -1;
+			goto end;
+		}
+
+		map_status = lttng_map_key_value_pair_list_append_key_value(
+				kv_pair_list, kv_pair);
+		if (map_status != LTTNG_MAP_STATUS_OK) {
+			ERR("Error appending a key-value pair to the list");
+			lttng_map_key_value_pair_destroy(kv_pair);
+			ret = -1;
+			goto end;
+		}
+	}
+
+	ret = 0;
+end:
 	return ret;
 }
 

@@ -170,6 +170,7 @@ extern enum lttng_map_status lttng_map_key_value_pair_get_value(
  */
 extern enum lttng_error_code lttng_list_map_key_value_pairs(
 		struct lttng_handle *handle, const char *map_name,
+		uint32_t app_bitness,
 		struct lttng_map_key_value_pair_list **kv_pair_list);
 
 /*

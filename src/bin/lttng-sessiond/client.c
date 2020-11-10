@@ -24,6 +24,8 @@
 #include <common/unix.h>
 #include <common/utils.h>
 #include <lttng/event-internal.h>
+#include <lttng/map/map.h>
+#include <lttng/map/map-internal.h>
 #include <lttng/session-descriptor-internal.h>
 #include <lttng/session-internal.h>
 #include <lttng/userspace-probe-internal.h>
@@ -876,6 +878,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	case LTTNG_SESSION_LIST_ROTATION_SCHEDULES:
 	case LTTNG_CLEAR_SESSION:
 	case LTTNG_LIST_TRIGGERS:
+	case LTTNG_LIST_MAP_VALUES:
 		need_domain = false;
 		break;
 	default:
@@ -889,6 +892,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 	case LTTNG_ADD_MAP:
 	case LTTNG_ENABLE_MAP:
 	case LTTNG_DISABLE_MAP:
+	case LTTNG_LIST_MAP_VALUES:
 		need_consumerd = false;
 		break;
 	default:
@@ -2390,6 +2394,48 @@ error_add_context:
 		lttng_triggers_destroy(return_triggers);
 		if (ret) {
 			ERR("Failed to serialize triggers in reply to `list triggers` command");
+			ret = LTTNG_ERR_NOMEM;
+			goto error;
+		}
+
+		payload_size = cmd_ctx->reply_payload.buffer.size -
+			original_payload_size;
+
+		update_lttng_msg(cmd_ctx, 0, payload_size);
+
+		ret = LTTNG_OK;
+		break;
+	}
+	case LTTNG_LIST_MAP_VALUES:
+	{
+		struct lttng_map_key_value_pair_list *return_kv_list = NULL;
+		const char *session_name, *map_name;
+		uint32_t app_bitness;
+		size_t original_payload_size;
+		size_t payload_size;
+
+		ret = setup_empty_lttng_msg(cmd_ctx);
+		if (ret) {
+			ret = LTTNG_ERR_NOMEM;
+			goto setup_error;
+		}
+
+		original_payload_size = cmd_ctx->reply_payload.buffer.size;
+
+		app_bitness = cmd_ctx->lsm.u.list_map_values.app_bitness;
+		session_name = cmd_ctx->lsm.session.name;
+		map_name = cmd_ctx->lsm.u.list_map_values.map_name;
+		ret = cmd_list_map_values(cmd_ctx->lsm.domain.type,
+				session_name, map_name, app_bitness, &return_kv_list);
+		if (ret != LTTNG_OK) {
+			goto error;
+		}
+		assert(return_kv_list);
+		ret = lttng_map_key_value_pair_list_serialize(
+				return_kv_list, &cmd_ctx->reply_payload);
+		lttng_map_key_value_pair_list_destroy(return_kv_list);
+		if (ret) {
+			ERR("Failed to serialize key-value pair list in reply to `list map values` command");
 			ret = LTTNG_ERR_NOMEM;
 			goto error;
 		}

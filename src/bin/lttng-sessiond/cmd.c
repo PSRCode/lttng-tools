@@ -358,7 +358,8 @@ enum lttng_error_code sync_incr_value_action_ust(
 		break;
 	case TRACER_EXECUTED_ACTION_STATE_UNREGISTER:
 		ret = map_event_ust_disable_tracepoint(session->ust_session,
-			map, (char *) pattern);
+			map, tracer_token, (char *) pattern, key, LTTNG_EVENT_TRACEPOINT,
+			LTTNG_EVENT_LOGLEVEL_ALL, 0, NULL, NULL, NULL, false);
 		assert(ret == LTTNG_OK);
 		break;
 	}
@@ -1937,7 +1938,6 @@ enum lttng_error_code cmd_enable_map(struct ltt_session *session,
 	DBG("Enabling map %s for session %s", map_name, session->name);
 
 	rcu_read_lock();
-
 
 	switch (domain) {
 	case LTTNG_DOMAIN_KERNEL:
@@ -5195,6 +5195,95 @@ end:
 	lttng_triggers_destroy(triggers);
 	return ret;
 }
+static
+enum lttng_error_code list_map_values(enum lttng_domain_type domain,
+		const char *session_name, const char *map_name,
+		uint32_t app_bitness,
+		struct lttng_map_key_value_pair_list **return_kv_pair_list)
+{
+	enum lttng_error_code ret;
+	struct ltt_session *session;
+	struct lttng_map_key_value_pair_list *local_kv_pair_list = NULL;
+
+	/* Returns a refcounted reference */
+	session = session_find_by_name(session_name);
+	if (!session) {
+		DBG("Session '%s' not found", session_name);
+		ret = LTTNG_ERR_SESS_NOT_FOUND;
+		goto end;
+	}
+
+	local_kv_pair_list = lttng_map_key_value_pair_list_create();
+	if (!local_kv_pair_list) {
+		ERR("Error creating a key value pair list");
+		ret = LTTNG_ERR_NOMEM;
+		goto end;
+	}
+
+	if (domain == LTTNG_DOMAIN_KERNEL) {
+		if (session->kernel_session) {
+			struct ltt_kernel_map *kmap;
+
+			kmap = trace_kernel_get_map_by_name(map_name,
+					session->kernel_session);
+			if (kmap) {
+				ret = kernel_list_map_values(kmap,
+						local_kv_pair_list);
+				if (ret != LTTNG_OK) {
+					ERR("Error listing kernel map '%s' values", map_name);
+					goto end;
+				}
+			} else {
+				DBG("No kernel map '%s' in session '%s'", map_name, session_name);
+			}
+		}
+	} else if (domain == LTTNG_DOMAIN_UST) {
+		if (session->ust_session) {
+			struct ltt_ust_map *umap;
+			struct ltt_ust_session *usess = session->ust_session;
+
+			umap = trace_ust_find_map_by_name(
+					usess->domain_global.maps, map_name);
+			if (umap) {
+				ret = ust_app_map_list_values(usess, umap, app_bitness,
+						local_kv_pair_list);
+				if (ret) {
+					ret = LTTNG_ERR_MAP_VALUES_LIST_FAIL;
+					ERR("Error listing UST map '%s' values", map_name);
+					goto end;
+				}
+			} else {
+				DBG("No UST map '%s' in session '%s'", map_name, session_name);
+			}
+		}
+	}
+
+	*return_kv_pair_list = local_kv_pair_list;
+	local_kv_pair_list = NULL;
+
+	ret = LTTNG_OK;
+end:
+	lttng_map_key_value_pair_list_destroy(local_kv_pair_list);
+	session_put(session);
+	return ret;
+}
+
+int cmd_list_map_values(enum lttng_domain_type domain,
+		const char *session_name, const char *map_name,
+		uint32_t app_bitness,
+		struct lttng_map_key_value_pair_list **return_kv_pair_list)
+{
+	enum lttng_error_code ret;
+
+	ret = list_map_values(domain, session_name, map_name, app_bitness,
+			return_kv_pair_list);
+	if (ret != LTTNG_OK) {
+		ERR("Error getting map values: error = '%s'", error_get_str(-ret));
+	}
+
+	return ret;
+}
+
 /*
  * Send relayd sockets from snapshot output to consumer. Ignore request if the
  * snapshot output is *not* set with a remote destination.

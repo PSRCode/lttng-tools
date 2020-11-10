@@ -232,8 +232,7 @@ struct ltt_ust_event *trace_ust_find_event(struct lttng_ht *ht,
 		char *name, struct lttng_bytecode *filter,
 		enum lttng_ust_loglevel_type loglevel_type, int loglevel_value,
 		struct lttng_event_exclusion *exclusion,
-		struct lttng_map_key *map_key
-		)
+		struct lttng_map_key *map_key)
 {
 	struct lttng_ht_node_str *node;
 	struct lttng_ht_iter iter;

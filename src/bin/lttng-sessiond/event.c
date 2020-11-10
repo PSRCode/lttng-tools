@@ -444,7 +444,17 @@ error:
  * Disable UST tracepoint of a map from a UST session.
  */
 int map_event_ust_disable_tracepoint(struct ltt_ust_session *usess,
-		struct ltt_ust_map *umap, const char *event_name)
+		struct ltt_ust_map *umap,
+		uint64_t tracer_token,
+		char *event_name,
+		struct lttng_map_key *key,
+		enum lttng_event_type ev_type,
+		enum lttng_loglevel_type ev_loglevel_type,
+		int ev_loglevel_value,
+		char *filter_expression,
+		struct lttng_bytecode *filter,
+		struct lttng_event_exclusion *exclusion,
+		bool internal_event)
 {
 	int ret;
 	struct ltt_ust_event *uevent;
@@ -460,7 +470,7 @@ int map_event_ust_disable_tracepoint(struct ltt_ust_session *usess,
 	 * event.
 	 */
 	uevent = trace_ust_find_event(umap->events, (char *) event_name, NULL,
-			LTTNG_UST_LOGLEVEL_ALL, -1, NULL, 0);
+			LTTNG_UST_LOGLEVEL_ALL, -1, NULL, key);
 	assert(uevent);
 
 	if (uevent->enabled == 0) {
@@ -549,7 +559,7 @@ error:
 int map_event_ust_disable_all_tracepoints(struct ltt_ust_session *usess,
 		struct ltt_ust_map *umap)
 {
-	int ret, i, size, error = 0;
+	int ret, error = 0;
 	struct lttng_ht_iter iter;
 	struct ltt_ust_event *uevent = NULL;
 	struct lttng_event *events = NULL;
@@ -564,7 +574,16 @@ int map_event_ust_disable_all_tracepoints(struct ltt_ust_session *usess,
 			node.node) {
 		if (uevent->enabled == 1) {
 			ret = map_event_ust_disable_tracepoint(usess, umap,
-					uevent->attr.name);
+					uevent->attr.token,
+					uevent->attr.name,
+					uevent->key,
+					uevent->attr.instrumentation,
+					uevent->attr.loglevel_type,
+					uevent->attr.loglevel,
+					uevent->filter_expression,
+					uevent->filter,
+					uevent->exclusion,
+					false);
 			if (ret < 0) {
 				error = LTTNG_ERR_UST_DISABLE_FAIL;
 				continue;
@@ -572,22 +591,11 @@ int map_event_ust_disable_all_tracepoints(struct ltt_ust_session *usess,
 		}
 	}
 
-	/* Get all UST available events */
-	size = ust_app_list_events(&events);
-	if (size < 0) {
-		ret = LTTNG_ERR_UST_LIST_FAIL;
-		goto error;
-	}
-
-	for (i = 0; i < size; i++) {
-		ret = map_event_ust_disable_tracepoint(usess, umap,
-				events[i].name);
-		if (ret < 0) {
-			/* Continue to disable the rest... */
-			error = LTTNG_ERR_UST_DISABLE_FAIL;
-			continue;
-		}
-	}
+	/*
+	 * FIXME: FRDESO: in the equivalent function
+	 * event_ust_disable_all_tracepoints() (above ^) we also iterator over
+	 * all lttng_event. Do we need to do this here too?
+	 */
 
 	ret = error ? error : LTTNG_OK;
 error:
