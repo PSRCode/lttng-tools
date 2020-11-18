@@ -286,6 +286,8 @@ int consumer_push_metadata(struct consumer_socket *socket,
 		uint64_t metadata_key, char *metadata_str, size_t len,
 		size_t target_offset, uint64_t version);
 int consumer_flush_channel(struct consumer_socket *socket, uint64_t key);
+int consumer_channel_stop_live_timer(struct consumer_socket *socket, uint64_t key);
+int consumer_channel_start_live_timer(struct consumer_socket *socket, uint64_t key);
 int consumer_clear_quiescent_channel(struct consumer_socket *socket, uint64_t key);
 int consumer_get_discarded_events(uint64_t session_id, uint64_t channel_key,
 		struct consumer_output *consumer, uint64_t *discarded);

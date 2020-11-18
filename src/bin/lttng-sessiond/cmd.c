@@ -2773,6 +2773,8 @@ int cmd_destroy_session(struct ltt_session *session, int wpipe)
 		/* Close any relayd session */
 		consumer_output_send_destroy_relayd(usess->consumer);
 
+		ust_force_stop_live_timer(usess);
+
 		/* Destroy every UST application related to this session. */
 		ret = ust_app_destroy_trace_all(usess);
 		if (ret) {
@@ -3172,11 +3174,22 @@ int cmd_data_pending(struct ltt_session *session)
 	}
 
 	if (usess && usess->consumer) {
+		/*
+		 * Stop the live timer since it can lead to stream and relayd
+		 * contention for the data pending check.
+		 */
+		ust_force_stop_live_timer(usess);
 		ret = consumer_is_data_pending(usess->id, usess->consumer);
 		if (ret == 1) {
 			/* Data is still being extracted for the kernel. */
 			goto error;
 		}
+		/*
+		 * Restart the live timer to ensure that we send inactivity
+		 * beacon as needed
+		 */
+		ust_force_start_live_timer(usess);
+
 	}
 
 	/* Data is ready to be read by a viewer */

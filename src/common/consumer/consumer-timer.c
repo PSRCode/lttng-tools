@@ -289,21 +289,32 @@ static void live_timer(struct lttng_consumer_local_data *ctx,
 	}
 
 	DBG("Live timer for channel %" PRIu64, channel->key);
+	if (channel->live_timer_enabled != 1) {
+		DBG("Liver timer was stopped before the iteration. Quitting early.");
+		goto skip;
+	}
 
 	rcu_read_lock();
 	cds_lfht_for_each_entry_duplicate(ht->ht,
 			ht->hash_fct(&channel->key, lttng_ht_seed),
 			ht->match_fct, &channel->key, &iter.iter,
 			stream, node_channel_id.node) {
+		if (channel->live_timer_enabled != 1) {
+			DBG("Liver timer was stopped during the iteration. Quitting early.");
+			goto skip_unlock;
+		}
+
 		ret = check_stream(stream, flush_index);
 		if (ret < 0) {
 			goto error_unlock;
 		}
 	}
 
+skip_unlock:
 error_unlock:
 	rcu_read_unlock();
 
+skip:
 error:
 	return;
 }
@@ -462,15 +473,19 @@ void consumer_timer_live_stop(struct lttng_consumer_channel *channel)
 
 	assert(channel);
 
+	if (!channel->live_timer) {
+		return;
+	}
+
 	ret = timer_delete(channel->live_timer);
 	if (ret == -1) {
 		PERROR("timer_delete");
 	}
 
-	consumer_timer_signal_thread_qs(LTTNG_CONSUMER_SIG_LIVE);
-
 	channel->live_timer = 0;
 	channel->live_timer_enabled = 0;
+
+	consumer_timer_signal_thread_qs(LTTNG_CONSUMER_SIG_LIVE);
 }
 
 /*

@@ -353,6 +353,9 @@ int ust_app_pid_get_channel_runtime_stats(struct ltt_ust_session *usess,
 		int overwrite, uint64_t *discarded, uint64_t *lost);
 int ust_app_regenerate_statedump_all(struct ltt_ust_session *usess);
 
+int ust_force_stop_live_timer(struct ltt_ust_session *usess);
+int ust_force_start_live_timer(struct ltt_ust_session *usess);
+
 static inline
 int ust_app_supported(void)
 {
@@ -581,6 +584,18 @@ int ust_app_pid_get_channel_runtime_stats(struct ltt_ust_session *usess,
 
 static inline
 int ust_app_regenerate_statedump_all(struct ltt_ust_session *usess)
+{
+	return 0;
+}
+
+static inline
+int ust_force_stop_live_timer(struct ltt_ust_session *usess)
+{
+	return 0;
+}
+
+static inline
+int ust_force_start_live_timer(struct ltt_ust_session *usess)
 {
 	return 0;
 }
