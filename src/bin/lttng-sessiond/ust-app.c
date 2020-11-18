@@ -33,6 +33,7 @@
 #include <common/common.h>
 #include <common/sessiond-comm/sessiond-comm.h>
 
+#include "consumer.h"
 #include "buffer-registry.h"
 #include "fd-limit.h"
 #include "health-sessiond.h"
@@ -446,6 +447,7 @@ void delete_ust_app_channel(int sock, struct ust_app_channel *ua_chan,
 		struct ust_app *app)
 {
 	int ret;
+	struct consumer_socket *consumer_socket;
 	struct lttng_ht_iter iter;
 	struct ust_app_event *ua_event;
 	struct ust_app_ctx *ua_ctx;
@@ -502,6 +504,16 @@ void delete_ust_app_channel(int sock, struct ust_app_channel *ua_chan,
 		lttng_fd_put(LTTNG_FD_APPS, 1);
 		free(ua_chan->obj);
 	}
+
+
+	/* Stop live timer immediately if any */
+	consumer_socket = consumer_find_socket_by_bitness(app->bits_per_long,
+			ua_chan->session->consumer);
+	ret = consumer_channel_stop_live_timer(consumer_socket, ua_chan->key);
+	if (ret) {
+		ERR("Error stopping live timer");
+	}
+
 	call_rcu(&ua_chan->rcu_head, delete_ust_app_channel_rcu);
 }
 

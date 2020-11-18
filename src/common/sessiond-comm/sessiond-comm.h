@@ -535,6 +535,9 @@ struct lttcomm_consumer_msg {
 		} LTTNG_PACKED flush_channel;
 		struct {
 			uint64_t key;	/* Channel key. */
+		} LTTNG_PACKED stop_live_timer;
+		struct {
+			uint64_t key;	/* Channel key. */
 		} LTTNG_PACKED clear_quiescent_channel;
 		struct {
 			char pathname[PATH_MAX];

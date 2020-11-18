@@ -467,6 +467,7 @@ void consumer_timer_live_stop(struct lttng_consumer_channel *channel)
 		PERROR("timer_delete");
 	}
 
+	ERR("JORAJ stop live timer for key %" PRIu64, channel->key);
 	consumer_timer_signal_thread_qs(LTTNG_CONSUMER_SIG_LIVE);
 
 	channel->live_timer = 0;
