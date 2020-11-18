@@ -837,6 +837,7 @@ void consumer_stream_destroy(struct lttng_consumer_stream *stream,
 		}
 
 		if (free_chan) {
+			ERR("Joraji consumer_stream_destroy %p %" PRIu64, free_chan, free_chan->key);
 			consumer_del_channel(free_chan);
 		}
 	} else {

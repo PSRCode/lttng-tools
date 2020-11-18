@@ -1206,6 +1206,69 @@ end:
 }
 
 /*
+ * Stop live timer.
+ *
+ * Return 0 on success else a negative value.
+ */
+int consumer_channel_stop_live_timer(struct consumer_socket *socket, uint64_t key)
+{
+	int ret;
+	struct lttcomm_consumer_msg msg;
+
+	assert(socket);
+
+	DBG2("Consumer stop live timer for channel key %" PRIu64, key);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.cmd_type = LTTNG_CONSUMER_CHANNEL_STOP_LIVE_TIMER;
+	msg.u.stop_live_timer.key = key;
+
+	pthread_mutex_lock(socket->lock);
+	health_code_update();
+
+	ret = consumer_send_msg(socket, &msg);
+	if (ret < 0) {
+		goto end;
+	}
+
+end:
+	health_code_update();
+	pthread_mutex_unlock(socket->lock);
+	return ret;
+}
+
+/*
+ * Start live timer.
+ *
+ * Return 0 on success else a negative value.
+ */
+int consumer_channel_start_live_timer(struct consumer_socket *socket, uint64_t key)
+{
+	int ret;
+	struct lttcomm_consumer_msg msg;
+
+	assert(socket);
+
+	DBG2("Consumer stop live timer for channel key %" PRIu64, key);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.cmd_type = LTTNG_CONSUMER_CHANNEL_START_LIVE_TIMER;
+	msg.u.start_live_timer.key = key;
+
+	pthread_mutex_lock(socket->lock);
+	health_code_update();
+
+	ret = consumer_send_msg(socket, &msg);
+	if (ret < 0) {
+		goto end;
+	}
+
+end:
+	health_code_update();
+	pthread_mutex_unlock(socket->lock);
+	return ret;
+}
+/*
  * Send a clear quiescent command to consumer using the given channel key.
  *
  * Return 0 on success else a negative value.

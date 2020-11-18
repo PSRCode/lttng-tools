@@ -1641,6 +1641,53 @@ int lttng_ustconsumer_recv_cmd(struct lttng_consumer_local_data *ctx,
 		assert(cds_list_empty(&channel->streams.head));
 		goto end_msg_sessiond;
 	}
+	case LTTNG_CONSUMER_CHANNEL_STOP_LIVE_TIMER:
+	{
+		int ret, relayd_err = 0;
+		uint64_t key = msg.u.get_channel.key;
+		struct lttng_consumer_channel *channel;
+
+		channel = consumer_find_channel(key);
+		if (!channel) {
+			ERR("UST consumer get channel key %" PRIu64 " not found", key);
+			ret_code = LTTCOMM_CONSUMERD_CHAN_NOT_FOUND;
+			goto end_msg_sessiond;
+		}
+
+		health_code_update();
+
+		if (channel->live_timer_enabled == 1) {
+			consumer_timer_live_stop(channel);
+		}
+
+		health_code_update();
+
+		goto end_msg_sessiond;
+	}
+	case LTTNG_CONSUMER_CHANNEL_START_LIVE_TIMER:
+	{
+		int ret, relayd_err = 0;
+		uint64_t key = msg.u.get_channel.key;
+		struct lttng_consumer_channel *channel;
+
+		channel = consumer_find_channel(key);
+		if (!channel) {
+			ERR("UST consumer get channel key %" PRIu64 " not found", key);
+			ret_code = LTTCOMM_CONSUMERD_CHAN_NOT_FOUND;
+			goto end_msg_sessiond;
+		}
+
+		health_code_update();
+
+		if (channel->live_timer_enabled == 0) {
+			consumer_timer_live_start(channel, channel->live_timer_interval);
+		}
+
+		health_code_update();
+
+		goto end_msg_sessiond;
+	}
+
 	case LTTNG_CONSUMER_DESTROY_CHANNEL:
 	{
 		uint64_t key = msg.u.destroy_channel.key;
