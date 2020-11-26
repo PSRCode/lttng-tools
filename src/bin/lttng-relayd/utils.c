@@ -53,6 +53,8 @@ static char *create_output_path_auto(const char *path_name)
 		PERROR("asprintf trace dir name");
 		goto exit;
 	}
+
+	ERR("JORAJ auto %s", traces_path);
 exit:
 	free(alloc_path);
 	return traces_path;
@@ -74,6 +76,7 @@ static char *create_output_path_noauto(const char *path_name)
 		PERROR("asprintf trace dir name");
 		goto exit;
 	}
+	ERR("JORAJ noauto %s", traces_path);
 exit:
 	free(full_path);
 	return traces_path;
@@ -88,6 +91,7 @@ char *create_output_path(const char *path_name)
 {
 	assert(path_name);
 
+	ERR("JORAJ %s", path_name);
 	if (opt_output_path == NULL) {
 		return create_output_path_auto(path_name);
 	} else {
