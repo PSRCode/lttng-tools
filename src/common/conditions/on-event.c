@@ -202,7 +202,7 @@ struct lttng_capture_descriptor *
 lttng_condition_on_event_get_internal_capture_descriptor_at_index(
 		const struct lttng_condition *condition, unsigned int index)
 {
-	const struct lttng_condition_on_event *event_rule_cond =
+	const struct lttng_condition_on_event *on_event_cond =
 			container_of(condition,
 				const struct lttng_condition_on_event,
 				parent);
@@ -225,7 +225,7 @@ lttng_condition_on_event_get_internal_capture_descriptor_at_index(
 	}
 
 	desc = lttng_dynamic_pointer_array_get_pointer(
-			&event_rule_cond->capture_descriptors, index);
+			&on_event_cond->capture_descriptors, index);
 end:
 	return desc;
 }
@@ -237,6 +237,7 @@ static int lttng_condition_on_event_serialize(
 	int ret;
 	struct lttng_condition_on_event *event_rule;
 	enum lttng_condition_status status;
+	uint64_t error_count, error_counter_index;
 	uint32_t i, capture_descr_count;
 
 	if (!condition || !IS_EVENT_RULE_CONDITION(condition)) {
@@ -250,6 +251,26 @@ static int lttng_condition_on_event_serialize(
 
 	DBG("Serializing event rule condition's event rule");
 	ret = lttng_event_rule_serialize(event_rule->rule, payload);
+	if (ret) {
+		goto end;
+	}
+
+	error_counter_index = lttng_condition_on_event_get_error_counter_index(
+			condition);
+	DBG("Serializing event rule condition's error counter index: %" PRIu64,
+			error_counter_index);
+	ret = lttng_dynamic_buffer_append(&payload->buffer, &error_counter_index,
+			sizeof(error_counter_index));
+	if (ret) {
+		goto end;
+	}
+
+	error_count = lttng_condition_on_event_get_error_count(
+			condition);
+	DBG("Serializing event rule condition's error count: %" PRIu64,
+			error_count);
+	ret = lttng_dynamic_buffer_append(&payload->buffer, &error_count,
+			sizeof(error_count));
 	if (ret) {
 		goto end;
 	}
@@ -412,6 +433,9 @@ struct lttng_condition *lttng_condition_on_event_create(
 	lttng_event_rule_get(rule);
 	condition->rule = rule;
 	rule = NULL;
+
+	LTTNG_OPTIONAL_SET(&condition->error_count, 0);
+	LTTNG_OPTIONAL_SET(&condition->error_counter_index, 0);
 
 	lttng_dynamic_pointer_array_init(&condition->capture_descriptors,
 			destroy_capture_descriptor);
@@ -583,6 +607,7 @@ ssize_t lttng_condition_on_event_create_from_payload(
 	size_t offset = 0;
 	ssize_t event_rule_length;
 	uint32_t i, capture_descr_count;
+	uint64_t error_counter_index, error_count;
 	struct lttng_condition *condition = NULL;
 	struct lttng_event_rule *event_rule = NULL;
 
@@ -603,16 +628,31 @@ ssize_t lttng_condition_on_event_create_from_payload(
 		goto error;
 	}
 
+	offset += event_rule_length;
+
+	/* Error counter index. */
+	error_counter_index = uint_from_buffer(&view->buffer, sizeof(uint64_t), &offset);
+	if (error_counter_index == UINT64_C(-1)) {
+		goto error;
+	}
+
+	/* Error count. */
+	error_count = uint_from_buffer(&view->buffer, sizeof(uint64_t), &offset);
+	if (error_count == UINT64_C(-1)) {
+		goto error;
+	}
+
 	/* Create condition (no capture descriptors yet) at this point */
 	condition = lttng_condition_on_event_create(event_rule);
 	if (!condition) {
 		goto error;
 	}
 
+	lttng_condition_on_event_set_error_count(condition, error_count);
+	lttng_condition_on_event_set_error_counter_index(condition, error_counter_index);
 
 	/* Capture descriptor count */
 	assert(event_rule_length >= 0);
-	offset += (size_t) event_rule_length;
 	capture_descr_count = uint_from_buffer(&view->buffer, sizeof(uint32_t), &offset);
 	if (capture_descr_count == UINT32_C(-1)) {
 		goto error;
@@ -690,13 +730,53 @@ enum lttng_condition_status lttng_condition_on_event_get_rule(
 	return status;
 }
 
+void lttng_condition_on_event_set_error_counter_index(
+		struct lttng_condition *condition, uint64_t error_counter_index)
+{
+	struct lttng_condition_on_event *on_event_cond =
+			container_of(condition,
+				struct lttng_condition_on_event, parent);
+
+	LTTNG_OPTIONAL_SET(&on_event_cond->error_counter_index, error_counter_index);
+}
+
+uint64_t lttng_condition_on_event_get_error_counter_index(
+		const struct lttng_condition *condition)
+{
+	struct lttng_condition_on_event *on_event_cond =
+			container_of(condition,
+				struct lttng_condition_on_event, parent);
+
+	return LTTNG_OPTIONAL_GET(on_event_cond->error_counter_index);
+}
+
+void lttng_condition_on_event_set_error_count(struct lttng_condition *condition,
+		uint64_t error_count)
+{
+	struct lttng_condition_on_event *on_event_cond =
+			container_of(condition,
+				struct lttng_condition_on_event, parent);
+
+	LTTNG_OPTIONAL_SET(&on_event_cond->error_count, error_count);
+}
+
+uint64_t lttng_condition_on_event_get_error_count(
+		const struct lttng_condition *condition)
+{
+	struct lttng_condition_on_event *on_event_cond =
+			container_of(condition,
+				struct lttng_condition_on_event, parent);
+
+	return LTTNG_OPTIONAL_GET(on_event_cond->error_count);
+}
+
 enum lttng_condition_status
 lttng_condition_on_event_append_capture_descriptor(
 		struct lttng_condition *condition,
 		struct lttng_event_expr *expr)
 {
 	enum lttng_condition_status status = LTTNG_CONDITION_STATUS_OK;
-	struct lttng_condition_on_event *event_rule_cond =
+	struct lttng_condition_on_event *on_event_cond =
 			container_of(condition,
 				struct lttng_condition_on_event, parent);
 	int ret;
@@ -743,7 +823,7 @@ lttng_condition_on_event_append_capture_descriptor(
 	descriptor->bytecode = NULL;
 
 	ret = lttng_dynamic_pointer_array_add_pointer(
-			&event_rule_cond->capture_descriptors, descriptor);
+			&on_event_cond->capture_descriptors, descriptor);
 	if (ret) {
 		status = LTTNG_CONDITION_STATUS_ERROR;
 		goto end;
@@ -761,7 +841,7 @@ lttng_condition_on_event_get_capture_descriptor_count(
 		const struct lttng_condition *condition, unsigned int *count)
 {
 	enum lttng_condition_status status = LTTNG_CONDITION_STATUS_OK;
-	const struct lttng_condition_on_event *event_rule_cond =
+	const struct lttng_condition_on_event *on_event_cond =
 			container_of(condition,
 				const struct lttng_condition_on_event,
 				parent);
@@ -772,7 +852,7 @@ lttng_condition_on_event_get_capture_descriptor_count(
 	}
 
 	*count = lttng_dynamic_pointer_array_get_count(
-			&event_rule_cond->capture_descriptors);
+			&on_event_cond->capture_descriptors);
 
 end:
 	return status;
@@ -1424,7 +1504,7 @@ const struct lttng_bytecode *
 lttng_condition_on_event_get_capture_bytecode_at_index(
 		const struct lttng_condition *condition, unsigned int index)
 {
-	const struct lttng_condition_on_event *event_rule_cond =
+	const struct lttng_condition_on_event *on_event_cond =
 			container_of(condition,
 				const struct lttng_condition_on_event,
 				parent);
@@ -1448,7 +1528,7 @@ lttng_condition_on_event_get_capture_bytecode_at_index(
 	}
 
 	desc = lttng_dynamic_pointer_array_get_pointer(
-			&event_rule_cond->capture_descriptors, index);
+			&on_event_cond->capture_descriptors, index);
 	if (desc == NULL) {
 		goto end;
 	}
