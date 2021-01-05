@@ -367,6 +367,7 @@ void consumer_del_channel(struct lttng_consumer_channel *channel)
 	/* Destroy streams that might have been left in the stream list. */
 	clean_channel_stream_list(channel);
 
+	ERR("JORAJ deleting live timer for channel %p %"PRIu64, channel, channel->key);
 	if (channel->live_timer_enabled == 1) {
 		consumer_timer_live_stop(channel);
 	}
@@ -1119,6 +1120,7 @@ void lttng_consumer_cleanup(void)
 
 	cds_lfht_for_each_entry(consumer_data.channel_ht->ht, &iter.iter, channel,
 			node.node) {
+		ERR("JORAJ IN consumer cleanup");
 		consumer_del_channel(channel);
 	}
 
@@ -1980,6 +1982,7 @@ void consumer_del_metadata_stream(struct lttng_consumer_stream *stream,
 	pthread_mutex_unlock(&consumer_data.lock);
 
 	if (free_chan) {
+		ERR("JORAJ deleting channel in metadata %p %" PRIu64, free_chan, free_chan->key);
 		consumer_del_channel(free_chan);
 	}
 
@@ -2842,7 +2845,9 @@ restart:
 						 * Release our own refcount. Force channel deletion even if
 						 * streams were not initialized.
 						 */
+						ERR("JORAJ CONSUMER_CHANNEL_DEL on chan %p %"PRIu64, chan, chan->key);
 						if (!uatomic_sub_return(&chan->refcount, 1)) {
+							ERR("IN JORAJ CONSUMER_CHANNEL_DEL on chan %p %"PRIu64, chan, chan->key);
 							consumer_del_channel(chan);
 						}
 						rcu_read_unlock();
@@ -2890,7 +2895,7 @@ restart:
 
 			/* Check for error event */
 			if (revents & (LPOLLERR | LPOLLHUP)) {
-				DBG("Channel fd %d is hup|err.", pollfd);
+				ERR(" JORAJ Channel fd %d is hup|err.", pollfd);
 
 				lttng_poll_del(&events, chan->wait_fd);
 				ret = lttng_ht_del(channel_ht, &iter);
@@ -2906,6 +2911,7 @@ restart:
 				/* Release our own refcount */
 				if (!uatomic_sub_return(&chan->refcount, 1)
 						&& !uatomic_read(&chan->nb_init_stream_left)) {
+					ERR(" JORAJ del hannel chan %p %"PRIu64, chan, chan->key);
 					consumer_del_channel(chan);
 				}
 			} else {
