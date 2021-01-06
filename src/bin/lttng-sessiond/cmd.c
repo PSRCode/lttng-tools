@@ -2773,6 +2773,8 @@ int cmd_destroy_session(struct ltt_session *session, int wpipe)
 		/* Close any relayd session */
 		consumer_output_send_destroy_relayd(usess->consumer);
 
+		ust_force_stop_live_timer(usess);
+
 		/* Destroy every UST application related to this session. */
 		ret = ust_app_destroy_trace_all(usess);
 		if (ret) {
