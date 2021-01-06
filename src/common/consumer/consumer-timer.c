@@ -299,6 +299,10 @@ static void live_timer(struct lttng_consumer_local_data *ctx,
 		if (ret < 0) {
 			goto error_unlock;
 		}
+		if (channel->live_timer_enabled != 1) {
+			DBG("JORAJ liver timer was stopped during the iteration. Quitting early.");
+			break;
+		}
 	}
 
 error_unlock:
