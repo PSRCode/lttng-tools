@@ -289,19 +289,24 @@ static void live_timer(struct lttng_consumer_local_data *ctx,
 	}
 
 	DBG("Live timer for channel %" PRIu64, channel->key);
+	if (channel->live_timer_enabled != 1) {
+		DBG("JORAJ liver timer was stopped during the iteration. Quitting early.");
+		goto error;
+	}
 
 	rcu_read_lock();
 	cds_lfht_for_each_entry_duplicate(ht->ht,
 			ht->hash_fct(&channel->key, lttng_ht_seed),
 			ht->match_fct, &channel->key, &iter.iter,
 			stream, node_channel_id.node) {
-		ret = check_stream(stream, flush_index);
-		if (ret < 0) {
-			goto error_unlock;
-		}
 		if (channel->live_timer_enabled != 1) {
 			DBG("JORAJ liver timer was stopped during the iteration. Quitting early.");
 			break;
+		}
+
+		ret = check_stream(stream, flush_index);
+		if (ret < 0) {
+			goto error_unlock;
 		}
 	}
 
