@@ -4992,22 +4992,115 @@ int ust_force_stop_live_timer(struct ltt_ust_session *usess)
 						node.node) {
 				struct consumer_socket *consumer_socket;
 
-				/* Depending on the buffer type, a different
-				 * channel key is used. */
-				if (ua_sess->buffer_type ==
-				    LTTNG_BUFFER_PER_UID) {
-					chan_reg_key =
-					    ua_chan->tracing_channel_id;
-				} else {
-					chan_reg_key = ua_chan->key;
-				}
-
 				/* Stop live timer immediately if any */
 				consumer_socket =
 				    consumer_find_socket_by_bitness(
 					app->bits_per_long,
 					ua_chan->session->consumer);
 				ret = consumer_channel_stop_live_timer(
+				    consumer_socket, ua_chan->key);
+				if (ret) {
+					ERR("Error stopping live timer");
+				}
+			}
+			break;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
+end:
+	rcu_read_unlock();
+	health_code_update();
+	return ret;
+}
+
+/*
+ * Force start live timers associated with the ust session.
+ */
+int ust_force_start_live_timer(struct ltt_ust_session *usess)
+{
+	int ret = 0;
+
+	DBG("Start all live timer associated with a UST session.");
+
+	rcu_read_lock();
+
+	switch (usess->buffer_type) {
+	case LTTNG_BUFFER_PER_UID:
+	{
+		struct buffer_reg_uid *reg;
+		struct lttng_ht_iter iter;
+
+		cds_list_for_each_entry(reg, &usess->buffer_reg_uid_list, lnode) {
+			struct ust_registry_session *ust_session_reg;
+			struct buffer_reg_channel *reg_chan;
+			struct consumer_socket *socket;
+
+			/* Get consumer socket to use */
+			socket = consumer_find_socket_by_bitness(reg->bits_per_long,
+					usess->consumer);
+			if (!socket) {
+				/* Ignore request if no consumer is found for the session. */
+				continue;
+			}
+
+			cds_lfht_for_each_entry(reg->registry->channels->ht, &iter.iter,
+					reg_chan, node.node) {
+				ret = consumer_channel_start_live_timer(socket, reg_chan->consumer_key);
+				if (ret) {
+					ERR("Error stopping live timer for channel %" PRIu64, reg_chan->consumer_key);
+				}
+			}
+		}
+		break;
+	}
+	case LTTNG_BUFFER_PER_PID:
+	{
+		struct lttng_ht_iter iter_i;
+		struct ust_app *app;
+		uint64_t chan_reg_key;
+
+		cds_lfht_for_each_entry(ust_app_ht->ht, &iter_i.iter, app,
+					pid_n.node) {
+			int ret;
+			struct ust_app_session *ua_sess;
+			struct lttng_ht_iter iter_j, iter_k;
+			struct lttng_ht_node_u64 *node;
+			struct ust_app_channel *ua_chan;
+
+			DBG("Stopping live timer associated with ust app pid "
+			    "%d",
+			    app->pid);
+
+			if (!app->compatible) {
+				goto end;
+			}
+
+			__lookup_session_by_app(usess, app, &iter_j);
+			node = lttng_ht_iter_get_node_u64(&iter_j);
+			if (node == NULL) {
+				/* Session is being or is deleted. */
+				goto end;
+			}
+			ua_sess = caa_container_of(node, struct ust_app_session,
+						   node);
+
+			health_code_update();
+
+			cds_lfht_for_each_entry(ua_sess->channels->ht,
+						&iter_k.iter, ua_chan,
+						node.node) {
+				struct consumer_socket *consumer_socket;
+
+				/* Stop live timer immediately if any */
+				consumer_socket =
+				    consumer_find_socket_by_bitness(
+					app->bits_per_long,
+					ua_chan->session->consumer);
+				ret = consumer_channel_start_live_timer(
 				    consumer_socket, ua_chan->key);
 				if (ret) {
 					ERR("Error stopping live timer");
