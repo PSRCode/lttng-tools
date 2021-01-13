@@ -510,7 +510,6 @@ int relayd_add_stream(struct lttcomm_relayd_sock *rsock, const char *channel_nam
 
 	DBG("Relayd adding stream for channel name %s", channel_name);
 
-
 	/* Compat with relayd 2.1 */
 	if (rsock->minor == 1) {
 		/* For 2.1 */
