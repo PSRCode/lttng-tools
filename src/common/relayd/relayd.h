@@ -23,6 +23,9 @@
 #include <common/sessiond-comm/relayd.h>
 #include <common/sessiond-comm/sessiond-comm.h>
 
+struct lttng_buffer_view;
+struct lttng_dynamic_buffer;
+
 int relayd_connect(struct lttcomm_relayd_sock *sock);
 int relayd_close(struct lttcomm_relayd_sock *sock);
 int relayd_create_session(struct lttcomm_relayd_sock *sock, uint64_t *session_id,
@@ -51,5 +54,11 @@ int relayd_send_index(struct lttcomm_relayd_sock *rsock,
 		uint64_t net_seq_num);
 int relayd_reset_metadata(struct lttcomm_relayd_sock *rsock,
 		uint64_t stream_id, uint64_t version);
+
+int relayd_add_stream_bulk_send_append(struct lttcomm_relayd_sock *rsock, const char *channel_name,
+		const char *pathname,
+		uint64_t tracefile_size, uint64_t tracefile_count, struct lttng_dynamic_buffer *buffer);
+int relayd_add_stream_bulk_send(struct lttcomm_relayd_sock *rsock, const struct lttng_buffer_view *view);
+int relayd_add_stream_rcv(struct lttcomm_relayd_sock *rsock, uint64_t *_stream_id);
 
 #endif /* _RELAYD_H */
