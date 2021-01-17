@@ -28,6 +28,8 @@
 #include <common/compat/endian.h>
 #include <common/sessiond-comm/relayd.h>
 #include <common/index/ctf-index.h>
+#include <common/dynamic-buffer.h>
+#include <common/buffer-view.h>
 
 #include "relayd.h"
 
@@ -83,6 +85,62 @@ static int send_command(struct lttcomm_relayd_sock *rsock,
 error:
 	free(buf);
 alloc_error:
+	return ret;
+}
+
+/*
+ * Send command. Fill up the header and append the data.
+ */
+static int send_command_accumulate(struct lttcomm_relayd_sock *rsock,
+		enum lttcomm_relayd_command cmd, void *data, size_t size,
+		struct lttng_dynamic_buffer *buffer)
+{
+	int ret;
+	struct lttcomm_relayd_hdr header;
+
+	memset(&header, 0, sizeof(header));
+	header.cmd = htobe32(cmd);
+	header.data_size = htobe64(size);
+
+	/* Zeroed for now since not used. */
+	header.cmd_version = 0;
+	header.circuit_id = 0;
+
+	lttng_dynamic_buffer_append(buffer, &header, sizeof(header));
+	if (data) {
+		lttng_dynamic_buffer_append(buffer, data, size);
+	}
+	
+	/* JORAJ TODO handle error correctly for appending */
+	ret = 0;
+
+	DBG3("Relayd queueing command %d of size %" PRIu64, (int) cmd, sizeof(header) + size);
+
+	return ret;
+}
+
+static int send_command_commit(struct lttcomm_relayd_sock *rsock,
+		const struct lttng_buffer_view *view, int flags)
+{
+	int ret;
+
+	if (rsock->sock.fd < 0) {
+		ret = -ECONNRESET;
+		goto error;
+	}
+
+	DBG3("Relayd sending array of command of size %" PRIu64, view->size);
+	ret = rsock->sock.ops->sendmsg(&rsock->sock, view->data, view->size, flags);
+	if (ret < 0) {
+		PERROR("Failed to send command array of command of size %" PRIu64,
+				 view->size);
+		ret = -errno;
+		goto error;
+	}
+
+	ret = 0;
+
+error:
 	return ret;
 }
 
@@ -320,6 +378,119 @@ error:
 	return ret;
 }
 
+int relayd_add_stream_rcv(struct lttcomm_relayd_sock *rsock, uint64_t *_stream_id)
+{
+	int ret;
+	struct lttcomm_relayd_status_stream reply;
+
+	/* Code flow error. Safety net. */
+	assert(rsock);
+
+	/* Waiting for reply */
+	ret = recv_reply(rsock, (void *) &reply, sizeof(reply));
+	if (ret < 0) {
+		goto error;
+	}
+
+	/* Back to host bytes order. */
+	reply.handle = be64toh(reply.handle);
+	reply.ret_code = be32toh(reply.ret_code);
+
+	/* Return session id or negative ret code. */
+	if (reply.ret_code != LTTNG_OK) {
+		ret = -1;
+		ERR("Relayd add stream replied error %d", reply.ret_code);
+	} else {
+		/* Success */
+		ret = 0;
+		*_stream_id = reply.handle;
+	}
+
+	DBG("Relayd stream added successfully with handle %" PRIu64,
+		reply.handle);
+
+error:
+	return ret;
+}
+
+int relayd_add_stream_bulk_send_append(struct lttcomm_relayd_sock *rsock, const char *channel_name,
+		const char *pathname,
+		uint64_t tracefile_size, uint64_t tracefile_count, struct lttng_dynamic_buffer *buffer)
+{
+	int ret;
+	struct lttcomm_relayd_add_stream msg;
+	struct lttcomm_relayd_add_stream_2_2 msg_2_2;
+
+	/* Code flow error. Safety net. */
+	assert(rsock);
+	assert(channel_name);
+	assert(pathname);
+
+	DBG("Relayd adding stream for channel name %s", channel_name);
+
+	/* Compat with relayd 2.1 */
+	if (rsock->minor == 1) {
+		memset(&msg, 0, sizeof(msg));
+		if (lttng_strncpy(msg.channel_name, channel_name,
+				sizeof(msg.channel_name))) {
+			ret = -1;
+		goto error;
+		}
+		if (lttng_strncpy(msg.pathname, pathname,
+				sizeof(msg.pathname))) {
+			ret = -1;
+			goto error;
+		}
+
+		/* Send command */
+		ret = send_command_accumulate(rsock, RELAYD_ADD_STREAM, (void *) &msg, sizeof(msg), buffer);
+		if (ret < 0) {
+			goto error;
+		}
+	} else {
+		memset(&msg_2_2, 0, sizeof(msg_2_2));
+		/* Compat with relayd 2.2+ */
+		if (lttng_strncpy(msg_2_2.channel_name, channel_name,
+				sizeof(msg_2_2.channel_name))) {
+			ret = -1;
+			goto error;
+		}
+		if (lttng_strncpy(msg_2_2.pathname, pathname,
+				sizeof(msg_2_2.pathname))) {
+			ret = -1;
+			goto error;
+		}
+		msg_2_2.tracefile_size = htobe64(tracefile_size);
+		msg_2_2.tracefile_count = htobe64(tracefile_count);
+
+		/* Send command */
+		ret = send_command_accumulate(rsock, RELAYD_ADD_STREAM, (void *) &msg_2_2, sizeof(msg_2_2), buffer);
+		if (ret < 0) {
+			goto error;
+		}
+	}
+
+error:
+	return ret;
+}
+
+int relayd_add_stream_bulk_send(struct lttcomm_relayd_sock *rsock, const struct lttng_buffer_view *view)
+{
+	int ret;
+
+	/* Code flow error. Safety net. */
+	assert(rsock);
+	assert(view);
+
+	ret = send_command_commit(rsock, view, 0);
+	if (ret < 0) {
+		goto error;
+	}
+
+error:
+	return ret;
+
+}
 /*
  * Inform the relay that all the streams for the current channel has been sent.
  *

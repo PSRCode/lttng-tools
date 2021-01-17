@@ -919,5 +919,6 @@ int consumer_add_metadata_stream(struct lttng_consumer_stream *stream);
 void consumer_del_stream_for_metadata(struct lttng_consumer_stream *stream);
 int consumer_create_index_file(struct lttng_consumer_stream *stream);
 void lttng_consumer_cleanup_relayd(struct consumer_relayd_sock_pair *relayd);
+int consumer_send_relayd_channel_bulk(struct lttng_consumer_channel *channel);
 
 #endif /* LIB_CONSUMER_H */

@@ -537,7 +537,6 @@ static int send_sessiond_channel(int sock,
 {
 	int ret, ret_code = LTTCOMM_CONSUMERD_SUCCESS;
 	struct lttng_consumer_stream *stream;
-	uint64_t relayd_id = -1ULL;
 
 	assert(channel);
 	assert(ctx);
@@ -546,25 +545,16 @@ static int send_sessiond_channel(int sock,
 	DBG("UST consumer sending channel %s to sessiond", channel->name);
 
 	if (channel->relayd_id != (uint64_t) -1ULL) {
-		cds_list_for_each_entry(stream, &channel->streams.head, send_node) {
-
-			health_code_update();
-
-			/* Try to send the stream to the relayd if one is available. */
-			ret = consumer_send_relayd_stream(stream, stream->chan->pathname);
-			if (ret < 0) {
-				/*
-				 * Flag that the relayd was the problem here probably due to a
-				 * communicaton error on the socket.
-				 */
-				if (relayd_error) {
-					*relayd_error = 1;
-				}
-				ret_code = LTTCOMM_CONSUMERD_RELAYD_FAIL;
+		ret = consumer_send_relayd_channel_bulk(channel);
+		if (ret < 0) {
+			/*
+			 * Flag that the relayd was the problem here probably due to a
+			 * communicaton error on the socket.
+			 */
+			if (relayd_error) {
+				*relayd_error = 1;
 			}
-			if (relayd_id == -1ULL) {
-				relayd_id = stream->relayd_id;
-			}
+			ret_code = LTTCOMM_CONSUMERD_RELAYD_FAIL;
 		}
 	}
 
