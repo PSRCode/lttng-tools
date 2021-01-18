@@ -144,6 +144,37 @@ error:
 	return ret;
 }
 
+static void recv_reply_skip(struct lttcomm_relayd_sock *rsock, size_t size)
+{
+	int ret;
+	DBG3("Relayd skipping reply of size %zu", size);
+
+	if (rsock->bytes_to_skip_on_recv >= 128) {
+		/* Only receive half of the expected data to discard, this
+		 * allows us to move the needle without waiting for recent reply
+		 * to skip.
+		*/
+		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_skip_on_recv/2, MSG_TRUNC);
+		if (ret <= 0 || ret != rsock->bytes_to_skip_on_recv/2) {
+			if (ret == 0) {
+				/* Orderly shutdown. */
+				DBG("Socket %d has performed an orderly shutdown", rsock->sock.fd);
+			} else {
+				DBG("Receiving reply to skip failed on sock %d for size %zu with ret %d",
+						rsock->sock.fd, rsock->bytes_to_skip_on_recv, ret);
+			}
+			/* We will fail on the next send */
+			return;
+		}
+
+		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_skip_on_recv, rsock->sock.fd);
+		rsock->bytes_to_skip_on_recv -= rsock->bytes_to_skip_on_recv/2;
+	}
+
+	/* Do not wait for the current reply */
+	rsock->bytes_to_skip_on_recv += size;
+}
+
 /*
  * Receive reply data on socket. This MUST be call after send_command or else
  * could result in unexpected behavior(s).
@@ -151,9 +182,29 @@ error:
 static int recv_reply(struct lttcomm_relayd_sock *rsock, void *data, size_t size)
 {
 	int ret;
+	char *discarded_data = NULL;
 
 	if (rsock->sock.fd < 0) {
 		return -ECONNRESET;
+	}
+
+	if (rsock->bytes_to_skip_on_recv != 0) {
+		/* TODO: could we use MSG_TRUNC here? */
+		discarded_data = malloc(rsock->bytes_to_skip_on_recv);
+		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_skip_on_recv, MSG_TRUNC);
+		if (ret <= 0 || ret != rsock->bytes_to_skip_on_recv) {
+			if (ret == 0) {
+				/* Orderly shutdown. */
+				DBG("Socket %d has performed an orderly shutdown", rsock->sock.fd);
+			} else {
+				DBG("Receiving reply to skip failed on sock %d for size %zu with ret %d",
+						rsock->sock.fd, rsock->bytes_to_skip_on_recv, ret);
+			}
+			ret = -1;
+			goto error;
+		}
+		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_skip_on_recv, rsock->sock.fd);
+		rsock->bytes_to_skip_on_recv = 0;
 	}
 
 	DBG3("Relayd waiting for reply of size %zu", size);
@@ -173,6 +224,7 @@ static int recv_reply(struct lttcomm_relayd_sock *rsock, void *data, size_t size
 	}
 
 error:
+	free(discarded_data);
 	return ret;
 }
 
@@ -694,6 +746,27 @@ int relayd_close(struct lttcomm_relayd_sock *rsock)
 		goto end;
 	}
 
+	/*
+	 * This ensure that we do not close the socket while the lttng-relayd
+	 * expect to be able to send a response that we skipped.
+	 * While we loose some time to receive everything, this keep the
+	 * "protocol" intact from the point of view of lttng-relayd.
+	 */
+	if (rsock->bytes_to_skip_on_recv != 0) {
+		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_skip_on_recv, MSG_TRUNC);
+		if (ret <= 0 || ret != rsock->bytes_to_skip_on_recv) {
+			if (ret == 0) {
+				/* Orderly shutdown. */
+				DBG("Socket %d has performed an orderly shutdown", rsock->sock.fd);
+			} else {
+				DBG("Receiving reply to skip failed on sock %d for size %zu with ret %d",
+						rsock->sock.fd, rsock->bytes_to_skip_on_recv, ret);
+			}
+		}
+		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_skip_on_recv, rsock->sock.fd);
+		rsock->bytes_to_skip_on_recv = 0;
+	}
+
 	DBG3("Relayd closing socket %d", rsock->sock.fd);
 
 	if (rsock->sock.ops) {
@@ -775,22 +848,11 @@ int relayd_send_close_stream(struct lttcomm_relayd_sock *rsock, uint64_t stream_
 		goto error;
 	}
 
-	/* Receive response */
-	ret = recv_reply(rsock, (void *) &reply, sizeof(reply));
-	if (ret < 0) {
-		goto error;
-	}
-
-	reply.ret_code = be32toh(reply.ret_code);
-
-	/* Return session id or negative ret code. */
-	if (reply.ret_code != LTTNG_OK) {
-		ret = -1;
-		ERR("Relayd close stream replied error %d", reply.ret_code);
-	} else {
-		/* Success */
-		ret = 0;
-	}
+	/* Skipping response since we do not really care for it and that TCP
+	 * guarantee in-order delivery at that at this point there is not much
+	 * to do on error.*/
+	recv_reply_skip(rsock, sizeof(reply));
+	ret = 0;
 
 	DBG("Relayd close stream id %" PRIu64 " successfully", stream_id);
 
@@ -1037,22 +1099,9 @@ int relayd_send_index(struct lttcomm_relayd_sock *rsock,
 		goto error;
 	}
 
-	/* Receive response */
-	ret = recv_reply(rsock, (void *) &reply, sizeof(reply));
-	if (ret < 0) {
-		goto error;
-	}
-
-	reply.ret_code = be32toh(reply.ret_code);
-
-	/* Return session id or negative ret code. */
-	if (reply.ret_code != LTTNG_OK) {
-		ret = -1;
-		ERR("Relayd send index replied error %d", reply.ret_code);
-	} else {
-		/* Success */
-		ret = 0;
-	}
+	/* Skip Receive response */
+	recv_reply_skip(rsock, sizeof(reply));
+	ret = 0;
 
 error:
 	return ret;
