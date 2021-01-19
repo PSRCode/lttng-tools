@@ -144,35 +144,50 @@ error:
 	return ret;
 }
 
-static void recv_reply_skip(struct lttcomm_relayd_sock *rsock, size_t size)
+static int recv_reply_ignore(struct lttcomm_relayd_sock *rsock, size_t size)
 {
 	int ret;
-	DBG3("Relayd skipping reply of size %zu", size);
+	size_t cutfoff = 128;
 
-	if (rsock->bytes_to_skip_on_recv >= 128) {
-		/* Only receive half of the expected data to discard, this
-		 * allows us to move the needle without waiting for recent reply
-		 * to skip.
-		*/
-		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_skip_on_recv/2, MSG_TRUNC);
-		if (ret <= 0 || ret != rsock->bytes_to_skip_on_recv/2) {
+	/*
+	 * To prevent ever growing size of recv_reply to ignore, if the number
+	 * of bytes we want to ignore is bigger than `cutoff`, consume half of
+	 * the cutoff. We might block on it but still, most of bytes to ignore
+	 * should already be ready to consume at this point.
+	 *
+	 * This kind of scenario can easily happen on stopped session with a
+	 * live_timer since to actual recv is done on the socket that would
+	 * discard the `ignore` portion.
+	 *
+	 * TCP guarantee in-roder both on send and recv so this is safe to do.
+	 */
+	if (rsock->bytes_to_ignore_on_recv >= cutfoff) {
+		size_t to_discard = cutfoff / 2;
+
+		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, to_discard, MSG_TRUNC);
+		if (ret <= 0 || ret != to_discard) {
 			if (ret == 0) {
 				/* Orderly shutdown. */
 				DBG("Socket %d has performed an orderly shutdown", rsock->sock.fd);
 			} else {
-				DBG("Receiving reply to skip failed on sock %d for size %zu with ret %d",
-						rsock->sock.fd, rsock->bytes_to_skip_on_recv, ret);
+				DBG("Receiving reply to discard failed on sock %d for size %zu with ret %d",
+						rsock->sock.fd, to_discard, ret);
 			}
-			/* We will fail on the next send */
-			return;
+			ret = -1;
+			goto error;
 		}
 
-		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_skip_on_recv, rsock->sock.fd);
-		rsock->bytes_to_skip_on_recv -= rsock->bytes_to_skip_on_recv/2;
+		DBG("Force discard of  %zu bytes on sock %d", to_discard, rsock->sock.fd);
+		rsock->bytes_to_ignore_on_recv -= to_discard;
 	}
 
-	/* Do not wait for the current reply */
-	rsock->bytes_to_skip_on_recv += size;
+	DBG3("Relayd ignore reply of size %zu", size);
+	/* Do not wait for the current reply to be ignored */
+	rsock->bytes_to_ignore_on_recv += size;
+	ret = 0;
+
+error:
+	return ret;
 }
 
 /*
@@ -182,29 +197,29 @@ static void recv_reply_skip(struct lttcomm_relayd_sock *rsock, size_t size)
 static int recv_reply(struct lttcomm_relayd_sock *rsock, void *data, size_t size)
 {
 	int ret;
-	char *discarded_data = NULL;
 
 	if (rsock->sock.fd < 0) {
 		return -ECONNRESET;
 	}
 
-	if (rsock->bytes_to_skip_on_recv != 0) {
-		/* TODO: could we use MSG_TRUNC here? */
-		discarded_data = malloc(rsock->bytes_to_skip_on_recv);
-		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_skip_on_recv, MSG_TRUNC);
-		if (ret <= 0 || ret != rsock->bytes_to_skip_on_recv) {
+	/*
+	 * We have to consume the bytes that are marked to ignore.
+	 */
+	if (rsock->bytes_to_ignore_on_recv != 0) {
+		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_ignore_on_recv, MSG_TRUNC);
+		if (ret <= 0 || ret != rsock->bytes_to_ignore_on_recv) {
 			if (ret == 0) {
 				/* Orderly shutdown. */
 				DBG("Socket %d has performed an orderly shutdown", rsock->sock.fd);
 			} else {
 				DBG("Receiving reply to skip failed on sock %d for size %zu with ret %d",
-						rsock->sock.fd, rsock->bytes_to_skip_on_recv, ret);
+						rsock->sock.fd, rsock->bytes_to_ignore_on_recv, ret);
 			}
 			ret = -1;
 			goto error;
 		}
-		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_skip_on_recv, rsock->sock.fd);
-		rsock->bytes_to_skip_on_recv = 0;
+		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_ignore_on_recv, rsock->sock.fd);
+		rsock->bytes_to_ignore_on_recv = 0;
 	}
 
 	DBG3("Relayd waiting for reply of size %zu", size);
@@ -224,7 +239,6 @@ static int recv_reply(struct lttcomm_relayd_sock *rsock, void *data, size_t size
 	}
 
 error:
-	free(discarded_data);
 	return ret;
 }
 
@@ -748,23 +762,23 @@ int relayd_close(struct lttcomm_relayd_sock *rsock)
 
 	/*
 	 * This ensure that we do not close the socket while the lttng-relayd
-	 * expect to be able to send a response that we skipped.
+	 * expects to be able to send a response that we skipped.
 	 * While we loose some time to receive everything, this keep the
-	 * "protocol" intact from the point of view of lttng-relayd.
+	 * protocol intact from the point of view of lttng-relayd.
 	 */
-	if (rsock->bytes_to_skip_on_recv != 0) {
-		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_skip_on_recv, MSG_TRUNC);
-		if (ret <= 0 || ret != rsock->bytes_to_skip_on_recv) {
+	if (rsock->bytes_to_ignore_on_recv != 0) {
+		ret = rsock->sock.ops->recvmsg(&rsock->sock, NULL, rsock->bytes_to_ignore_on_recv, MSG_TRUNC);
+		if (ret <= 0 || ret != rsock->bytes_to_ignore_on_recv) {
 			if (ret == 0) {
 				/* Orderly shutdown. */
 				DBG("Socket %d has performed an orderly shutdown", rsock->sock.fd);
 			} else {
 				DBG("Receiving reply to skip failed on sock %d for size %zu with ret %d",
-						rsock->sock.fd, rsock->bytes_to_skip_on_recv, ret);
+						rsock->sock.fd, rsock->bytes_to_ignore_on_recv, ret);
 			}
 		}
-		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_skip_on_recv, rsock->sock.fd);
-		rsock->bytes_to_skip_on_recv = 0;
+		DBG("Discarded %zu bytes on sock %d", rsock->bytes_to_ignore_on_recv, rsock->sock.fd);
+		rsock->bytes_to_ignore_on_recv = 0;
 	}
 
 	DBG3("Relayd closing socket %d", rsock->sock.fd);
@@ -848,11 +862,15 @@ int relayd_send_close_stream(struct lttcomm_relayd_sock *rsock, uint64_t stream_
 		goto error;
 	}
 
-	/* Skipping response since we do not really care for it and that TCP
-	 * guarantee in-order delivery at that at this point there is not much
-	 * to do on error.*/
-	recv_reply_skip(rsock, sizeof(reply));
-	ret = 0;
+	/*
+	 * Discard response since we do not really care for it and that TCP
+	 * guarantee in-order delivery. As for error handling, there is not much
+	 * to do at this point (closing).
+	 **/
+	ret = recv_reply_ignore(rsock, sizeof(reply));
+	if (ret < 0) {
+		goto error;
+	}
 
 	DBG("Relayd close stream id %" PRIu64 " successfully", stream_id);
 
@@ -1099,9 +1117,17 @@ int relayd_send_index(struct lttcomm_relayd_sock *rsock,
 		goto error;
 	}
 
-	/* Skip Receive response */
-	recv_reply_skip(rsock, sizeof(reply));
-	ret = 0;
+	/*
+	 * Ignore the response. TCP guarantee in-order arrival and the overall
+	 * protocol do not rely on hard ordering between the control and data
+	 * socket for index.
+	 * Indexes are sent either at the end of the buffer consumption or
+	 * during the live timer.
+	 */
+	ret = recv_reply_ignore(rsock, sizeof(reply));
+	if (ret < 0) {
+		goto error;
+	}
 
 error:
 	return ret;

@@ -208,8 +208,8 @@ struct lttcomm_relayd_sock {
 	struct lttcomm_sock sock;
 	uint32_t major;
 	uint32_t minor;
-	/* The number of bytes to ignore on the next receive */
-	uint64_t bytes_to_skip_on_recv;
+	/* The number of bytes to ignore on the next receive. */
+	uint64_t bytes_to_ignore_on_recv;
 } LTTNG_PACKED;
 
 struct lttcomm_net_family {
