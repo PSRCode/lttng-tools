@@ -752,36 +752,30 @@ int consumer_send_relayd_channel_bulk(struct lttng_consumer_channel *channel)
 		goto end_rcu_unlock;
 	}
 
-	cds_list_for_each_entry(stream, &channel->streams.head, send_node) {
-		health_code_update();
-		ret = relayd_add_stream_bulk_send_append(&relayd->control_sock, stream->name,
-				stream->chan->pathname,
-				stream->chan->tracefile_size, stream->chan->tracefile_count, &buffer);
-		if (ret < 0) {
-			ERR("Relayd add stream append failed. Cleaning up relayd %" PRIu64".", relayd->id);
-			lttng_consumer_cleanup_relayd(relayd);
-			goto end_rcu_unlock;
-		}
-	}
-
-	/* Hold the lock to make sure no other message is send/received in between
-	 * the bulk send and individual rcv. At this point in time deadlock should noty occur in
-	 * relation to stream lock or any other lock since we a bringing up the
-	 * streams.
+	/*
+	 * Perform the send part of the relayd_add_stream for all stream.
+	 *
+	 * This ensure that we do not wait for response in between each command
+	 * before sending the next one.
+	 *
+	 * This result in a waterfall of send command and a waterfall of recv.
+	 *
+	 * This leverage the TCP order guarantee for send and receive.
 	 */
 	pthread_mutex_lock(&relayd->ctrl_sock_mutex);
-
-	{
-		const struct lttng_buffer_view view = lttng_buffer_view_from_dynamic_buffer(&buffer, 0, -1);
-		
-		ret = relayd_add_stream_bulk_send(&relayd->control_sock, &view);
+	cds_list_for_each_entry(stream, &channel->streams.head, send_node) {
+		health_code_update();
+		ret = relayd_add_stream_send(&relayd->control_sock, stream->name,
+				stream->chan->pathname,
+				stream->chan->tracefile_size, stream->chan->tracefile_count);
 		if (ret < 0) {
-			ERR("Relayd add stream bulk send failed. Cleaning up relayd %" PRIu64".", relayd->id);
+			ERR("Relayd add stream send failed. Cleaning up relayd %" PRIu64".", relayd->id);
 			lttng_consumer_cleanup_relayd(relayd);
-			goto end_ctrl_mutex;
+			goto end_socket_mutex;
 		}
 	}
 
+	/* Perform individual recv part of relayd_add_stream */
 	cds_list_for_each_entry(stream, &channel->streams.head, send_node) {
 		health_code_update();
 
@@ -789,7 +783,7 @@ int consumer_send_relayd_channel_bulk(struct lttng_consumer_channel *channel)
 		if (ret < 0) {
 			ERR("Relayd add stream failed. Cleaning up relayd %" PRIu64".", relayd->id);
 			lttng_consumer_cleanup_relayd(relayd);
-			goto end_ctrl_mutex;
+			goto end_socket_mutex;
 		}
 
 		uatomic_inc(&relayd->refcount);
@@ -799,7 +793,7 @@ int consumer_send_relayd_channel_bulk(struct lttng_consumer_channel *channel)
 			stream->name, stream->key, stream->relayd_id);
 	}
 
-end_ctrl_mutex:
+end_socket_mutex:
 	pthread_mutex_unlock(&relayd->ctrl_sock_mutex);
 end_rcu_unlock:
 	rcu_read_unlock();

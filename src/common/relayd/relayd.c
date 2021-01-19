@@ -444,6 +444,74 @@ error:
 	return ret;
 }
 
+/*
+ * Add stream on the relayd. Send part.
+ *
+ * On success return 0 else return ret_code negative value.
+ */
+int relayd_add_stream_send(struct lttcomm_relayd_sock *rsock, const char *channel_name,
+		const char *pathname, uint64_t tracefile_size, uint64_t tracefile_count)
+{
+	int ret;
+	struct lttcomm_relayd_add_stream msg;
+	struct lttcomm_relayd_add_stream_2_2 msg_2_2;
+
+	/* Code flow error. Safety net. */
+	assert(rsock);
+	assert(channel_name);
+	assert(pathname);
+
+	DBG("Relayd adding stream for channel name %s. Part send", channel_name);
+
+	/* Compat with relayd 2.1 */
+	if (rsock->minor == 1) {
+		memset(&msg, 0, sizeof(msg));
+		if (lttng_strncpy(msg.channel_name, channel_name,
+				sizeof(msg.channel_name))) {
+			ret = -1;
+			goto error;
+		}
+		if (lttng_strncpy(msg.pathname, pathname,
+				sizeof(msg.pathname))) {
+			ret = -1;
+			goto error;
+		}
+
+		/* Send command */
+		ret = send_command(rsock, RELAYD_ADD_STREAM, (void *) &msg, sizeof(msg), 0);
+		if (ret < 0) {
+			goto error;
+		}
+	} else {
+		memset(&msg_2_2, 0, sizeof(msg_2_2));
+		/* Compat with relayd 2.2+ */
+		if (lttng_strncpy(msg_2_2.channel_name, channel_name,
+				sizeof(msg_2_2.channel_name))) {
+			ret = -1;
+			goto error;
+		}
+		if (lttng_strncpy(msg_2_2.pathname, pathname,
+				sizeof(msg_2_2.pathname))) {
+			ret = -1;
+			goto error;
+		}
+		msg_2_2.tracefile_size = htobe64(tracefile_size);
+		msg_2_2.tracefile_count = htobe64(tracefile_count);
+
+		/* Send command */
+		ret = send_command(rsock, RELAYD_ADD_STREAM, (void *) &msg_2_2, sizeof(msg_2_2), 0);
+		if (ret < 0) {
+			goto error;
+		}
+	}
+
+	DBG("Relayd add stream sent for channel name %s.", channel_name);
+	ret = 0;
+
+error:
+	return ret;
+}
+
 int relayd_add_stream_rcv(struct lttcomm_relayd_sock *rsock, uint64_t *_stream_id)
 {
 	int ret;
@@ -479,84 +547,6 @@ error:
 	return ret;
 }
 
-int relayd_add_stream_bulk_send_append(struct lttcomm_relayd_sock *rsock, const char *channel_name,
-		const char *pathname,
-		uint64_t tracefile_size, uint64_t tracefile_count, struct lttng_dynamic_buffer *buffer)
-{
-	int ret;
-	struct lttcomm_relayd_add_stream msg;
-	struct lttcomm_relayd_add_stream_2_2 msg_2_2;
-
-	/* Code flow error. Safety net. */
-	assert(rsock);
-	assert(channel_name);
-	assert(pathname);
-
-	DBG("Relayd adding stream for channel name %s", channel_name);
-
-	/* Compat with relayd 2.1 */
-	if (rsock->minor == 1) {
-		memset(&msg, 0, sizeof(msg));
-		if (lttng_strncpy(msg.channel_name, channel_name,
-				sizeof(msg.channel_name))) {
-			ret = -1;
-		goto error;
-		}
-		if (lttng_strncpy(msg.pathname, pathname,
-				sizeof(msg.pathname))) {
-			ret = -1;
-			goto error;
-		}
-
-		/* Send command */
-		ret = send_command_accumulate(rsock, RELAYD_ADD_STREAM, (void *) &msg, sizeof(msg), buffer);
-		if (ret < 0) {
-			goto error;
-		}
-	} else {
-		memset(&msg_2_2, 0, sizeof(msg_2_2));
-		/* Compat with relayd 2.2+ */
-		if (lttng_strncpy(msg_2_2.channel_name, channel_name,
-				sizeof(msg_2_2.channel_name))) {
-			ret = -1;
-			goto error;
-		}
-		if (lttng_strncpy(msg_2_2.pathname, pathname,
-				sizeof(msg_2_2.pathname))) {
-			ret = -1;
-			goto error;
-		}
-		msg_2_2.tracefile_size = htobe64(tracefile_size);
-		msg_2_2.tracefile_count = htobe64(tracefile_count);
-
-		/* Send command */
-		ret = send_command_accumulate(rsock, RELAYD_ADD_STREAM, (void *) &msg_2_2, sizeof(msg_2_2), buffer);
-		if (ret < 0) {
-			goto error;
-		}
-	}
-
-error:
-	return ret;
-}
-
-int relayd_add_stream_bulk_send(struct lttcomm_relayd_sock *rsock, const struct lttng_buffer_view *view)
-{
-	int ret;
-
-	/* Code flow error. Safety net. */
-	assert(rsock);
-	assert(view);
-
-	ret = send_command_commit(rsock, view, 0);
-	if (ret < 0) {
-		goto error;
-	}
-
-error:
-	return ret;
-
-}
 /*
  * Inform the relay that all the streams for the current channel has been sent.
  *
