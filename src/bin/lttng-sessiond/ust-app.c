@@ -188,25 +188,22 @@ no_match:
  * Unique add of an ust app event in the given ht. This uses the custom
  * ht_match_ust_app_event match function and the event name as hash.
  */
-static void add_unique_ust_app_event(struct ust_app_channel *ua_chan,
+static void add_unique_ust_app_event(struct lttng_ht *events_ht,
 		struct ust_app_event *event)
 {
 	struct cds_lfht_node *node_ptr;
 	struct ust_app_ht_key key;
-	struct lttng_ht *ht;
 
-	assert(ua_chan);
-	assert(ua_chan->events);
+	assert(events_ht);
 	assert(event);
 
-	ht = ua_chan->events;
 	key.name = event->attr.name;
 	key.filter = event->filter;
 	key.loglevel_type = event->attr.loglevel;
 	key.exclusion = event->exclusion;
 
-	node_ptr = cds_lfht_add_unique(ht->ht,
-			ht->hash_fct(event->node.key, lttng_ht_seed),
+	node_ptr = cds_lfht_add_unique(events_ht->ht,
+			events_ht->hash_fct(event->node.key, lttng_ht_seed),
 			ht_match_ust_app_event, &key, &event->node.node);
 	assert(node_ptr == &event->node.node);
 }
@@ -3619,7 +3616,7 @@ int create_ust_app_event(struct ust_app_session *ua_sess,
 		goto error;
 	}
 
-	add_unique_ust_app_event(ua_chan, ua_event);
+	add_unique_ust_app_event(ua_chan->events, ua_event);
 
 	DBG2("UST app create event completed: app = '%s' (ppid: %d)",
 			app->name, app->ppid);
