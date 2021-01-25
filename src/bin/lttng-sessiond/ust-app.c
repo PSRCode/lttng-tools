@@ -2337,9 +2337,10 @@ error:
 	health_code_update();
 	return ret;
 }
-static int init_ust_event_notifier_from_event_rule(
+
+static int init_ust_event_from_event_rule(
 		const struct lttng_event_rule *rule,
-		struct lttng_ust_event_notifier *event_notifier)
+		struct lttng_ust_event *event)
 {
 	enum lttng_event_rule_status status;
 	enum lttng_ust_loglevel_type ust_loglevel_type = LTTNG_UST_LOGLEVEL_ALL;
@@ -2349,8 +2350,6 @@ static int init_ust_event_notifier_from_event_rule(
 	/* For now only LTTNG_EVENT_RULE_TYPE_TRACEPOINT are supported. */
 	assert(lttng_event_rule_get_type(rule) ==
 			LTTNG_EVENT_RULE_TYPE_TRACEPOINT);
-
-	memset(event_notifier, 0, sizeof(*event_notifier));
 
 	if (lttng_event_rule_targets_agent_domain(rule)) {
 		/*
@@ -2399,8 +2398,8 @@ static int init_ust_event_notifier_from_event_rule(
 		}
 	}
 
-	event_notifier->event.instrumentation = LTTNG_UST_TRACEPOINT;
-	ret = lttng_strncpy(event_notifier->event.name, pattern,
+	event->instrumentation = LTTNG_UST_TRACEPOINT;
+	ret = lttng_strncpy(event->name, pattern,
 			LTTNG_UST_SYM_NAME_LEN - 1);
 	if (ret) {
 		ERR("Failed to copy event rule pattern to notifier: pattern = '%s' ",
@@ -2408,8 +2407,8 @@ static int init_ust_event_notifier_from_event_rule(
 		goto end;
 	}
 
-	event_notifier->event.loglevel_type = ust_loglevel_type;
-	event_notifier->event.loglevel = loglevel;
+	event->loglevel_type = ust_loglevel_type;
+	event->loglevel = loglevel;
 end:
 	return ret;
 }
@@ -2422,7 +2421,7 @@ static int create_ust_event_notifier(struct ust_app *app,
 		struct ust_app_event_notifier_rule *ua_event_notifier_rule)
 {
 	int ret = 0;
-	struct lttng_ust_event_notifier event_notifier;
+	struct lttng_ust_event_notifier event_notifier = {0};
 	struct lttng_condition *condition = NULL;
 	const struct lttng_event_rule *event_rule = NULL;
 	unsigned int capture_bytecode_count = 0, i;
@@ -2441,7 +2440,7 @@ static int create_ust_event_notifier(struct ust_app *app,
 	/* Should we also test for UST at this point, or do we trust all the
 	 * upper level? */
 
-	init_ust_event_notifier_from_event_rule(event_rule, &event_notifier);
+	init_ust_event_from_event_rule(event_rule, &event_notifier.event);
 	event_notifier.event.token = ua_event_notifier_rule->token;
 	event_notifier.error_counter_index = ua_event_notifier_rule->error_counter_index;
 
