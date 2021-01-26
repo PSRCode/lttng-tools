@@ -212,11 +212,15 @@ struct ltt_ust_session *trace_ust_create_session(uint64_t session_id);
 struct ltt_ust_channel *trace_ust_create_channel(struct lttng_channel *attr,
 		enum lttng_domain_type domain);
 struct ltt_ust_map *trace_ust_create_map(const struct lttng_map *map);
-enum lttng_error_code trace_ust_create_event(struct lttng_event *ev,
+enum lttng_error_code trace_ust_create_event(const char *ev_name,
+		enum lttng_event_type ev_type,
+		enum lttng_loglevel_type ev_loglevel_type,
+		enum lttng_loglevel ev_loglevel,
 		char *filter_expression,
 		struct lttng_bytecode *filter,
 		struct lttng_event_exclusion *exclusion,
-		bool internal_event, struct ltt_ust_event **ust_event);
+		bool internal_event,
+		struct ltt_ust_event **ust_event);
 struct ltt_ust_context *trace_ust_create_context(
 		const struct lttng_event_context *ctx);
 int trace_ust_match_context(const struct ltt_ust_context *uctx,
@@ -287,11 +291,15 @@ struct ltt_ust_channel *trace_ust_create_channel(struct lttng_channel *attr,
 	return NULL;
 }
 static inline
-enum lttng_error_code trace_ust_create_event(struct lttng_event *ev,
-		const char *filter_expression,
+enum lttng_error_code trace_ust_create_event(const char *ev_name,
+		enum lttng_event_type ev_type,
+		enum lttng_loglevel_type ev_loglevel_type,
+		enum lttng_loglevel ev_loglevel,
+		char *filter_expression,
 		struct lttng_bytecode *filter,
 		struct lttng_event_exclusion *exclusion,
-		bool internal_event, struct ltt_ust_event **ust_event)
+		bool internal_event,
+		struct ltt_ust_event **ust_event)
 {
 	return LTTNG_ERR_NO_UST;
 }
