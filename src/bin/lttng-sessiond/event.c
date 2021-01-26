@@ -172,8 +172,10 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 			(enum lttng_ust_loglevel_type) event->loglevel_type,
 			event->loglevel, exclusion);
 	if (!uevent) {
-		ret = trace_ust_create_event(event, filter_expression,
-				filter, exclusion, internal_event, &uevent);
+		ret = trace_ust_create_event(event->name, event->type,
+				event->loglevel_type, event->loglevel,
+				filter_expression, filter, exclusion,
+				internal_event, &uevent);
 		/* We have passed ownership */
 		filter_expression = NULL;
 		filter = NULL;
