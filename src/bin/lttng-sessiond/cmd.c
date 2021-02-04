@@ -40,6 +40,8 @@
 #include <lttng/action/incr-value-internal.h>
 #include <lttng/channel.h>
 #include <lttng/channel-internal.h>
+#include "lttng/domain.h"
+#include "lttng/map/map.h"
 #include <lttng/map/map-internal.h>
 #include <lttng/rotate-internal.h>
 #include <lttng/location-internal.h>
@@ -4151,6 +4153,64 @@ ssize_t cmd_list_channels(enum lttng_domain_type domain,
 	ret = payload_size;
 end:
 	return ret;
+}
+
+enum lttng_error_code cmd_list_maps(enum lttng_domain_type domain,
+		struct ltt_session *session,
+		struct lttng_map_list **return_map_list)
+{
+	enum lttng_error_code ret_code;
+	struct lttng_map_list *map_list = NULL;
+
+	map_list = lttng_map_list_create();
+
+	switch (domain) {
+	case LTTNG_DOMAIN_KERNEL:
+		if (session->kernel_session != NULL) {
+			struct ltt_kernel_map *kmap;
+			cds_list_for_each_entry(kmap,
+					&session->kernel_session->map_list.head, list) {
+				enum lttng_map_status map_status;
+				map_status = lttng_map_list_add(map_list, kmap->map);
+				if (map_status != LTTNG_MAP_STATUS_OK) {
+					ERR("Error appending kernel map to list");
+					ret_code = LTTNG_ERR_FATAL;
+					break;
+				}
+			}
+
+		}
+		break;
+	case LTTNG_DOMAIN_UST:
+	{
+		struct ltt_ust_map *umap;
+		struct lttng_ht_iter iter;
+
+		rcu_read_lock();
+		cds_lfht_for_each_entry(session->ust_session->domain_global.maps->ht,
+				&iter.iter, umap, node.node) {
+			enum lttng_map_status map_status;
+			map_status = lttng_map_list_add(map_list, umap->map);
+			if (map_status != LTTNG_MAP_STATUS_OK) {
+				ERR("Error appending UST map to list");
+				ret_code = LTTNG_ERR_FATAL;
+				break;
+			}
+		}
+		rcu_read_unlock();
+		break;
+	}
+	default:
+		ret_code = LTTNG_ERR_UND;
+		goto end;
+	}
+
+	*return_map_list = map_list;
+	map_list = NULL;
+	ret_code = LTTNG_OK;
+end:
+	lttng_map_list_destroy(map_list);
+	return ret_code;
 }
 
 /*

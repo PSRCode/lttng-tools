@@ -1912,6 +1912,45 @@ error_add_context:
 		ret = LTTNG_OK;
 		break;
 	}
+	case LTTNG_LIST_MAPS:
+	{
+		struct lttng_map_list *return_map_list = NULL;
+		size_t original_payload_size;
+		size_t payload_size;
+
+		ret = setup_empty_lttng_msg(cmd_ctx);
+		if (ret) {
+			ret = LTTNG_ERR_NOMEM;
+			goto setup_error;
+		}
+
+		original_payload_size = cmd_ctx->reply_payload.buffer.size;
+
+		ret = cmd_list_maps(cmd_ctx->lsm.domain.type, cmd_ctx->session,
+				&return_map_list);
+		if (ret != LTTNG_OK) {
+			goto error;
+		}
+
+		assert(return_map_list);
+		ret = lttng_map_list_serialize(return_map_list,
+				&cmd_ctx->reply_payload);
+		lttng_map_list_destroy(return_map_list);
+		if (ret) {
+			ERR("Failed to serialize map_list in reply to `%s` command",
+					lttcomm_sessiond_command_str(cmd_ctx->lsm.cmd_type));
+			ret = LTTNG_ERR_NOMEM;
+			goto error;
+		}
+
+		payload_size = cmd_ctx->reply_payload.buffer.size -
+			original_payload_size;
+
+		update_lttng_msg(cmd_ctx, 0, payload_size);
+
+		ret = LTTNG_OK;
+		break;
+	}
 	case LTTNG_LIST_EVENTS:
 	{
 		ssize_t list_ret;

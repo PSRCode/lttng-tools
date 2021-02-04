@@ -131,6 +131,9 @@ extern enum lttng_map_status lttng_map_list_get_count(
  */
 extern void lttng_map_list_destroy(struct lttng_map_list *map_list);
 
+extern enum lttng_error_code lttng_list_maps(struct lttng_handle *handle,
+		struct lttng_map_list **map_list);
+
 /*
  * Get the key of a key-value.
  *

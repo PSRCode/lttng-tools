@@ -110,6 +110,7 @@ enum lttcomm_sessiond_command {
 	LTTNG_ADD_MAP					= 52,
 	LTTNG_ENABLE_MAP				= 53,
 	LTTNG_DISABLE_MAP				= 54,
+	LTTNG_LIST_MAPS					= 55,
 };
 
 static inline
@@ -206,6 +207,8 @@ const char *lttcomm_sessiond_command_str(enum lttcomm_sessiond_command cmd)
 		return "LTTNG_ENABLE_MAP";
 	case LTTNG_DISABLE_MAP:
 		return "LTTNG_DISABLE_MAP";
+	case LTTNG_LIST_MAPS:
+		return "LTTNG_LIST_MAPS";
 	default:
 		abort();
 	}

@@ -10,9 +10,11 @@
 
 #include "context.h"
 #include "lttng-sessiond.h"
+#include "lttng/map/map.h"
 #include "lttng/tracker.h"
 #include "session.h"
 #include <common/tracker.h>
+
 
 struct notification_thread_handle;
 
@@ -121,6 +123,9 @@ ssize_t cmd_list_events(enum lttng_domain_type domain,
 		struct lttng_payload *payload);
 ssize_t cmd_list_channels(enum lttng_domain_type domain,
 		struct ltt_session *session, struct lttng_channel **channels);
+enum lttng_error_code cmd_list_maps(enum lttng_domain_type domain,
+		struct ltt_session *session,
+		struct lttng_map_list **return_map_list);
 ssize_t cmd_list_domains(struct ltt_session *session,
 		struct lttng_domain **domains);
 void cmd_list_lttng_sessions(struct lttng_session *sessions,
