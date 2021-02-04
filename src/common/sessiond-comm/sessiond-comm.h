@@ -109,6 +109,7 @@ enum lttcomm_sessiond_command {
 	LTTNG_LIST_TRIGGERS                             = 51,
 	LTTNG_ADD_MAP					= 52,
 	LTTNG_REMOVE_MAP				= 53,
+	LTTNG_LIST_MAPS					= 54,
 };
 
 static inline
@@ -203,6 +204,8 @@ const char *lttcomm_sessiond_command_str(enum lttcomm_sessiond_command cmd)
 		return "LTTNG_ADD_MAP";
 	case LTTNG_REMOVE_MAP:
 		return "LTTNG_REMOVE_MAP";
+	case LTTNG_LIST_MAPS:
+		return "LTTNG_LIST_MAPS";
 	default:
 		abort();
 	}

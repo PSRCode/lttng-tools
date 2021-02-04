@@ -19,6 +19,7 @@
 #include <common/time.h>
 #include <common/tracker.h>
 #include <lttng/constant.h>
+#include <lttng/map/map.h>
 #include <lttng/tracker.h>
 
 #include "../command.h"
@@ -29,6 +30,7 @@ static int opt_jul;
 static int opt_log4j;
 static int opt_python;
 static char *opt_channel;
+static char *opt_map;
 static int opt_domain;
 static int opt_fields;
 static int opt_syscall;
@@ -64,6 +66,7 @@ static struct poptOption long_options[] = {
 	{"python",	'p', POPT_ARG_VAL, &opt_python, 1, 0, 0},
 	{"userspace",	'u', POPT_ARG_NONE, 0, OPT_USERSPACE, 0, 0},
 	{"channel",	'c', POPT_ARG_STRING, &opt_channel, 0, 0, 0},
+	{"map",		'm', POPT_ARG_STRING, &opt_map, 0, 0, 0},
 	{"domain",	'd', POPT_ARG_VAL, &opt_domain, 1, 0, 0},
 	{"fields",	'f', POPT_ARG_VAL, &opt_fields, 1, 0, 0},
 	{"syscall",	'S', POPT_ARG_VAL, &opt_syscall, 1, 0, 0},
@@ -1368,6 +1371,49 @@ skip_stats_printing:
 	return;
 }
 
+static void print_map(const struct lttng_map *map)
+{
+	const char *map_name;
+	enum lttng_map_status map_status;
+	unsigned int i, dimension_count;
+	enum lttng_domain_type domain;
+	enum lttng_buffer_type buffer_type;
+	enum lttng_map_bitness bitness;
+	enum lttng_map_boundary_policy boundary_policy;
+
+	dimension_count = lttng_map_get_dimension_count(map);
+	bitness = lttng_map_get_bitness(map);
+	domain = lttng_map_get_domain(map);
+
+	buffer_type = lttng_map_get_buffer_type(map);
+
+	boundary_policy = lttng_map_get_boundary_policy(map);
+
+	map_status = lttng_map_get_name(map, &map_name);
+	if (map_status != LTTNG_MAP_STATUS_OK) {
+		ERR("Failed to get map name");
+		goto end;
+	}
+	MSG("- %s\n", map_name);
+	MSG("%sAttributes:", indent4);
+	MSG("%sBitness:  %s", indent6, bitness == LTTNG_MAP_BITNESS_32BITS ? "32" : "64");
+	MSG("%sBoundary policy:  %s", indent6,
+			boundary_policy == LTTNG_MAP_BOUNDARY_POLICY_OVERFLOW ? "OVERFLOW" : "<unknown>");
+	MSG("%sNumber of dimension:  %u", indent6, dimension_count);
+
+	for (i = 0; i < dimension_count; i++) {
+		uint64_t cur_dim_len;
+		map_status = lttng_map_get_dimension_length(map, i, &cur_dim_len);
+		if (map_status != LTTNG_MAP_STATUS_OK) {
+			ERR("Failed to get map name");
+			goto end;
+		}
+		MSG("%sDimension #%u length:  %"PRIu64, indent8, dimension_count, cur_dim_len);
+	}
+end:
+	return;
+}
+
 /*
  * Machine interface
  * Print a list of channel
@@ -1506,6 +1552,67 @@ error:
 	free(channels);
 
 error_channels:
+	return ret;
+}
+
+/*
+ * List map(s) of session and domain.
+ *
+ * If map_name is NULL, all maps are listed.
+ */
+static int list_maps(const char *desired_map_name)
+{
+	struct lttng_map_list *map_list = NULL;
+	enum lttng_map_status map_status;
+	enum lttng_error_code ret_code;
+	unsigned int i, map_count;
+	bool map_found = false;
+	int ret = CMD_SUCCESS;
+
+	DBG("Listing map(s) (%s)", desired_map_name ? : "<all>");
+
+	ret_code = lttng_list_maps(handle, &map_list);
+	if (ret_code != LTTNG_OK) {
+		ERR("Error getting map list");
+		ret = CMD_ERROR;
+		goto end;
+	}
+
+	map_status = lttng_map_list_get_count(map_list, &map_count);
+	if (map_status != LTTNG_MAP_STATUS_OK) {
+		ERR("Error getting map list element count");
+		ret = CMD_ERROR;
+		goto end;
+	}
+
+	MSG("Maps:\n-------------");
+	for (i = 0; i < map_count; i++) {
+		const struct lttng_map *map = NULL;
+		const char *map_name = NULL;
+		map = lttng_map_list_get_at_index(map_list, i);
+		if (!map) {
+			ret = CMD_ERROR;
+			ERR("Error getting map from list: index = %u", i);
+			goto end;
+		}
+
+		map_status = lttng_map_get_name(map, &map_name);
+		if (map_status != LTTNG_MAP_STATUS_OK) {
+			ERR("Error getting map name");
+			ret = CMD_ERROR;
+			goto end;
+		}
+
+		if (desired_map_name != NULL) {
+			if (strncmp(map_name, desired_map_name, NAME_MAX) == 0) {
+				print_map(map);
+				break;
+			}
+		} else {
+			print_map(map);
+		}
+	}
+end:
 	return ret;
 }
 
@@ -2461,6 +2568,11 @@ int cmd_list(int argc, const char **argv)
 				goto end;
 			}
 
+			ret = list_maps(opt_map);
+			if (ret) {
+				goto end;
+			}
+
 			if (lttng_opt_mi) {
 				/* Close domain and domain element */
 				ret = mi_lttng_close_multi_element(writer, 2);
@@ -2557,6 +2669,11 @@ int cmd_list(int argc, const char **argv)
 				}
 
 				ret = list_channels(opt_channel);
+				if (ret) {
+					goto end;
+				}
+
+				ret = list_maps(opt_map);
 				if (ret) {
 					goto end;
 				}
