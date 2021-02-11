@@ -6,7 +6,7 @@
  */
 
 #include <lttng/event-expr.h>
-#include <common/event-expr-to-bytecode.h>
+#include <lttng/event-expr-internal.h>
 #include <common/bytecode/bytecode.h>
 #include <tap/tap.h>
 
