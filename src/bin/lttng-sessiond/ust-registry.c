@@ -589,45 +589,6 @@ end:
 	return ret;
 }
 
-int ust_registry_map_add_token_key_mapping(struct ust_registry_session *session,
-		uint64_t map_key, uint64_t tracer_token,
-		const struct lttng_map_key *key)
-{
-	int ret;
-	struct ust_registry_map_key_ht_entry *key_entry;
-	struct ust_registry_map *map;
-
-	DBG("📢Appending tracer token %"PRIu64" to token to map key mapping", tracer_token);
-	rcu_read_lock();
-	map = ust_registry_map_find(session, map_key);
-	if (!map) {
-		ret = -EINVAL;
-		goto end;
-	}
-	rcu_read_unlock();
-
-	key_entry = zmalloc(sizeof(struct ust_registry_map_key_ht_entry));
-	if (!key_entry) {
-		ret = -ENOMEM;
-		goto end;
-	}
-	key_entry->key = key;
-
-	rcu_read_lock();
-
-	lttng_ht_node_init_u64(&key_entry->node, tracer_token);
-	lttng_ht_add_unique_u64(map->tracer_token_to_map_key_ht,
-			&key_entry->node);
-
-	rcu_read_unlock();
-
-
-	ret = 0;
-end:
-	return ret;
-
-}
-
 static
 const struct lttng_map_key *ust_registry_map_find_key_for_token(
 		struct ust_registry_map *map,
@@ -662,6 +623,60 @@ const struct lttng_map_key *ust_registry_map_find_key_for_token(
 end:
 	return key;
 }
+
+int ust_registry_map_add_token_key_mapping(struct ust_registry_session *session,
+		uint64_t map_key, uint64_t tracer_token,
+		const struct lttng_map_key *key)
+{
+	int ret;
+	struct ust_registry_map_key_ht_entry *key_entry;
+	struct ust_registry_map *map;
+	const struct lttng_map_key *existing_mapping = NULL;
+
+	DBG("📢Appending tracer token %"PRIu64" to token to map key mapping", tracer_token);
+	rcu_read_lock();
+	map = ust_registry_map_find(session, map_key);
+	if (!map) {
+		ret = -EINVAL;
+		goto end;
+	}
+	rcu_read_unlock();
+
+	/* JORAJ check if the mapping already exist, we might want to *move this
+	 * to the caller or at least provide more check if for some scenario
+	 * (PID) this should never happen
+	 */
+	existing_mapping = ust_registry_map_find_key_for_token(map, tracer_token);
+	if (existing_mapping != NULL) {
+		assert(existing_mapping == key);
+		DBG("📢 JORAJ Mapping for tracer_token %"PRIu64" to map key %p", tracer_token, key);
+		ret = 0;
+		goto end;
+	}
+
+	key_entry = zmalloc(sizeof(struct ust_registry_map_key_ht_entry));
+	if (!key_entry) {
+		ret = -ENOMEM;
+		goto end;
+	}
+	key_entry->key = key;
+
+	rcu_read_lock();
+
+	lttng_ht_node_init_u64(&key_entry->node, tracer_token);
+	lttng_ht_add_unique_u64(map->tracer_token_to_map_key_ht,
+			&key_entry->node);
+
+	rcu_read_unlock();
+
+
+	ret = 0;
+end:
+	return ret;
+
+}
+
+
 
 static
 int ust_registry_map_find_or_create_index_for_key(struct ust_registry_map *map,
