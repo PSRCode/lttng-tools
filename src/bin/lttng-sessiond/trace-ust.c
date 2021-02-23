@@ -75,7 +75,10 @@ int trace_ust_ht_match_event(struct cds_lfht_node *node, const void *_key)
 	key = _key;
 	ev_loglevel_value = event->attr.loglevel;
 
-	/* Match the 4 elements of the key: name, filter, loglevel, exclusions. */
+	/* Match the 5 elements of the key: tracer_token, name, filter, loglevel, exclusions. */
+	if (event->attr.token != key->tracer_token) {
+		goto no_match;
+	}
 
 	/* Event name */
 	if (strncmp(event->attr.name, key->name, sizeof(event->attr.name)) != 0) {
@@ -227,7 +230,9 @@ error:
 struct ltt_ust_event *trace_ust_find_event(struct lttng_ht *ht,
 		char *name, struct lttng_bytecode *filter,
 		enum lttng_ust_loglevel_type loglevel_type, int loglevel_value,
-		struct lttng_event_exclusion *exclusion)
+		struct lttng_event_exclusion *exclusion,
+		uint64_t tracer_token
+		)
 {
 	struct lttng_ht_node_str *node;
 	struct lttng_ht_iter iter;
@@ -241,6 +246,7 @@ struct ltt_ust_event *trace_ust_find_event(struct lttng_ht *ht,
 	key.loglevel_type = loglevel_type;
 	key.loglevel_value = loglevel_value;
 	key.exclusion = exclusion;
+	key.tracer_token = tracer_token;
 
 	cds_lfht_lookup(ht->ht, ht->hash_fct((void *) name, lttng_ht_seed),
 			trace_ust_ht_match_event, &key, &iter.iter);

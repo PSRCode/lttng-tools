@@ -53,6 +53,7 @@ static void add_unique_ust_event(struct lttng_ht *ht,
 	key.loglevel_type = event->attr.loglevel_type;
 	key.loglevel_value = event->attr.loglevel;
 	key.exclusion = event->exclusion;
+	key.tracer_token = event->attr.token;
 
 	node_ptr = cds_lfht_add_unique(ht->ht,
 			ht->hash_fct(event->node.key, lttng_ht_seed),
@@ -177,7 +178,7 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 
 	uevent = trace_ust_find_event(uchan->events, event->name, filter,
 			(enum lttng_ust_loglevel_type) event->loglevel_type,
-			event->loglevel, exclusion);
+			event->loglevel, exclusion, tracer_token);
 	if (!uevent) {
 		ret = trace_ust_create_event(tracer_token, event->name, NULL, event->type,
 				event->loglevel_type, event->loglevel,
@@ -288,7 +289,7 @@ int map_event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 
 	uevent = trace_ust_find_event(umap->events, ev_name, filter,
 			(enum lttng_ust_loglevel_type) ev_loglevel_type,
-			ev_loglevel_value, exclusion);
+			ev_loglevel_value, exclusion, tracer_token);
 	if (!uevent) {
 		ret = trace_ust_create_event(tracer_token, ev_name, key, ev_type,
 				ev_loglevel_type, ev_loglevel_value,
@@ -1003,8 +1004,10 @@ static int event_agent_disable_one(struct ltt_ust_session *usess,
 	 * happens thanks to an UST filter. The following -1 is actually
 	 * ignored since the type is LTTNG_UST_LOGLEVEL_ALL.
 	 */
+	/* TODO: JORAJ FRDESO: hmmm what to do with tracer token here?
+	 */
 	uevent = trace_ust_find_event(uchan->events, (char *) ust_event_name,
-			aevent->filter, LTTNG_UST_LOGLEVEL_ALL, -1, NULL);
+			aevent->filter, LTTNG_UST_LOGLEVEL_ALL, -1, NULL, 0);
 	/* If the agent event exists, it must be available on the UST side. */
 	assert(uevent);
 

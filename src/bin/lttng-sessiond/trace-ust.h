@@ -28,6 +28,7 @@ struct ltt_ust_ht_key {
 	enum lttng_ust_loglevel_type loglevel_type;
 	int loglevel_value;
 	const struct lttng_event_exclusion *exclusion;
+	uint64_t tracer_token;
 };
 
 /* Context hash table nodes */
@@ -198,7 +199,8 @@ int trace_ust_ht_match_event_by_name(struct cds_lfht_node *node,
 struct ltt_ust_event *trace_ust_find_event(struct lttng_ht *ht,
 		char *name, struct lttng_bytecode *filter,
 		enum lttng_ust_loglevel_type loglevel_type, int loglevel_value,
-		struct lttng_event_exclusion *exclusion);
+		struct lttng_event_exclusion *exclusion,
+		uint64_t tracer_token);
 struct ltt_ust_channel *trace_ust_find_channel_by_name(struct lttng_ht *ht,
 		const char *name);
 struct ltt_ust_map *trace_ust_find_map_by_name(struct lttng_ht *ht,
