@@ -39,7 +39,7 @@
  * Add unique UST event based on the event name, filter bytecode and loglevel.
  */
 static void add_unique_ust_event(struct lttng_ht *ht,
-		struct ltt_ust_event *event)
+		struct ltt_ust_event *event, struct lttng_map_key *map_key)
 {
 	struct cds_lfht_node *node_ptr;
 	struct ltt_ust_ht_key key;
@@ -53,7 +53,7 @@ static void add_unique_ust_event(struct lttng_ht *ht,
 	key.loglevel_type = event->attr.loglevel_type;
 	key.loglevel_value = event->attr.loglevel;
 	key.exclusion = event->exclusion;
-	key.tracer_token = event->attr.token;
+	key.key = map_key;
 
 	node_ptr = cds_lfht_add_unique(ht->ht,
 			ht->hash_fct(event->node.key, lttng_ht_seed),
@@ -178,7 +178,7 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 
 	uevent = trace_ust_find_event(uchan->events, event->name, filter,
 			(enum lttng_ust_loglevel_type) event->loglevel_type,
-			event->loglevel, exclusion, tracer_token);
+			event->loglevel, exclusion, NULL);
 	if (!uevent) {
 		ret = trace_ust_create_event(tracer_token, event->name, NULL, event->type,
 				event->loglevel_type, event->loglevel,
@@ -206,7 +206,7 @@ int event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 	uevent->enabled = 1;
 	if (to_create) {
 		/* Add ltt ust event to channel */
-		add_unique_ust_event(uchan->events, uevent);
+		add_unique_ust_event(uchan->events, uevent, NULL);
 	}
 
 	if (!usess->active) {
@@ -270,7 +270,7 @@ int map_event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 		struct ltt_ust_map *umap,
 		uint64_t tracer_token,
 		char *ev_name,
-		const struct lttng_map_key *key,
+		struct lttng_map_key *key,
 		enum lttng_event_type ev_type,
 		enum lttng_loglevel_type ev_loglevel_type,
 		int ev_loglevel_value,
@@ -289,14 +289,13 @@ int map_event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 
 	uevent = trace_ust_find_event(umap->events, ev_name, filter,
 			(enum lttng_ust_loglevel_type) ev_loglevel_type,
-			ev_loglevel_value, exclusion, tracer_token);
+			ev_loglevel_value, exclusion, key);
 	if (!uevent) {
 		ret = trace_ust_create_event(tracer_token, ev_name, key, ev_type,
 				ev_loglevel_type, ev_loglevel_value,
 				filter_expression, filter, exclusion,
 				internal_event, &uevent);
 		/* We have passed ownership */
-		key = NULL;
 		filter_expression = NULL;
 		filter = NULL;
 		exclusion = NULL;
@@ -318,7 +317,7 @@ int map_event_ust_enable_tracepoint(struct ltt_ust_session *usess,
 	uevent->enabled = 1;
 	if (to_create) {
 		/* Add ltt ust event to map */
-		add_unique_ust_event(umap->events, uevent);
+		add_unique_ust_event(umap->events, uevent, key);
 	}
 
 	if (!usess->active) {
@@ -1007,7 +1006,7 @@ static int event_agent_disable_one(struct ltt_ust_session *usess,
 	/* TODO: JORAJ FRDESO: hmmm what to do with tracer token here?
 	 */
 	uevent = trace_ust_find_event(uchan->events, (char *) ust_event_name,
-			aevent->filter, LTTNG_UST_LOGLEVEL_ALL, -1, NULL, 0);
+			aevent->filter, LTTNG_UST_LOGLEVEL_ALL, -1, NULL, NULL);
 	/* If the agent event exists, it must be available on the UST side. */
 	assert(uevent);
 

@@ -356,6 +356,19 @@ static void destroy_event_rcu(struct rcu_head *head)
 }
 
 /*
+ * Destroy ust_registry_map_key_ht_entry function call of the call RCU.
+ */
+static void destroy_ust_registry_map_key_ht_entry(struct rcu_head *head)
+{
+	struct lttng_ht_node_u64 *node =
+		caa_container_of(head, struct lttng_ht_node_u64, head);
+	struct ust_registry_map_key_ht_entry *entry =
+		caa_container_of(node, struct ust_registry_map_key_ht_entry, node);
+
+	lttng_map_key_put(entry->key);
+	free(entry);
+}
+/*
  * Find an event using the name and signature in the given registry. RCU read
  * side lock MUST be acquired before calling this function and as long as the
  * event reference is kept by the caller.
@@ -626,7 +639,7 @@ end:
 
 int ust_registry_map_add_token_key_mapping(struct ust_registry_session *session,
 		uint64_t map_key, uint64_t tracer_token,
-		const struct lttng_map_key *key)
+		struct lttng_map_key *key)
 {
 	int ret;
 	struct ust_registry_map_key_ht_entry *key_entry;
@@ -660,6 +673,9 @@ int ust_registry_map_add_token_key_mapping(struct ust_registry_session *session,
 		goto end;
 	}
 	key_entry->key = key;
+
+	/* Ensure the lifetime of the lttng_map_key object. */
+	lttng_map_key_get(key);
 
 	rcu_read_lock();
 
@@ -860,6 +876,28 @@ void ust_registry_chan_destroy_event(struct ust_registry_channel *chan,
 	assert(!ret);
 
 	call_rcu(&event->node.head, destroy_event_rcu);
+
+	return;
+}
+
+/*
+ * This MUST be called within a RCU read side lock section.
+ */
+static void ust_registry_map_key_entry_destroy(struct lttng_ht *ht,
+		struct ust_registry_map_key_ht_entry *entry)
+{
+	int ret;
+	struct lttng_ht_iter iter;
+
+	assert(ht);
+	assert(entry);
+
+	/* Delete the node first. */
+	iter.iter.node = &entry->node.node;
+	ret = lttng_ht_del(ht, &iter);
+	assert(!ret);
+
+	call_rcu(&entry->node.head, destroy_ust_registry_map_key_ht_entry);
 
 	return;
 }
@@ -1146,6 +1184,7 @@ static void destroy_map(struct ust_registry_map *map)
 {
 	struct lttng_ht_iter iter;
 	struct ust_registry_event *event;
+	struct ust_registry_map_key_ht_entry *key_entry;
 	enum lttng_error_code cmd_ret;
 
 	assert(map);
@@ -1160,9 +1199,9 @@ static void destroy_map(struct ust_registry_map *map)
 	}
 
 	/* Destroy all event associated with this registry. */
-	cds_lfht_for_each_entry(map->tracer_token_to_map_key_ht->ht,
-			&iter.iter, event, node.node) {
-#warning free map key object
+	cds_lfht_for_each_entry (map->tracer_token_to_map_key_ht->ht,
+			&iter.iter, key_entry, node.node) {
+		ust_registry_map_key_entry_destroy(map->tracer_token_to_map_key_ht, key_entry);
 	}
 
 	/* Destroy all event associated with this registry. */

@@ -37,6 +37,7 @@
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/action/action.h>
 #include <lttng/action/action-internal.h>
+#include <lttng/action/incr-value-internal.h>
 #include <lttng/channel.h>
 #include <lttng/channel-internal.h>
 #include <lttng/map/map-internal.h>
@@ -304,7 +305,7 @@ enum lttng_error_code sync_incr_value_action_ust(
 		const struct lttng_condition *condition,
 		const char *map_name,
 		uint64_t tracer_token,
-		const struct lttng_map_key *key,
+		struct lttng_map_key *key,
 		enum tracer_executed_action_state state)
 {
 	enum lttng_error_code error_code;
@@ -429,7 +430,7 @@ enum lttng_error_code sync_incr_value_action(
 	enum lttng_condition_status cond_status;
 	const struct lttng_event_rule *event_rule;
 	struct ltt_session *session = NULL;
-	const struct lttng_map_key *key;
+	struct lttng_map_key *key;
 
 	action_status = lttng_action_incr_value_get_map_name(action,
 			&map_name);
@@ -447,7 +448,7 @@ enum lttng_error_code sync_incr_value_action(
 		goto end;
 	}
 
-	action_status = lttng_action_incr_value_get_key(action, &key);
+	action_status = lttng_action_incr_value_borrow_key_mutable(action, &key);
 	if (action_status != LTTNG_ACTION_STATUS_OK) {
 		ERR("Key not set for incr-value action");
 		ret = LTTNG_ERR_INVALID_MAP;

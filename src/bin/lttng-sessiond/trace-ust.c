@@ -18,6 +18,7 @@
 #include <common/trace-chunk.h>
 #include <common/utils.h>
 
+#include <lttng/map-key-internal.h>
 #include <lttng/map/map-internal.h>
 
 #include "buffer-registry.h"
@@ -75,8 +76,8 @@ int trace_ust_ht_match_event(struct cds_lfht_node *node, const void *_key)
 	key = _key;
 	ev_loglevel_value = event->attr.loglevel;
 
-	/* Match the 5 elements of the key: tracer_token, name, filter, loglevel, exclusions. */
-	if (event->attr.token != key->tracer_token) {
+	/* Match the 5 elements of the key: map_key, name, filter, loglevel, exclusions. */
+	if (!lttng_map_key_is_equal(event->key, key->key)) {
 		goto no_match;
 	}
 
@@ -231,7 +232,7 @@ struct ltt_ust_event *trace_ust_find_event(struct lttng_ht *ht,
 		char *name, struct lttng_bytecode *filter,
 		enum lttng_ust_loglevel_type loglevel_type, int loglevel_value,
 		struct lttng_event_exclusion *exclusion,
-		uint64_t tracer_token
+		struct lttng_map_key *map_key
 		)
 {
 	struct lttng_ht_node_str *node;
@@ -246,7 +247,7 @@ struct ltt_ust_event *trace_ust_find_event(struct lttng_ht *ht,
 	key.loglevel_type = loglevel_type;
 	key.loglevel_value = loglevel_value;
 	key.exclusion = exclusion;
-	key.tracer_token = tracer_token;
+	key.key = map_key;
 
 	cds_lfht_lookup(ht->ht, ht->hash_fct((void *) name, lttng_ht_seed),
 			trace_ust_ht_match_event, &key, &iter.iter);
@@ -538,7 +539,7 @@ end:
  */
 enum lttng_error_code trace_ust_create_event(uint64_t tracer_token,
 		const char *ev_name,
-		const struct lttng_map_key *key,
+		struct lttng_map_key *key,
 		enum lttng_event_type ev_type,
 		enum lttng_loglevel_type ev_loglevel_type,
 		enum lttng_loglevel ev_loglevel,
@@ -613,6 +614,13 @@ enum lttng_error_code trace_ust_create_event(uint64_t tracer_token,
 	local_ust_event->filter_expression = filter_expression;
 	local_ust_event->filter = filter;
 	local_ust_event->exclusion = exclusion;
+
+	/* Take a reference on the lttng_map_key to bounds its lifetime to the
+	 * ust_event.
+	 */
+	if (key) {
+		lttng_map_key_get(key);
+	}
 
 	/* Init node */
 	lttng_ht_node_init_str(&local_ust_event->node, local_ust_event->attr.name);
@@ -1340,6 +1348,7 @@ void trace_ust_destroy_event(struct ltt_ust_event *event)
 	assert(event);
 
 	DBG2("Trace destroy UST event %s", event->attr.name);
+	lttng_map_key_put(event->key);
 	free(event->filter_expression);
 	free(event->filter);
 	free(event->exclusion);

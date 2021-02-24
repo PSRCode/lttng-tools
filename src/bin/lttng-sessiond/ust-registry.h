@@ -173,7 +173,7 @@ struct ust_registry_channel {
 };
 
 struct ust_registry_map_key_ht_entry {
-	const struct lttng_map_key *key;
+	struct lttng_map_key *key;
 	struct lttng_ht_node_u64 node;
 };
 
@@ -372,7 +372,7 @@ void ust_registry_map_del_free(struct ust_registry_session *session,
 		uint64_t key);
 int ust_registry_map_add_token_key_mapping(struct ust_registry_session *session,
 		uint64_t map_key, uint64_t tracer_token,
-		const struct lttng_map_key *key);
+		struct lttng_map_key *key);
 
 int ust_registry_session_init(struct ust_registry_session **sessionp,
 		struct ust_app *app,

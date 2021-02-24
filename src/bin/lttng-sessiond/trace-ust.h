@@ -28,7 +28,7 @@ struct ltt_ust_ht_key {
 	enum lttng_ust_loglevel_type loglevel_type;
 	int loglevel_value;
 	const struct lttng_event_exclusion *exclusion;
-	uint64_t tracer_token;
+	struct lttng_map_key *key;
 };
 
 /* Context hash table nodes */
@@ -46,7 +46,7 @@ struct ltt_ust_event {
 	char *filter_expression;
 	struct lttng_bytecode *filter;
 	struct lttng_event_exclusion *exclusion;
-	const struct lttng_map_key *key;
+	struct lttng_map_key *key;
 	/*
 	 * An internal event is an event which was created by the session daemon
 	 * through which, for example, events emitted in Agent domains are
@@ -200,7 +200,7 @@ struct ltt_ust_event *trace_ust_find_event(struct lttng_ht *ht,
 		char *name, struct lttng_bytecode *filter,
 		enum lttng_ust_loglevel_type loglevel_type, int loglevel_value,
 		struct lttng_event_exclusion *exclusion,
-		uint64_t tracer_token);
+		struct lttng_map_key *key);
 struct ltt_ust_channel *trace_ust_find_channel_by_name(struct lttng_ht *ht,
 		const char *name);
 struct ltt_ust_map *trace_ust_find_map_by_name(struct lttng_ht *ht,
@@ -217,7 +217,7 @@ struct ltt_ust_channel *trace_ust_create_channel(struct lttng_channel *attr,
 struct ltt_ust_map *trace_ust_create_map(const struct lttng_map *map);
 enum lttng_error_code trace_ust_create_event(uint64_t tracer_token,
 		const char *ev_name,
-		const struct lttng_map_key *key,
+		struct lttng_map_key *key,
 		enum lttng_event_type ev_type,
 		enum lttng_loglevel_type ev_loglevel_type,
 		enum lttng_loglevel ev_loglevel,
