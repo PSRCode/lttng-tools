@@ -5649,8 +5649,8 @@ void ust_app_synchronize_event_notifier_rules(struct ust_app *app)
 	}
 
 	for (i = 0; i < count; i++) {
-		struct lttng_condition *condition;
-		struct lttng_event_rule *event_rule;
+		const struct lttng_condition *condition;
+		const struct lttng_event_rule *event_rule;
 		struct lttng_trigger *trigger;
 		const struct ust_app_event_notifier_rule *looked_up_event_notifier_rule;
 		enum lttng_condition_status condition_status;
@@ -5660,14 +5660,14 @@ void ust_app_synchronize_event_notifier_rules(struct ust_app *app)
 		assert(trigger);
 
 		token = lttng_trigger_get_tracer_token(trigger);
-		condition = lttng_trigger_get_condition(trigger);
+		condition = lttng_trigger_get_const_condition(trigger);
 
 		if (lttng_condition_get_type(condition) != LTTNG_CONDITION_TYPE_ON_EVENT) {
 			/* Does not apply */
 			continue;
 		}
 
-		condition_status = lttng_condition_on_event_borrow_rule_mutable(condition, &event_rule);
+		condition_status = lttng_condition_on_event_get_rule(condition, &event_rule);
 		assert(condition_status == LTTNG_CONDITION_STATUS_OK);
 
 		if (lttng_event_rule_get_domain_type(event_rule) == LTTNG_DOMAIN_KERNEL) {
