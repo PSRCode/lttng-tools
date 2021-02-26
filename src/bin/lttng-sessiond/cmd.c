@@ -3132,13 +3132,17 @@ int cmd_start_trace(struct ltt_session *session)
 	}
 
 	/*
-	 * Starting a session without channel is useless since after that it's not
-	 * possible to enable channel thus inform the client.
+	 * Starting a session without channel or maps is useless since after that it's not
+	 * possible to enable channel or maps thus inform the client.
 	 */
 	if (usess && usess->domain_global.channels) {
 		nb_chan += lttng_ht_get_count(usess->domain_global.channels);
+	}
+
+	if (usess && usess->domain_global.maps) {
 		nb_map += lttng_ht_get_count(usess->domain_global.maps);
 	}
+
 	if (ksession) {
 		nb_chan += ksession->channel_count;
 		nb_map += ksession->map_count;
