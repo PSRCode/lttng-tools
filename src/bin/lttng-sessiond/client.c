@@ -47,8 +47,6 @@
 #include "clear.h"
 #include "agent-thread.h"
 
-static bool consumerd_required_by_session(const struct ltt_session *session);
-
 static bool is_root;
 
 static struct thread_state {
@@ -887,6 +885,21 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 		need_domain = true;
 	}
 
+	/* Needs a functioning consumerd? */
+	switch (cmd_ctx->lsm.cmd_type) {
+	case LTTNG_REGISTER_TRIGGER:
+	case LTTNG_UNREGISTER_TRIGGER:
+	case LTTNG_ADD_MAP:
+	case LTTNG_ENABLE_MAP:
+	case LTTNG_DISABLE_MAP:
+	case LTTNG_LIST_MAP_VALUES:
+		need_consumerd = false;
+		break;
+	default:
+		need_consumerd = true;
+		break;
+	}
+
 	if (config.no_kernel && need_domain
 			&& cmd_ctx->lsm.domain.type == LTTNG_DOMAIN_KERNEL) {
 		if (!is_root) {
@@ -968,25 +981,6 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 			/* Acquire lock for the session */
 			session_lock(cmd_ctx->session);
 		}
-		break;
-	}
-
-	/* Needs a functioning consumerd? */
-	switch (cmd_ctx->lsm.cmd_type) {
-	case LTTNG_REGISTER_TRIGGER:
-	case LTTNG_UNREGISTER_TRIGGER:
-	case LTTNG_ADD_MAP:
-	case LTTNG_ENABLE_MAP:
-	case LTTNG_DISABLE_MAP:
-	case LTTNG_LIST_MAP_VALUES:
-		need_consumerd = false;
-		break;
-	case LTTNG_START_TRACE:
-		need_consumerd =
-				consumerd_required_by_session(cmd_ctx->session);
-		break;
-	default:
-		need_consumerd = true;
 		break;
 	}
 
@@ -2869,32 +2863,4 @@ error:
 	lttng_thread_put(thread);
 	cleanup_client_thread(client_quit_pipe);
 	return NULL;
-}
-
-/*
- * Check if the session to be started require the presence of consumerds.
- *
- * Session with channels requires consumerds.
- * Sessions with maps only do not.
- */
-static bool consumerd_required_by_session(const struct ltt_session *session)
-{
-	unsigned long nb_chan = 0;
-	const struct ltt_kernel_session *ksession;
-	const struct ltt_ust_session *usess;
-
-	assert(session);
-
-	ksession = session->kernel_session;
-	usess = session->ust_session;
-
-	if (usess && usess->domain_global.channels) {
-		nb_chan += lttng_ht_get_count(usess->domain_global.channels);
-	}
-
-	if (ksession) {
-		nb_chan += ksession->channel_count;
-	}
-
-	return (bool) nb_chan;
 }
