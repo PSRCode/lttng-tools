@@ -28,10 +28,6 @@
 #include "utils.h"
 #include "lttng-sessiond.h"
 
-static
-struct consumer_socket *consumer_find_socket(int key,
-		const struct consumer_output *consumer);
-
 /*
  * Return allocated full pathname of the session using the consumer trace path
  * and subdir if available.
@@ -361,17 +357,14 @@ error:
 
 /*
  * Return the consumer socket from the given consumer output with the right
- * bitness. Return -1 on error.
- *
- * Output parameter _socket can be NULL.
+ * bitness. On error, returns NULL.
  *
  * The caller MUST acquire a rcu read side lock and keep it until the socket
  * object reference is not needed anymore.
  */
-int consumer_find_socket_by_bitness(int bits,
-		const struct consumer_output *consumer, struct consumer_socket **_socket )
+struct consumer_socket *consumer_find_socket_by_bitness(int bits,
+		const struct consumer_output *consumer)
 {
-	int ret;
 	int consumer_fd;
 	struct consumer_socket *socket = NULL;
 
@@ -387,24 +380,14 @@ int consumer_find_socket_by_bitness(int bits,
 		goto end;
 	}
 
-	if (consumer_fd == -1) {
-		ret = 0;
-		goto end;
-	}
-
 	socket = consumer_find_socket(consumer_fd, consumer);
 	if (!socket) {
 		ERR("Consumer socket fd %d not found in consumer obj %p",
 				consumer_fd, consumer);
-		ret = -1;
-		goto end;
 	}
 
-	ret = 0;
-
 end:
-	*_socket = socket;
-	return ret;
+	return socket;
 }
 
 /*
@@ -412,7 +395,6 @@ end:
  * be acquired before calling this function and across use of the
  * returned consumer_socket.
  */
-static
 struct consumer_socket *consumer_find_socket(int key,
 		const struct consumer_output *consumer)
 {

@@ -1062,9 +1062,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 					goto error;
 				}
 			}
-		}
 
-		if (need_consumerd) {
 			/* Start the kernel consumer daemon */
 			pthread_mutex_lock(&kconsumer_data.pid_mutex);
 			if (kconsumer_data.pid == 0 &&
@@ -1123,9 +1121,7 @@ static int process_client_msg(struct command_ctx *cmd_ctx, int *sock,
 					goto error;
 				}
 			}
-		}
 
-		if (need_consumerd) {
 			/* Start the UST consumer daemons */
 			/* 64-bit */
 			pthread_mutex_lock(&ustconsumer64_data.pid_mutex);

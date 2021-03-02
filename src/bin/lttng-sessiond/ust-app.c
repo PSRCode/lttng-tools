@@ -907,14 +907,11 @@ static int push_metadata(struct ust_registry_session *registry,
 	}
 
 	/* Get consumer socket to use to push the metadata.*/
-	ret_val  = consumer_find_socket_by_bitness(registry->bits_per_long,
-			consumer, &socket);
-	if (ret_val) {
-		goto error;
-	}
+	socket = consumer_find_socket_by_bitness(registry->bits_per_long,
+			consumer);
 	if (!socket) {
-		ret_val = 0;
-		goto end;
+		ret_val = -1;
+		goto error;
 	}
 
 	ret = ust_app_push_metadata(registry, socket, 0);
@@ -926,7 +923,6 @@ static int push_metadata(struct ust_registry_session *registry,
 	return 0;
 
 error:
-end:
 	pthread_mutex_unlock(&registry->lock);
 	return ret_val;
 }
@@ -975,13 +971,10 @@ static int close_metadata(struct ust_registry_session *registry,
 	}
 
 	/* Get consumer socket to use to push the metadata.*/
-	ret = consumer_find_socket_by_bitness(registry->bits_per_long,
-			consumer, &socket);
-	if (ret) {
-		goto end;
-	}
+	socket = consumer_find_socket_by_bitness(registry->bits_per_long,
+			consumer);
 	if (!socket) {
-		ret = 0;
+		ret = -1;
 		goto end;
 	}
 
@@ -3456,14 +3449,10 @@ static int do_consumer_create_channel(struct ltt_ust_session *usess,
 	health_code_update();
 
 	/* Get the right consumer socket for the application. */
-	ret = consumer_find_socket_by_bitness(bitness, usess->consumer, &socket);
-	if (ret) {
+	socket = consumer_find_socket_by_bitness(bitness, usess->consumer);
+	if (!socket) {
 		ret = -EINVAL;
 		goto error;
-	}
-	if (!socket) {
-		ret = 0;
-		goto end;
 	}
 
 	health_code_update();
@@ -3527,7 +3516,6 @@ error_fd_get_stream:
 error_ask:
 	lttng_fd_put(LTTNG_FD_APPS, 1);
 error:
-end:
 	health_code_update();
 	rcu_read_unlock();
 	return ret;
@@ -5089,13 +5077,9 @@ static int create_ust_app_metadata(struct ust_app_session *ua_sess,
 	}
 
 	/* Get the right consumer socket for the application. */
-	ret = consumer_find_socket_by_bitness(app->bits_per_long, consumer, &socket);
-	if (ret) {
-		ret = -EINVAL;
-		goto error_consumer;
-	}
+	socket = consumer_find_socket_by_bitness(app->bits_per_long, consumer);
 	if (!socket) {
-		ret = 0;
+		ret = -EINVAL;
 		goto error_consumer;
 	}
 
@@ -6976,16 +6960,8 @@ int ust_app_flush_app_session(struct ust_app *app,
 	health_code_update();
 
 	/* Flushing buffers */
-	ret = consumer_find_socket_by_bitness(app->bits_per_long,
-			ua_sess->consumer, &socket);
-	if (ret) {
-		retval = -1;
-		goto end_no_consumer;
-	}
-	if (!socket) {
-		retval = 0;
-		goto end_no_consumer;
-	}
+	socket = consumer_find_socket_by_bitness(app->bits_per_long,
+			ua_sess->consumer);
 
 	/* Flush buffers and push metadata. */
 	switch (ua_sess->buffer_type) {
@@ -7010,7 +6986,6 @@ int ust_app_flush_app_session(struct ust_app *app,
 	health_code_update();
 
 end_deleted:
-end_no_consumer:
 	pthread_mutex_unlock(&ua_sess->lock);
 
 end_not_compatible:
@@ -7047,8 +7022,8 @@ int ust_app_flush_session(struct ltt_ust_session *usess)
 			struct consumer_socket *socket;
 
 			/* Get consumer socket to use to push the metadata.*/
-			(void) consumer_find_socket_by_bitness(reg->bits_per_long,
-					usess->consumer, &socket);
+			socket = consumer_find_socket_by_bitness(reg->bits_per_long,
+					usess->consumer);
 			if (!socket) {
 				/* Ignore request if no consumer is found for the session. */
 				continue;
@@ -7121,16 +7096,12 @@ int ust_app_clear_quiescent_app_session(struct ust_app *app,
 
 	health_code_update();
 
-	ret = consumer_find_socket_by_bitness(app->bits_per_long,
-			ua_sess->consumer, &socket);
-	if (ret) {
+	socket = consumer_find_socket_by_bitness(app->bits_per_long,
+			ua_sess->consumer);
+	if (!socket) {
 		ERR("Failed to find consumer (%" PRIu32 ") socket",
 				app->bits_per_long);
 		ret = -1;
-		goto end_unlock;
-	}
-	if (!socket) {
-		ret = 0;
 		goto end_unlock;
 	}
 
@@ -7197,8 +7168,8 @@ int ust_app_clear_quiescent_session(struct ltt_ust_session *usess)
 			struct buffer_reg_channel *buf_reg_chan;
 
 			/* Get associated consumer socket.*/
-			(void) consumer_find_socket_by_bitness(
-					reg->bits_per_long, usess->consumer, &socket);
+			socket = consumer_find_socket_by_bitness(
+					reg->bits_per_long, usess->consumer);
 			if (!socket) {
 				/*
 				 * Ignore request if no consumer is found for
@@ -8806,14 +8777,11 @@ enum lttng_error_code ust_app_snapshot_record(
 			}
 
 			/* Get consumer socket to use to push the metadata.*/
-			ret = consumer_find_socket_by_bitness(reg->bits_per_long,
-					usess->consumer, &socket);
-			if (ret) {
+			socket = consumer_find_socket_by_bitness(reg->bits_per_long,
+					usess->consumer);
+			if (!socket) {
 				status = LTTNG_ERR_INVALID;
 				goto error;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			memset(pathname, 0, sizeof(pathname));
@@ -8873,14 +8841,11 @@ enum lttng_error_code ust_app_snapshot_record(
 			}
 
 			/* Get the right consumer socket for the application. */
-			ret = consumer_find_socket_by_bitness(app->bits_per_long,
-					output, &socket);
-			if (ret) {
+			socket = consumer_find_socket_by_bitness(app->bits_per_long,
+					output);
+			if (!socket) {
 				status = LTTNG_ERR_INVALID;
 				goto error;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			/* Add the UST default trace dir to path. */
@@ -9213,14 +9178,11 @@ enum lttng_error_code ust_app_rotate_session(struct ltt_session *session)
 			}
 
 			/* Get consumer socket to use to push the metadata.*/
-			ret = consumer_find_socket_by_bitness(reg->bits_per_long,
-					usess->consumer, &socket);
-			if (ret) {
+			socket = consumer_find_socket_by_bitness(reg->bits_per_long,
+					usess->consumer);
+			if (!socket) {
 				cmd_ret = LTTNG_ERR_INVALID;
 				goto error;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			/* Rotate the data channels. */
@@ -9267,14 +9229,11 @@ enum lttng_error_code ust_app_rotate_session(struct ltt_session *session)
 			}
 
 			/* Get the right consumer socket for the application. */
-			ret = consumer_find_socket_by_bitness(app->bits_per_long,
-					usess->consumer, &socket);
-			if (ret) {
+			socket = consumer_find_socket_by_bitness(app->bits_per_long,
+					usess->consumer);
+			if (!socket) {
 				cmd_ret = LTTNG_ERR_INVALID;
 				goto error;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			registry = get_session_registry(ua_sess);
@@ -9471,14 +9430,11 @@ enum lttng_error_code ust_app_clear_session(struct ltt_session *session)
 			struct consumer_socket *socket;
 
 			/* Get consumer socket to use to push the metadata.*/
-			ret = consumer_find_socket_by_bitness(reg->bits_per_long,
-					usess->consumer, &socket);
-			if (ret) {
+			socket = consumer_find_socket_by_bitness(reg->bits_per_long,
+					usess->consumer);
+			if (!socket) {
 				cmd_ret = LTTNG_ERR_INVALID;
 				goto error_socket;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			/* Clear the data channels. */
@@ -9522,14 +9478,11 @@ enum lttng_error_code ust_app_clear_session(struct ltt_session *session)
 			}
 
 			/* Get the right consumer socket for the application. */
-			ret = consumer_find_socket_by_bitness(app->bits_per_long,
-					usess->consumer, &socket);
-			if (ret) {
+			socket = consumer_find_socket_by_bitness(app->bits_per_long,
+					usess->consumer);
+			if (!socket) {
 				cmd_ret = LTTNG_ERR_INVALID;
 				goto error_socket;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			registry = get_session_registry(ua_sess);
@@ -9610,7 +9563,6 @@ end:
  */
 enum lttng_error_code ust_app_open_packets(struct ltt_session *session)
 {
-	int ret_val;
 	enum lttng_error_code ret = LTTNG_OK;
 	struct lttng_ht_iter iter;
 	struct ltt_ust_session *usess = session->ust_session;
@@ -9629,14 +9581,11 @@ enum lttng_error_code ust_app_open_packets(struct ltt_session *session)
 			struct buffer_reg_channel *buf_reg_chan;
 			struct consumer_socket *socket;
 
-			ret_val = consumer_find_socket_by_bitness(
-					reg->bits_per_long, usess->consumer, &socket);
-			if (ret_val) {
+			socket = consumer_find_socket_by_bitness(
+					reg->bits_per_long, usess->consumer);
+			if (!socket) {
 				ret = LTTNG_ERR_FATAL;
 				goto error;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			cds_lfht_for_each_entry(reg->registry->channels->ht,
@@ -9673,14 +9622,11 @@ enum lttng_error_code ust_app_open_packets(struct ltt_session *session)
 			}
 
 			/* Get the right consumer socket for the application. */
-			ret_val = consumer_find_socket_by_bitness(
-					app->bits_per_long, usess->consumer, &socket);
-			if (ret_val) {
+			socket = consumer_find_socket_by_bitness(
+					app->bits_per_long, usess->consumer);
+			if (!socket) {
 				ret = LTTNG_ERR_FATAL;
 				goto error;
-			}
-			if (!socket) {
-				continue;
 			}
 
 			registry = get_session_registry(ua_sess);

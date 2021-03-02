@@ -174,8 +174,10 @@ struct consumer_output {
 	char chunk_path[LTTNG_PATH_MAX];
 };
 
-int consumer_find_socket_by_bitness(int bits,
-		const struct consumer_output *consumer, struct consumer_socket **_socket);
+struct consumer_socket *consumer_find_socket(int key,
+		const struct consumer_output *consumer);
+struct consumer_socket *consumer_find_socket_by_bitness(int bits,
+		const struct consumer_output *consumer);
 struct consumer_socket *consumer_allocate_socket(int *fd);
 void consumer_add_socket(struct consumer_socket *sock,
 		struct consumer_output *consumer);

@@ -905,8 +905,8 @@ void buffer_reg_uid_destroy(struct buffer_reg_uid *regp,
 
 	rcu_read_lock();
 	/* Get the right socket from the consumer object. */
-	(void) consumer_find_socket_by_bitness(regp->bits_per_long,
-			consumer, &socket);
+	socket = consumer_find_socket_by_bitness(regp->bits_per_long,
+			consumer);
 	if (!socket) {
 		goto unlock;
 	}
