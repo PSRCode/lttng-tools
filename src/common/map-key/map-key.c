@@ -489,7 +489,12 @@ bool lttng_map_key_is_equal(
 	enum lttng_map_key_status status;
 	unsigned int a_count, b_count, i;
 
-	if (!a || !b) {
+	if (!!a != !!b) {
+		goto end;
+	}
+
+	if (a == NULL && b == NULL) {
+		is_equal = true;
 		goto end;
 	}
 
