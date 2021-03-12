@@ -4647,6 +4647,21 @@ error:
 		default:
 			break;
 		}
+
+		rcu_read_lock();
+		/* Get the right consumer socket for the application. */
+		struct consumer_socket *socket = NULL;
+		socket = consumer_find_socket_by_bitness(app->bits_per_long, usess->consumer);
+		rcu_read_unlock();
+		if (!socket) {
+			/* Not much can be done here */
+			goto end;
+		}
+
+		/*
+		 * Let's at least clean up the mess we created on the consumer.
+		 */
+		(void) ust_consumer_destroy_channel(socket, ua_chan);
 	}
 
 	if (ret == 0 && _ua_chan) {
@@ -4657,6 +4672,7 @@ error:
 		 */
 		*_ua_chan = ua_chan;
 	}
+end:
 	return ret;
 }
 
