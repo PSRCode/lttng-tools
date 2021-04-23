@@ -19,16 +19,18 @@
 	lttng_condition_get_type(condition) == LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH   \
 	)
 
+#define FIXED_POINT_FRACTIONAL_BITS 5
+
 static
 double fixed_to_double(uint32_t val)
 {
-	return (double) val / (double) UINT32_MAX;
+	return ((double) val / (double) (1 << FIXED_POINT_FRACTIONAL_BITS));
 }
 
 static
 uint64_t double_to_fixed(double val)
 {
-	return (val * (double) UINT32_MAX);
+	return (uint64_t) (val * (1 << FIXED_POINT_FRACTIONAL_BITS));
 }
 
 static
