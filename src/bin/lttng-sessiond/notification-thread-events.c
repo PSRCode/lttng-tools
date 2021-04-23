@@ -4028,14 +4028,15 @@ bool evaluate_buffer_usage_condition(const struct lttng_condition *condition,
 
 	condition_type = lttng_condition_get_type(condition);
 	if (condition_type == LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW) {
-		DBG("[notification-thread] Low buffer usage condition being evaluated: threshold = %" PRIu64 ", highest usage = %" PRIu64,
-				threshold, sample->highest_usage);
+		ERR("[notification-thread] Low buffer usage condition being evaluated: threshold = %" PRIu64 ", highest usage = %" PRIu64 " condition %p",
+				threshold, sample->highest_usage, condition);
 
 		/*
 		 * The low condition should only be triggered once _all_ of the
 		 * streams in a channel have gone below the "low" threshold.
 		 */
 		if (sample->highest_usage <= threshold) {
+			ERR("highest_usage <= threshold");
 			result = true;
 		}
 	} else {
@@ -4100,6 +4101,7 @@ int evaluate_buffer_condition(const struct lttng_condition *condition,
 		latest_sample_result = evaluate_buffer_usage_condition(
 				condition, latest_sample,
 				channel_info->capacity);
+		DBG("Previous sample %d, lastest sample %d condition %p", previous_sample_result, latest_sample_result , condition);
 		break;
 	case LTTNG_CONDITION_TYPE_SESSION_CONSUMED_SIZE:
 		if (caa_likely(previous_sample_available)) {
@@ -4825,6 +4827,7 @@ int handle_notification_thread_channel_sample(
 		 * evaluation.
 		 */
 		client_list = get_client_list_from_condition(state, condition);
+		ERR("trigger %p %s, condition %p", trigger, trigger->name, condition);
 
 		ret = evaluate_buffer_condition(condition, &evaluation, state,
 				previous_sample_available ? &previous_sample : NULL,
@@ -4845,6 +4848,7 @@ int handle_notification_thread_channel_sample(
 		}
 
 		lttng_trigger_fire(trigger);
+
 
 		/*
 		 * Ownership of `evaluation` transferred to the action executor
