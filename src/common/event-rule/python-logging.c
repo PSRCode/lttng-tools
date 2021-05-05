@@ -15,6 +15,7 @@
 #include <common/runas.h>
 #include <common/hashtable/hashtable.h>
 #include <common/hashtable/utils.h>
+#include <common/mi-lttng.h>
 #include <common/string-utils/string-utils.h>
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/event-rule/python-logging-internal.h>
@@ -478,6 +479,75 @@ error:
 	return event;
 }
 
+static enum lttng_error_code lttng_event_rule_python_logging_mi(
+		const struct lttng_event_rule *rule, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_event_rule_status status;
+
+	const char *filter = NULL;
+	const char *name_pattern = NULL;
+	const struct lttng_log_level_rule *log_level_rule = NULL;
+
+	assert(rule);
+	assert(writer);
+	assert(IS_PYTHON_LOGGING_EVENT_RULE(rule));
+
+	status = lttng_event_rule_python_logging_get_name_pattern(rule, &name_pattern);
+	assert(status == LTTNG_EVENT_RULE_STATUS_OK);
+	assert(name_pattern);
+
+	status = lttng_event_rule_python_logging_get_filter(rule, &filter);
+	assert(status == LTTNG_EVENT_RULE_STATUS_OK || status == LTTNG_EVENT_RULE_STATUS_UNSET);
+
+	status = lttng_event_rule_python_logging_get_log_level_rule(rule, &log_level_rule);
+	assert(status == LTTNG_EVENT_RULE_STATUS_OK || status == LTTNG_EVENT_RULE_STATUS_UNSET);
+
+	/* Open event_rule_python_logging. */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_event_rule_python_logging);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret = mi_lttng_writer_write_element_string(writer,
+			mi_lttng_element_event_rule_name_pattern, name_pattern);
+	if (ret) {
+		goto mi_error;
+	}
+
+	if (filter != NULL) {
+		ret = mi_lttng_writer_write_element_string(writer,
+				mi_lttng_element_event_rule_filter_expression,
+				name_pattern);
+		if (ret) {
+			goto mi_error;
+		}
+	}
+
+	if (log_level_rule) {
+		ret = lttng_log_level_rule_mi(log_level_rule, writer);
+		if (ret) {
+			goto mi_error;
+		}
+	}
+
+	/* Close event_rule_python_logging. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
 struct lttng_event_rule *lttng_event_rule_python_logging_create(void)
 {
 	struct lttng_event_rule *rule = NULL;
@@ -506,6 +576,7 @@ struct lttng_event_rule *lttng_event_rule_python_logging_create(void)
 	tp_rule->parent.hash = lttng_event_rule_python_logging_hash;
 	tp_rule->parent.generate_lttng_event =
 			lttng_event_rule_python_logging_generate_lttng_event;
+	tp_rule->parent.mi = lttng_event_rule_python_logging_mi;
 
 	tp_rule->log_level_rule = NULL;
 

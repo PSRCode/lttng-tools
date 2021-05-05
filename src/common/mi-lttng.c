@@ -245,6 +245,120 @@ LTTNG_HIDDEN const char *const mi_lttng_action_type_str_snapshot_session =
 		"SNAPSHOT-SESSION";
 LTTNG_HIDDEN const char *const mi_lttng_action_type_str_list = "LIST";
 
+/* String related to condition */
+LTTNG_HIDDEN const char * const mi_lttng_element_condition = "condition";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_channel_name = "channel_name";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_threshold_bytes = "threshold_bytes";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_threshold_ratio = "threshold_ratio";
+
+/* String related to enum lttng_condition_type */
+LTTNG_HIDDEN const char *const mi_lttng_condition_type_str_session_consumed_size = "SESSION-CONSUMED-SIZE";
+LTTNG_HIDDEN const char *const mi_lttng_condition_type_str_buffer_usage_high = "BUFFER-USAGE-HIGH";
+LTTNG_HIDDEN const char *const mi_lttng_condition_type_str_buffer_usage_low = "BUFFER-USAGE-LOW";
+LTTNG_HIDDEN const char *const mi_lttng_condition_type_str_session_roration_ongoing = "SESSION-ROTATION-ONGOING";
+LTTNG_HIDDEN const char *const mi_lttng_condition_type_str_session_rotation_completed = "SESSION-ROTATION-COMPLETED";
+LTTNG_HIDDEN const char *const mi_lttng_condition_type_str_on_event = "ON-EVENT";
+
+/* String related to capture descriptor */
+LTTNG_HIDDEN const char * const mi_lttng_element_capture_descriptor = "capture_descriptor";
+LTTNG_HIDDEN const char * const mi_lttng_element_capture_descriptors = "capture_descriptors";
+
+/* String related to event expression */
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr = "event_expression";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_provider_name = "provider_name";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_type_name = "type_name";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_index = "index";
+
+/* String related to enum lttng_event_expr */
+LTTNG_HIDDEN const char * const mi_lttng_event_expr_type_str_event_payload_field= "EVENT-PAYLOAD-FIELD";
+LTTNG_HIDDEN const char * const mi_lttng_event_expr_type_str_channel_context_field= "CHANNEL-CONTEXT-FIELD";
+LTTNG_HIDDEN const char * const mi_lttng_event_expr_type_str_app_specific_context_field = "APP-SPECIFIC-CONTEXT-FIELD";
+LTTNG_HIDDEN const char * const mi_lttng_event_expr_type_str_array_field_element = "ARRAY-FIELD-ELEMENT";
+
+/* String related to event rule */
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule = "event_rule";
+
+/* String related to enum lttng_event_rule_type */
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_jul_logging = "JUL-LOGGING";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_kernel_kprobe = "KERNEL-KPROBE";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_kernel_syscall = "KERNEL-SYSCALL";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_kernel_tracepoint = "KERNEL-TRACEPOINT";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_kernel_uprobe = "KERNEL-UPROBE";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_log4j_logging = "LOG4J-LOGGING";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_python_logging = "PYTHON-LOGGING";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_user_tracepoint = "USER-TRACEPOINT";
+
+/* String related to lttng_event_rule_type */
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_name_pattern = "name_pattern";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_filter_expression = "filter_expression";
+
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_jul_logging = "event_rule_jul_logging";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_kernel_kprobe = "event_rule_kernel_kprobe";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_kernel_syscall = "event_rule_kernel_syscall";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_kernel_tracepoint = "event_rule_kernel_tracepoint";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_kernel_uprobe = "event_rule_kernel_kprobe";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_log4j_logging = "event_rule_log4j_logging";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_python_logging = "event_rule_python_logging";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_user_tracepoint = "event_rule_user_tracepoint";
+
+/* String related to lttng_event_rule_kernel_syscall. */
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_kernel_syscall_emission_site = "emission_site";
+
+/* String related to enum lttng_event_rule_kernel_syscall_emission_site. */
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_kernel_syscall_emission_site_entry_exit = "entry+exit";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_kernel_syscall_emission_site_entry = "entry";
+LTTNG_HIDDEN const char * const mi_lttng_event_rule_kernel_syscall_emission_site_exit = "exit";
+
+/* String related to lttng_event_rule_user_tracepoint */
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_user_tracepoint_name_pattern_exclusions = "name_pattern_exclusions";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_user_tracepoint_name_pattern_exclusion = "name_pattern_exclusion";
+
+/* String related to enum lttng_log_level_rule_type. */
+LTTNG_HIDDEN const char * const mi_lttng_log_level_rule_type_str_exactly = "EXACTLY";
+LTTNG_HIDDEN const char * const mi_lttng_log_level_rule_type_str_at_least_as_severe_as = "AT-LEAST-AS-SEVERE-AS";
+
+/* String related to log level rule. */
+LTTNG_HIDDEN const char * const mi_lttng_element_log_level_rule = "log_level_rule";
+LTTNG_HIDDEN const char * const mi_lttng_element_log_level_rule_exactly = "log_level_rule_exactly";
+LTTNG_HIDDEN const char * const mi_lttng_element_log_level_rule_at_least_as_severe_as = "log_level_rule_at_least_as_severe_as";
+LTTNG_HIDDEN const char * const mi_lttng_element_log_level_rule_level = "level";
+
+/* String related to enum lttng_kernel_probe_location_type. */
+LTTNG_HIDDEN const char * const mi_lttng_kernel_probe_location_type_str_symbol_offset = "SYMBOL-OFFSET";
+LTTNG_HIDDEN const char * const mi_lttng_kernel_probe_location_type_str_address = "ADDRESS";
+
+/* String related to kernel probe location. */
+LTTNG_HIDDEN const char * const mi_lttng_element_kernel_probe_location = "kernel_probe_location";
+LTTNG_HIDDEN const char * const mi_lttng_element_kernel_probe_location_symbol_offset = "kernel_probe_location_symbol_offset";
+LTTNG_HIDDEN const char * const mi_lttng_element_kernel_probe_location_symbol_offset_name = "name";
+LTTNG_HIDDEN const char * const mi_lttng_element_kernel_probe_location_symbol_offset_offset = "offset";
+
+LTTNG_HIDDEN const char * const mi_lttng_element_kernel_probe_location_address = "kernel_probe_location_address";
+LTTNG_HIDDEN const char * const mi_lttng_element_kernel_probe_location_address_address = "address";
+
+/* String related to enum lttng_userspace_probe_location_type. */
+LTTNG_HIDDEN const char * const mi_lttng_userspace_probe_location_type_str_function = "FUNCTION";
+LTTNG_HIDDEN const char * const mi_lttng_userspace_probe_location_type_str_tracepoint = "TRACEPOINT";
+
+/* String related to enum lttng_userspace_probe_location_lookup_method_type. */
+LTTNG_HIDDEN const char * const mi_lttng_userspace_probe_location_lookup_method_type_str_function_default = "FUNCTION-DEFAULT";
+LTTNG_HIDDEN const char * const mi_lttng_userspace_probe_location_lookup_method_type_str_function_elf = "FUNCTION-ELF";
+LTTNG_HIDDEN const char * const mi_lttng_userspace_probe_location_lookup_method_type_str_tracepoint_sdt = "TRACEPOINT-SDT";
+
+/* String related to userspace probe location. */
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location = "userspace_probe_location";
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_lookup_method = "userspace_probe_location_lookuop_method";
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_binary_path = "binary_path";
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_function = "userspace_probe_location_function";
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_function_name = "name";
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_tracepoint = "userspace_probe_location_tracepoint";
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_tracepoint_name = "name";
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_tracepoint_provider_name = "provider_name";
+
+/* String related to enum lttng_userspace_probe_location_function_instrumentation_type */
+LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_function_instrumentation_type = "instrumentation_type";
+LTTNG_HIDDEN const char * const mi_lttng_userspace_probe_location_function_instrumentation_type_entry = "ENTRY";
+
 /* String related to add-context command */
 LTTNG_HIDDEN const char * const mi_lttng_element_context_symbol = "symbol";
 
@@ -626,6 +740,72 @@ const char *mi_lttng_action_type_string(enum lttng_action_type value)
 		return mi_lttng_action_type_str_list;
 	case LTTNG_ACTION_TYPE_UNKNOWN:
 		/* Fallthrough */
+	default:
+		assert(0);
+		return NULL;
+	}
+}
+
+LTTNG_HIDDEN
+const char *mi_lttng_condition_type_string(enum lttng_condition_type value)
+{
+	switch (value) {
+	case LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH:
+		return mi_lttng_condition_type_str_buffer_usage_high;
+	case LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW:
+		return mi_lttng_condition_type_str_buffer_usage_low;
+	case LTTNG_CONDITION_TYPE_EVENT_RULE_MATCHES:
+		return mi_lttng_condition_type_str_on_event;
+	case LTTNG_CONDITION_TYPE_SESSION_CONSUMED_SIZE:
+		return mi_lttng_condition_type_str_session_consumed_size;
+	case LTTNG_CONDITION_TYPE_SESSION_ROTATION_ONGOING:
+		return mi_lttng_condition_type_str_session_roration_ongoing;
+	case LTTNG_CONDITION_TYPE_SESSION_ROTATION_COMPLETED:
+		return mi_lttng_condition_type_str_session_rotation_completed;
+	default:
+		assert(0);
+		return NULL;
+	}
+}
+
+LTTNG_HIDDEN
+const char *mi_lttng_event_expr_type_string(enum lttng_event_expr_type value)
+{
+	switch(value) {
+	case LTTNG_EVENT_EXPR_TYPE_EVENT_PAYLOAD_FIELD:
+		return mi_lttng_event_expr_type_str_event_payload_field;
+	case LTTNG_EVENT_EXPR_TYPE_CHANNEL_CONTEXT_FIELD:
+		return mi_lttng_event_expr_type_str_channel_context_field;
+	case LTTNG_EVENT_EXPR_TYPE_APP_SPECIFIC_CONTEXT_FIELD:
+		return mi_lttng_event_expr_type_str_app_specific_context_field;
+	case LTTNG_EVENT_EXPR_TYPE_ARRAY_FIELD_ELEMENT:
+		return mi_lttng_event_expr_type_str_array_field_element;
+	default:
+		assert(0);
+		return NULL;
+	}
+}
+
+LTTNG_HIDDEN
+const char *mi_lttng_event_rule_type_string(enum lttng_event_rule_type value)
+{
+	switch(value) {
+	case LTTNG_EVENT_RULE_TYPE_JUL_LOGGING:
+		return mi_lttng_event_rule_type_str_jul_logging;
+	case LTTNG_EVENT_RULE_TYPE_KERNEL_KPROBE:
+		return mi_lttng_event_rule_type_str_kernel_kprobe;
+	case LTTNG_EVENT_RULE_TYPE_KERNEL_SYSCALL:
+		return mi_lttng_event_rule_type_str_kernel_syscall;
+	case LTTNG_EVENT_RULE_TYPE_KERNEL_TRACEPOINT:
+		return mi_lttng_event_rule_type_str_kernel_tracepoint;
+	case LTTNG_EVENT_RULE_TYPE_KERNEL_UPROBE:
+		return mi_lttng_event_rule_type_str_kernel_uprobe;
+	case LTTNG_EVENT_RULE_TYPE_LOG4J_LOGGING:
+		return mi_lttng_event_rule_type_str_log4j_logging;
+	case LTTNG_EVENT_RULE_TYPE_PYTHON_LOGGING:
+		return mi_lttng_event_rule_type_str_python_logging;
+	case LTTNG_EVENT_RULE_TYPE_USER_TRACEPOINT:
+		return mi_lttng_event_rule_type_str_user_tracepoint;
 	default:
 		assert(0);
 		return NULL;

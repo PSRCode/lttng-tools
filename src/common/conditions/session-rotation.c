@@ -5,12 +5,13 @@
  *
  */
 
+#include <assert.h>
+#include <common/error.h>
+#include <common/macros.h>
+#include <common/mi-lttng.h>
 #include <lttng/condition/condition-internal.h>
 #include <lttng/condition/session-rotation-internal.h>
 #include <lttng/location-internal.h>
-#include <common/macros.h>
-#include <common/error.h>
-#include <assert.h>
 #include <stdbool.h>
 
 static
@@ -27,6 +28,10 @@ static
 void lttng_condition_session_rotation_destroy(
 		struct lttng_condition *condition);
 
+static enum lttng_error_code lttng_condition_session_rotation_mi(
+		const struct lttng_condition *condition,
+		struct mi_writer *writer);
+
 static const
 struct lttng_condition rotation_condition_template = {
 	/* .type omitted; shall be set on creation. */
@@ -34,6 +39,7 @@ struct lttng_condition rotation_condition_template = {
 	.serialize = lttng_condition_session_rotation_serialize,
 	.equal = lttng_condition_session_rotation_is_equal,
 	.destroy = lttng_condition_session_rotation_destroy,
+	.mi = lttng_condition_session_rotation_mi,
 };
 
 static
@@ -585,4 +591,35 @@ lttng_evaluation_session_rotation_completed_get_location(
 	*location = rotation->location;
 end:
 	return status;
+}
+
+static
+enum lttng_error_code lttng_condition_session_rotation_mi(const struct lttng_condition *condition, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_condition_status status;
+	const char *session_name = NULL;
+
+	assert(condition);
+	assert(writer);
+	assert(is_rotation_condition(condition));
+
+	status = lttng_condition_session_rotation_get_session_name(condition, &session_name);
+	assert(status == LTTNG_CONDITION_STATUS_OK);
+	assert(session_name);
+
+	/* Session name */
+	ret = mi_lttng_writer_write_element_string(writer, mi_lttng_element_session_name, session_name);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
 }

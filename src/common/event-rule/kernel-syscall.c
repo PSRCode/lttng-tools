@@ -15,6 +15,7 @@
 #include <common/hashtable/hashtable.h>
 #include <common/hashtable/utils.h>
 #include <common/string-utils/string-utils.h>
+#include <common/mi-lttng.h>
 #include <lttng/event-rule/event-rule-internal.h>
 #include <lttng/event-rule/kernel-syscall-internal.h>
 
@@ -247,6 +248,93 @@ lttng_event_rule_kernel_syscall_hash(
 	return hash;
 }
 
+static enum lttng_error_code lttng_event_rule_kernel_syscall_mi(
+		const struct lttng_event_rule *rule, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_event_rule_status status;
+
+	enum lttng_event_rule_kernel_syscall_emission_site site_type;
+	const char *filter = NULL;
+	const char *name_pattern = NULL;
+	const char *site_type_str = NULL;
+
+	assert(rule);
+	assert(writer);
+	assert(IS_SYSCALL_EVENT_RULE(rule));
+
+	status = lttng_event_rule_kernel_syscall_get_name_pattern(rule, &name_pattern);
+	assert(status == LTTNG_EVENT_RULE_STATUS_OK);
+	assert(name_pattern);
+
+	status = lttng_event_rule_kernel_syscall_get_filter(rule, &filter);
+	assert(status == LTTNG_EVENT_RULE_STATUS_OK || status == LTTNG_EVENT_RULE_STATUS_UNSET);
+
+	site_type = lttng_event_rule_kernel_syscall_get_emission_site(rule);
+
+	switch (site_type) {
+	case LTTNG_EVENT_RULE_KERNEL_SYSCALL_EMISSION_SITE_ENTRY_EXIT:
+		site_type_str = mi_lttng_event_rule_kernel_syscall_emission_site_entry_exit;
+		break;
+	case LTTNG_EVENT_RULE_KERNEL_SYSCALL_EMISSION_SITE_ENTRY:
+		site_type_str = mi_lttng_event_rule_kernel_syscall_emission_site_entry;
+		break;
+	case LTTNG_EVENT_RULE_KERNEL_SYSCALL_EMISSION_SITE_EXIT:
+		site_type_str = mi_lttng_event_rule_kernel_syscall_emission_site_exit;
+		break;
+	default:
+		abort();
+		break;
+	}
+
+	/* Open event_rule_kernel_syscall. */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_event_rule_kernel_syscall);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Emission site */
+	ret = mi_lttng_writer_write_element_string(writer,
+			mi_lttng_element_event_rule_kernel_syscall_emission_site,
+			site_type_str);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Name pattern. */
+	ret = mi_lttng_writer_write_element_string(writer,
+			mi_lttng_element_event_rule_name_pattern, name_pattern);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Filter. */
+	if (filter != NULL) {
+		ret = mi_lttng_writer_write_element_string(writer,
+				mi_lttng_element_event_rule_filter_expression,
+				name_pattern);
+		if (ret) {
+			goto mi_error;
+		}
+	}
+
+	/* Close event_rule_kernel_syscall. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
 struct lttng_event_rule *lttng_event_rule_kernel_syscall_create(
 		enum lttng_event_rule_kernel_syscall_emission_site
 				emission_site)
@@ -287,6 +375,7 @@ struct lttng_event_rule *lttng_event_rule_kernel_syscall_create(
 	syscall_rule->parent.generate_exclusions =
 			lttng_event_rule_kernel_syscall_generate_exclusions;
 	syscall_rule->parent.hash = lttng_event_rule_kernel_syscall_hash;
+	syscall_rule->parent.mi = lttng_event_rule_kernel_syscall_mi;
 
 	/* Default pattern is '*'. */
 	status = lttng_event_rule_kernel_syscall_set_name_pattern(rule, "*");

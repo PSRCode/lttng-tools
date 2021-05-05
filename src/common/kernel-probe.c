@@ -13,6 +13,7 @@
 #include <common/payload-view.h>
 #include <common/hashtable/hashtable.h>
 #include <common/hashtable/utils.h>
+#include <common/mi-lttng.h>
 #include <fcntl.h>
 #include <lttng/constant.h>
 #include <lttng/kernel-probe.h>
@@ -48,6 +49,14 @@ unsigned long lttng_kernel_probe_location_address_hash(
 static
 unsigned long lttng_kernel_probe_location_symbol_hash(
 		const struct lttng_kernel_probe_location *location);
+
+static enum lttng_error_code lttng_kernel_probe_location_address_mi(
+		const struct lttng_kernel_probe_location *location,
+		struct mi_writer *writer);
+
+static enum lttng_error_code lttng_kernel_probe_location_symbol_mi(
+		const struct lttng_kernel_probe_location *location,
+		struct mi_writer *writer);
 
 enum lttng_kernel_probe_location_type lttng_kernel_probe_location_get_type(
 		const struct lttng_kernel_probe_location *location)
@@ -120,6 +129,7 @@ lttng_kernel_probe_location_address_create(uint64_t address)
 	ret->equal = lttng_kernel_probe_location_address_is_equal;
 	ret->serialize = lttng_kernel_probe_location_address_serialize;
 	ret->hash = lttng_kernel_probe_location_address_hash;
+	ret->mi = lttng_kernel_probe_location_address_mi;
 
 end:
 	return ret;
@@ -157,6 +167,7 @@ lttng_kernel_probe_location_symbol_create(const char *symbol_name,
 	ret->equal = lttng_kernel_probe_location_symbol_is_equal;
 	ret->serialize = lttng_kernel_probe_location_symbol_serialize;
 	ret->hash = lttng_kernel_probe_location_symbol_hash;
+	ret->mi = lttng_kernel_probe_location_symbol_mi;
 	goto end;
 
 error:
@@ -723,4 +734,167 @@ unsigned long lttng_kernel_probe_location_hash(
 	const struct lttng_kernel_probe_location *location)
 {
 	return location->hash(location);
+}
+
+static enum lttng_error_code lttng_kernel_probe_location_address_mi(
+		const struct lttng_kernel_probe_location *location,
+		struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_kernel_probe_location_status status;
+
+	uint64_t address;
+
+	assert(location);
+	assert(writer);
+	assert(location->type == LTTNG_KERNEL_PROBE_LOCATION_TYPE_ADDRESS);
+
+	status = lttng_kernel_probe_location_address_get_address(location, &address);
+	assert(status == LTTNG_KERNEL_PROBE_LOCATION_STATUS_OK);
+
+	/* Open kernel_probe_location_address. */
+	ret = mi_lttng_writer_open_element(writer,
+			mi_lttng_element_kernel_probe_location_address);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret = mi_lttng_writer_write_element_unsigned_int(writer,
+			mi_lttng_element_kernel_probe_location_address_address,
+			address);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close kernel_probe_location_address. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
+static enum lttng_error_code lttng_kernel_probe_location_symbol_mi(
+		const struct lttng_kernel_probe_location *location,
+		struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_kernel_probe_location_status status;
+
+	const char *name = NULL;
+	uint64_t offset;
+
+	assert(location);
+	assert(writer);
+	assert(location->type == LTTNG_KERNEL_PROBE_LOCATION_TYPE_SYMBOL_OFFSET);
+
+	name = lttng_kernel_probe_location_symbol_get_name(location);
+	assert(name);
+
+	status = lttng_kernel_probe_location_symbol_get_offset(location, &offset);
+	assert(status == LTTNG_KERNEL_PROBE_LOCATION_STATUS_OK);
+
+	/* Open kernel_probe_location_symbol_offset. */
+	ret = mi_lttng_writer_open_element(writer,
+			mi_lttng_element_kernel_probe_location_symbol_offset);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Name. */
+	ret = mi_lttng_writer_write_element_string(writer,
+			mi_lttng_element_kernel_probe_location_symbol_offset_name,
+			name);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Offset. */
+	ret = mi_lttng_writer_write_element_unsigned_int(writer,
+			mi_lttng_element_kernel_probe_location_symbol_offset_offset,
+			offset);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close kernel_probe_location_symbol_offset. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
+LTTNG_HIDDEN
+enum lttng_error_code lttng_kernel_probe_location_mi(const struct lttng_kernel_probe_location *location,
+		struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+
+	const char *type_str;
+
+	assert(location);
+	assert(writer);
+
+	switch (lttng_kernel_probe_location_get_type(location)) {
+	case LTTNG_KERNEL_PROBE_LOCATION_TYPE_ADDRESS:
+		type_str = mi_lttng_kernel_probe_location_type_str_address;
+		break;
+	case LTTNG_KERNEL_PROBE_LOCATION_TYPE_SYMBOL_OFFSET:
+		type_str = mi_lttng_kernel_probe_location_type_str_symbol_offset;
+		break;
+	default:
+		abort();
+		break;
+	}
+
+	/* Open kernel_probe_location. */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_kernel_probe_location);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Kernel probe location type. */
+	ret = mi_lttng_writer_write_element_string(
+			writer, config_element_type, type_str);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret = location->mi(location, writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close kernel_probe_location. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
 }

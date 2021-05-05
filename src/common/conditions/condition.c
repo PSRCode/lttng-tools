@@ -5,17 +5,18 @@
  *
  */
 
-#include <lttng/condition/condition-internal.h>
+#include <assert.h>
+#include <common/buffer-view.h>
+#include <common/dynamic-buffer.h>
+#include <common/error.h>
+#include <common/macros.h>
+#include <common/mi-lttng.h>
 #include <lttng/condition/buffer-usage-internal.h>
+#include <lttng/condition/condition-internal.h>
 #include <lttng/condition/event-rule-matches-internal.h>
 #include <lttng/condition/session-consumed-size-internal.h>
 #include <lttng/condition/session-rotation-internal.h>
-#include <common/macros.h>
-#include <common/error.h>
-#include <common/dynamic-buffer.h>
-#include <common/buffer-view.h>
 #include <stdbool.h>
-#include <assert.h>
 
 enum lttng_condition_type lttng_condition_get_type(
 		const struct lttng_condition *condition)
@@ -237,4 +238,50 @@ const char *lttng_condition_type_str(enum lttng_condition_type type)
 	default:
 		return "???";
 	}
+}
+
+LTTNG_HIDDEN
+enum lttng_error_code lttng_condition_mi(const struct lttng_condition *condition,
+		struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+
+	assert(condition);
+	assert(writer);
+	assert(condition->mi);
+
+	/* Open condition */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_condition);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* condition type */
+	ret = mi_lttng_writer_write_element_string(
+			writer, config_element_type, mi_lttng_condition_type_string(condition->type));
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Underlying condition */
+	ret_code = condition->mi(condition, writer);
+	if (ret_code != LTTNG_OK) {
+		goto end;
+	}
+
+	/* Close condition */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
 }

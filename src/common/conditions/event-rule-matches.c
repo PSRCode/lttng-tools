@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <common/error.h>
 #include <common/macros.h>
+#include <common/mi-lttng.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <lttng/condition/condition-internal.h>
@@ -433,6 +434,64 @@ void destroy_capture_descriptor(void *ptr)
 	free(desc);
 }
 
+static
+enum lttng_error_code lttng_condition_event_rule_matches_mi(const struct lttng_condition *condition, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_condition_status status;
+	const struct lttng_event_rule *rule = NULL;
+	unsigned int capture_descriptor_count, i;
+
+
+	assert(condition);
+	assert(writer);
+	assert(IS_EVENT_RULE_MATCHES_CONDITION(condition));
+
+	status = lttng_condition_event_rule_matches_get_rule(condition, &rule);
+	assert(status == LTTNG_CONDITION_STATUS_OK);
+	assert(rule != NULL);
+
+	status = lttng_condition_event_rule_matches_get_capture_descriptor_count(condition, &capture_descriptor_count);
+	assert(status == LTTNG_CONDITION_STATUS_OK);
+
+	/* The event rule. */
+	ret_code = lttng_event_rule_mi(rule, writer);
+	if (ret_code != LTTNG_OK) {
+		goto end;
+	}
+
+	/* The capture descriptors. */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_capture_descriptors);
+	if (ret) {
+		goto mi_error;
+	}
+
+	for(i=0; i < capture_descriptor_count; i++) {
+		const struct lttng_event_expr *descriptor = NULL;
+		descriptor = lttng_condition_event_rule_matches_get_capture_descriptor_at_index(condition, i);
+		assert(descriptor);
+
+		ret_code = lttng_event_expr_mi(descriptor, writer);
+		if (ret_code != LTTNG_OK) {
+			goto end;
+		}
+	}
+
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
 struct lttng_condition *lttng_condition_event_rule_matches_create(
 		struct lttng_event_rule *rule)
 {
@@ -456,6 +515,7 @@ struct lttng_condition *lttng_condition_event_rule_matches_create(
 			lttng_condition_event_rule_matches_serialize,
 	condition->parent.equal = lttng_condition_event_rule_matches_is_equal,
 	condition->parent.destroy = lttng_condition_event_rule_matches_destroy,
+	condition->parent.mi = lttng_condition_event_rule_matches_mi,
 
 	lttng_event_rule_get(rule);
 	condition->rule = rule;

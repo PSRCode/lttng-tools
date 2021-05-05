@@ -14,6 +14,7 @@
 #include <common/runas.h>
 #include <common/hashtable/hashtable.h>
 #include <common/hashtable/utils.h>
+#include <common/mi-lttng.h>
 #include <ctype.h>
 #include <lttng/constant.h>
 #include <lttng/event-rule/event-rule.h>
@@ -223,6 +224,63 @@ end:
 	return ret;
 }
 
+static enum lttng_error_code lttng_event_rule_kernel_kprobe_mi(
+		const struct lttng_event_rule *rule, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_event_rule_status status;
+
+	const char *event_name = NULL;
+	const struct lttng_kernel_probe_location *location = NULL;
+
+	assert(rule);
+	assert(writer);
+	assert(IS_KPROBE_EVENT_RULE(rule));
+
+	status = lttng_event_rule_kernel_kprobe_get_event_name(rule, &event_name);
+	assert(status == LTTNG_EVENT_RULE_STATUS_OK);
+	assert(event_name);
+
+	status = lttng_event_rule_kernel_kprobe_get_location(rule, &location);
+	assert(status == LTTNG_EVENT_RULE_STATUS_OK);
+	assert(location);
+
+	/* Open event_rule_kernel_kprobe. */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_event_rule_kernel_kprobe);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Name */
+	ret = mi_lttng_writer_write_element_string(writer,
+			mi_lttng_element_event_rule_name_pattern, event_name);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Probe location.*/
+	ret = lttng_kernel_probe_location_mi(location, writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close event_rule_kernel_kprobe. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
 struct lttng_event_rule *lttng_event_rule_kernel_kprobe_create(
 		const struct lttng_kernel_probe_location *location)
 {
@@ -248,6 +306,7 @@ struct lttng_event_rule *lttng_event_rule_kernel_kprobe_create(
 	krule->parent.generate_exclusions =
 			lttng_event_rule_kernel_kprobe_generate_exclusions;
 	krule->parent.hash = lttng_event_rule_kernel_kprobe_hash;
+	krule->parent.mi = lttng_event_rule_kernel_kprobe_mi;
 
 	if (kernel_probe_set_location(krule, location)) {
 		lttng_event_rule_destroy(rule);

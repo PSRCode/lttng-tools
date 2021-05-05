@@ -9,6 +9,7 @@
 #define LTTNG_CONDITION_INTERNAL_H
 
 #include <lttng/condition/condition.h>
+#include <lttng/lttng-error.h>
 #include <common/macros.h>
 #include <common/payload-view.h>
 #include <common/payload.h>
@@ -17,6 +18,8 @@
 #include <urcu/ref.h>
 #include <stdint.h>
 #include <sys/types.h>
+
+struct mi_writer;
 
 typedef void (*condition_destroy_cb)(struct lttng_condition *condition);
 typedef bool (*condition_validate_cb)(const struct lttng_condition *condition);
@@ -28,6 +31,9 @@ typedef bool (*condition_equal_cb)(const struct lttng_condition *a,
 typedef ssize_t (*condition_create_from_payload_cb)(
 		struct lttng_payload_view *view,
 		struct lttng_condition **condition);
+typedef enum lttng_error_code (*condition_mi_cb)(
+		const struct lttng_condition *condition,
+		struct mi_writer *writer);
 
 struct lttng_condition {
 	/* Reference counting is only exposed to internal users. */
@@ -37,6 +43,7 @@ struct lttng_condition {
 	condition_serialize_cb serialize;
 	condition_equal_cb equal;
 	condition_destroy_cb destroy;
+	condition_mi_cb mi;
 };
 
 struct lttng_condition_comm {
@@ -70,6 +77,10 @@ int lttng_condition_serialize(const struct lttng_condition *condition,
 LTTNG_HIDDEN
 bool lttng_condition_is_equal(const struct lttng_condition *a,
 		const struct lttng_condition *b);
+
+LTTNG_HIDDEN
+enum lttng_error_code lttng_condition_mi(const struct lttng_condition *condition,
+		struct mi_writer *writer);
 
 LTTNG_HIDDEN
 const char *lttng_condition_type_str(enum lttng_condition_type type);

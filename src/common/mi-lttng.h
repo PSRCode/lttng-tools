@@ -241,6 +241,120 @@ LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_rotate_session;
 LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_snapshot_session;
 LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_list;
 
+/* String related to condition */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_channel_name;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_threshold_ratio;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_threshold_bytes;
+
+/* String related to enum lttng_condition_type */
+LTTNG_HIDDEN extern const char * const mi_lttng_condition_type_str_session_consumed_size;
+LTTNG_HIDDEN extern const char * const mi_lttng_condition_type_str_buffer_usage_high;
+LTTNG_HIDDEN extern const char * const mi_lttng_condition_type_str_buffer_usage_low;
+LTTNG_HIDDEN extern const char * const mi_lttng_condition_type_str_buffer_session_roration_ongoing;
+LTTNG_HIDDEN extern const char * const mi_lttng_condition_type_str_session_rotation_completed;
+LTTNG_HIDDEN extern const char * const mi_lttng_condition_type_str_on_event;
+
+/* String related to capture descriptor */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_capture_descriptor;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_capture_descriptors;
+
+/* String related to event expression */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_provider_name;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_type_name;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_index;
+
+/* String related to enum lttng_event_expr_type */
+LTTNG_HIDDEN extern const char * const mi_lttng_event_expr_type_str_event_payload_field;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_expr_type_str_channel_context_field;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_expr_type_str_app_specific_context_field;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_expr_type_str_array_field_element;
+
+/* String related to event rule */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule;
+
+/* String related to enum lttng_event_rule_type */
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_user_tracepoint;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_kernel_tracepoint;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_kernel_syscall;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_kernel_kprobe;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_kernel_uprobe;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_jul_logging;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_log4j_logging;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_python_logging;
+
+/* String related to lttng_event_rule */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_name_pattern;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_filter_expression;
+
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_jul_logging;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_kernel_kprobe;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_kernel_syscall;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_kernel_tracepoint;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_kernel_uprobe;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_log4j_logging;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_python_logging;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_user_tracepoint;
+
+/* String related to lttng_event_rule_kernel_syscall. */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_kernel_syscall_emission_site;
+
+/* String related to enum lttng_event_rule_kernel_syscall_emission_site. */
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_kernel_syscall_emission_site_entry_exit;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_kernel_syscall_emission_site_entry;
+LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_kernel_syscall_emission_site_exit;
+
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_user_tracepoint_name_pattern_exclusions;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_user_tracepoint_name_pattern_exclusion;
+
+/* String related to enum lttng_log_level_rule_type. */
+LTTNG_HIDDEN extern const char * const mi_lttng_log_level_rule_type_str_exactly;
+LTTNG_HIDDEN extern const char * const mi_lttng_log_level_rule_type_str_at_least_as_severe_as;
+
+/* String related to log level rule. */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_log_level_rule;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_log_level_rule_exactly;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_log_level_rule_at_least_as_severe_as;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_log_level_rule_at_least_as_severe_as_thre;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_log_level_rule_level;
+
+/* String related to enum lttng_kernel_probe_location_type. */
+LTTNG_HIDDEN extern const char * const mi_lttng_kernel_probe_location_type_str_symbol_offset;
+LTTNG_HIDDEN extern const char * const mi_lttng_kernel_probe_location_type_str_address;
+
+/* String related to kernel probe location. */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_kernel_probe_location;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_kernel_probe_location_symbol_offset;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_kernel_probe_location_symbol_offset_name;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_kernel_probe_location_symbol_offset_offset;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_kernel_probe_location_address;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_kernel_probe_location_address_address;
+
+/* String related to enum lttng_userspace_probe_location_type. */
+LTTNG_HIDDEN extern const char * const mi_lttng_userspace_probe_location_type_str_function;
+LTTNG_HIDDEN extern const char * const mi_lttng_userspace_probe_location_type_str_tracepoint;
+
+/* String related to enum lttng_userspace_probe_location_lookup_method_type. */
+LTTNG_HIDDEN extern const char * const mi_lttng_userspace_probe_location_lookup_method_type_str_function_default;
+LTTNG_HIDDEN extern const char * const mi_lttng_userspace_probe_location_lookup_method_type_str_function_elf;
+LTTNG_HIDDEN extern const char * const mi_lttng_userspace_probe_location_lookup_method_type_str_tracepoint_sdt;
+
+/* String related to userspace probe location. */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_lookup_method;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_binary_path;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_function;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_function_name;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_tracepoint;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_tracepoint_name;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_tracepoint_provider_name;
+
+/* String related to enum lttng_userspace_probe_location_function_instrumentation_type */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_userspace_probe_location_function_instrumentation_type;
+LTTNG_HIDDEN extern const char * const mi_lttng_userspace_probe_location_function_instrumentation_type_entry;
+
+
 /* String related to add-context command */
 LTTNG_HIDDEN extern const char * const mi_lttng_element_context_symbol;
 
@@ -255,6 +369,9 @@ const char *mi_lttng_trace_archive_location_relay_protocol_type_string(
 		enum lttng_trace_archive_location_relay_protocol_type value);
 const char *mi_lttng_action_type_string(enum lttng_action_type value);
 const char *mi_lttng_rate_policy_type_string(enum lttng_rate_policy_type value);
+const char *mi_lttng_condition_type_string(enum lttng_condition_type value);
+const char *mi_lttng_event_expr_type_string(enum lttng_event_expr_type value);
+const char *mi_lttng_event_rule_type_string(enum lttng_event_rule_type value);
 
 /*
  * Create an instance of a machine interface writer.

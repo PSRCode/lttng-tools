@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <common/error.h>
 #include <common/macros.h>
+#include <common/mi-lttng.h>
 #include <common/payload.h>
 #include <common/payload-view.h>
 #include <common/hashtable/hashtable.h>
@@ -360,4 +361,50 @@ unsigned long lttng_event_rule_hash(const struct lttng_event_rule *rule)
 {
 	assert(rule->hash);
 	return rule->hash(rule);
+}
+
+LTTNG_HIDDEN
+enum lttng_error_code lttng_event_rule_mi(
+		const struct lttng_event_rule *rule, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+
+	assert(rule);
+	assert(writer);
+	assert(rule->mi);
+
+	/* Open event_rule */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_event_rule);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Event rule type */
+	ret = mi_lttng_writer_write_element_string(
+			writer, config_element_type, mi_lttng_event_rule_type_string(rule->type));
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Underlying event rule */
+	ret_code = rule->mi(rule, writer);
+	if (ret_code != LTTNG_OK) {
+		goto end;
+	}
+
+	/* Close event rule */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
 }
