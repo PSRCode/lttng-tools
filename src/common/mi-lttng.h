@@ -224,6 +224,23 @@ LTTNG_HIDDEN extern const char *const mi_lttng_element_rate_policy_once_after_n_
 LTTNG_HIDDEN extern const char * const mi_lttng_rate_policy_type_str_every_n;
 LTTNG_HIDDEN extern const char * const mi_lttng_rate_policy_type_str_once_after_n;
 
+/* String related to action elements */
+LTTNG_HIDDEN extern const char *const mi_lttng_element_action;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_action_list;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_action_notify;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_action_start_session;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_action_stop_session;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_action_rotate_session;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_action_snapshot_session;
+
+/* String related to enum lttng_action_type */
+LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_notify;
+LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_start_session;
+LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_stop_session;
+LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_rotate_session;
+LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_snapshot_session;
+LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_list;
+
 /* String related to add-context command */
 LTTNG_HIDDEN extern const char * const mi_lttng_element_context_symbol;
 
@@ -236,6 +253,7 @@ const char *mi_lttng_buffertype_string(enum lttng_buffer_type value);
 const char *mi_lttng_rotation_state_string(enum lttng_rotation_state value);
 const char *mi_lttng_trace_archive_location_relay_protocol_type_string(
 		enum lttng_trace_archive_location_relay_protocol_type value);
+const char *mi_lttng_action_type_string(enum lttng_action_type value);
 const char *mi_lttng_rate_policy_type_string(enum lttng_rate_policy_type value);
 
 /*
@@ -791,7 +809,7 @@ int mi_lttng_snapshot_output_session_name(struct mi_writer *writer,
  * Negative values indicate an error.
  */
 int mi_lttng_snapshot_list_output(struct mi_writer *writer,
-		struct lttng_snapshot_output *output);
+		const struct lttng_snapshot_output *output);
 
 /*
  * Machine interface of the output of the command snapshot del output

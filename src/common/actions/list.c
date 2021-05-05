@@ -7,10 +7,11 @@
 
 #include <assert.h>
 #include <common/dynamic-array.h>
-#include <common/payload.h>
-#include <common/payload-view.h>
 #include <common/error.h>
 #include <common/macros.h>
+#include <common/mi-lttng.h>
+#include <common/payload-view.h>
+#include <common/payload.h>
 #include <lttng/action/action-internal.h>
 #include <lttng/action/list-internal.h>
 #include <lttng/action/list.h>
@@ -278,6 +279,56 @@ end:
 	return action_status;
 }
 
+static enum lttng_error_code lttng_action_list_mi(
+		const struct lttng_action *action, struct mi_writer *writer)
+{
+	int ret;
+	struct lttng_action_list *action_list;
+	unsigned int i, count;
+	enum lttng_error_code ret_code;
+
+	assert(action);
+	assert(IS_LIST_ACTION(action));
+	assert(writer);
+
+	/* Open action_list */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_action_list);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Effectively an array of action. */
+	action_list = action_list_from_action(action);
+	count = lttng_dynamic_pointer_array_get_count(&action_list->actions);
+	for (i = 0; i < count; i++) {
+		struct lttng_action *child =
+				lttng_dynamic_pointer_array_get_pointer(
+						&action_list->actions, i);
+
+		assert(child);
+
+		ret_code = lttng_action_mi(child, writer);
+		if (ret_code != LTTNG_OK) {
+			goto end;
+		}
+	}
+
+	/* Close action_list element. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
 struct lttng_action *lttng_action_list_create(void)
 {
 	struct lttng_action_list *action_list;
@@ -296,7 +347,8 @@ struct lttng_action *lttng_action_list_create(void)
 			lttng_action_list_serialize,
 			lttng_action_list_is_equal, lttng_action_list_destroy,
 			NULL,
-			lttng_action_list_add_error_query_results);
+			lttng_action_list_add_error_query_results,
+			lttng_action_list_mi);
 
 	lttng_dynamic_pointer_array_init(&action_list->actions,
 			destroy_lttng_action_list_element);

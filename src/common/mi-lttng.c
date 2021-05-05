@@ -220,6 +220,31 @@ LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_once_after_n_thresho
 LTTNG_HIDDEN const char * const mi_lttng_rate_policy_type_str_every_n = "EVERY-N";
 LTTNG_HIDDEN const char * const mi_lttng_rate_policy_type_str_once_after_n = "ONCE-AFTER-N";
 
+/* String related to action elements */
+LTTNG_HIDDEN const char *const mi_lttng_element_action = "action";
+LTTNG_HIDDEN const char *const mi_lttng_element_action_list = "action_list";
+LTTNG_HIDDEN const char *const mi_lttng_element_action_notify = "action_notify";
+LTTNG_HIDDEN const char *const mi_lttng_element_action_start_session =
+		"action_start_session";
+LTTNG_HIDDEN const char *const mi_lttng_element_action_stop_session =
+		"action_stop_session";
+LTTNG_HIDDEN const char *const mi_lttng_element_action_rotate_session =
+		"action_rotate_session";
+LTTNG_HIDDEN const char *const mi_lttng_element_action_snapshot_session =
+		"action_snapshot_session";
+
+/* String related to enum lttng_action_type */
+LTTNG_HIDDEN const char *const mi_lttng_action_type_str_notify = "NOTIFY";
+LTTNG_HIDDEN const char *const mi_lttng_action_type_str_start_session =
+		"START-SESSION";
+LTTNG_HIDDEN const char *const mi_lttng_action_type_str_stop_session =
+		"STOP-SESSION";
+LTTNG_HIDDEN const char *const mi_lttng_action_type_str_rotate_session =
+		"ROTATE-SESSION";
+LTTNG_HIDDEN const char *const mi_lttng_action_type_str_snapshot_session =
+		"SNAPSHOT-SESSION";
+LTTNG_HIDDEN const char *const mi_lttng_action_type_str_list = "LIST";
+
 /* String related to add-context command */
 LTTNG_HIDDEN const char * const mi_lttng_element_context_symbol = "symbol";
 
@@ -576,6 +601,30 @@ const char *mi_lttng_rate_policy_type_string(enum lttng_rate_policy_type value)
 	case LTTNG_RATE_POLICY_TYPE_ONCE_AFTER_N:
 		return mi_lttng_rate_policy_type_str_once_after_n;
 	case LTTNG_RATE_POLICY_TYPE_UNKNOWN:
+		/* Fallthrough */
+	default:
+		assert(0);
+		return NULL;
+	}
+}
+
+LTTNG_HIDDEN
+const char *mi_lttng_action_type_string(enum lttng_action_type value)
+{
+	switch (value) {
+	case LTTNG_ACTION_TYPE_NOTIFY:
+		return mi_lttng_action_type_str_notify;
+	case LTTNG_ACTION_TYPE_START_SESSION:
+		return mi_lttng_action_type_str_start_session;
+	case LTTNG_ACTION_TYPE_STOP_SESSION:
+		return mi_lttng_action_type_str_stop_session;
+	case LTTNG_ACTION_TYPE_ROTATE_SESSION:
+		return mi_lttng_action_type_str_rotate_session;
+	case LTTNG_ACTION_TYPE_SNAPSHOT_SESSION:
+		return mi_lttng_action_type_str_snapshot_session;
+	case LTTNG_ACTION_TYPE_LIST:
+		return mi_lttng_action_type_str_list;
+	case LTTNG_ACTION_TYPE_UNKNOWN:
 		/* Fallthrough */
 	default:
 		assert(0);
@@ -2055,7 +2104,7 @@ end:
 
 LTTNG_HIDDEN
 int mi_lttng_snapshot_list_output(struct mi_writer *writer,
-		struct lttng_snapshot_output *output)
+		const struct lttng_snapshot_output *output)
 {
 	int ret;
 

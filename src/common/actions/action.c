@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include <common/error.h>
+#include <common/mi-lttng.h>
 #include <lttng/action/action-internal.h>
 #include <lttng/action/list-internal.h>
 #include <lttng/action/notify-internal.h>
@@ -53,7 +54,8 @@ void lttng_action_init(struct lttng_action *action,
 		action_equal_cb equal,
 		action_destroy_cb destroy,
 		action_get_rate_policy_cb get_rate_policy,
-		action_add_error_query_results_cb add_error_query_results)
+		action_add_error_query_results_cb add_error_query_results,
+		action_mi_cb mi)
 {
 	urcu_ref_init(&action->ref);
 	action->type = type;
@@ -63,6 +65,7 @@ void lttng_action_init(struct lttng_action *action,
 	action->destroy = destroy;
 	action->get_rate_policy = get_rate_policy;
 	action->add_error_query_results = add_error_query_results;
+	action->mi = mi;
 
 	action->execution_request_counter = 0;
 	action->execution_counter = 0;
@@ -333,4 +336,50 @@ enum lttng_action_status lttng_action_generic_add_error_query_results(
 end:
 	lttng_error_query_result_destroy(error_counter);
 	return action_status;
+}
+
+LTTNG_HIDDEN
+enum lttng_error_code lttng_action_mi(const struct lttng_action *action,
+		struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+
+	assert(action);
+	assert(writer);
+	assert(action->mi);
+
+	/* Open action */
+	ret = mi_lttng_writer_open_element(
+			writer, mi_lttng_element_action);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Action type */
+	ret = mi_lttng_writer_write_element_string(
+			writer, config_element_type, mi_lttng_action_type_string(action->type));
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Underlying action */
+	ret_code = action->mi(action, writer);
+	if (ret_code != LTTNG_OK) {
+		goto end;
+	}
+
+	/* Close action */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
 }

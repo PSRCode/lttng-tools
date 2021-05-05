@@ -20,6 +20,7 @@
 #include <urcu/ref.h>
 
 struct lttng_rate_policy;
+struct mi_writer;
 
 typedef bool (*action_validate_cb)(struct lttng_action *action);
 typedef void (*action_destroy_cb)(struct lttng_action *action);
@@ -35,6 +36,9 @@ typedef const struct lttng_rate_policy *(*action_get_rate_policy_cb)(
 typedef enum lttng_action_status (*action_add_error_query_results_cb)(
 		const struct lttng_action *action,
 		struct lttng_error_query_results *results);
+typedef enum lttng_error_code (*action_mi_cb)(
+		const struct lttng_action *condition,
+		struct mi_writer *writer);
 
 struct lttng_action {
 	struct urcu_ref ref;
@@ -45,6 +49,7 @@ struct lttng_action {
 	action_destroy_cb destroy;
 	action_get_rate_policy_cb get_rate_policy;
 	action_add_error_query_results_cb add_error_query_results;
+	action_mi_cb mi;
 
 	/* Internal use only. */
 
@@ -76,7 +81,8 @@ void lttng_action_init(struct lttng_action *action,
 		action_equal_cb equal,
 		action_destroy_cb destroy,
 		action_get_rate_policy_cb get_rate_policy,
-		action_add_error_query_results_cb add_error_query_results);
+		action_add_error_query_results_cb add_error_query_results,
+		action_mi_cb mi);
 
 LTTNG_HIDDEN
 bool lttng_action_validate(struct lttng_action *action);
@@ -128,5 +134,7 @@ LTTNG_HIDDEN
 enum lttng_action_status lttng_action_generic_add_error_query_results(
 		const struct lttng_action *action,
 		struct lttng_error_query_results *results);
+LTTNG_HIDDEN
+enum lttng_error_code lttng_action_mi(const struct lttng_action *action, struct mi_writer *writer);
 
 #endif /* LTTNG_ACTION_INTERNAL_H */
