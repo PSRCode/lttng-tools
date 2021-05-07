@@ -208,6 +208,18 @@ LTTNG_HIDDEN const char * const mi_lttng_rotation_state_str_error = "ERROR";
 /* String related to enum lttng_trace_archive_location_relay_protocol_type */
 LTTNG_HIDDEN const char * const mi_lttng_rotation_location_relay_protocol_str_tcp = "TCP";
 
+/* String related to rate_policy elements */
+LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy = "rate_policy";
+LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_every_n = "rate_policy_every_n";
+LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_once_after_n = "rate_policy_oncer_after_n";
+
+LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_every_n_interval = "interval";
+LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_once_after_n_threshold = "threshold";
+
+/* String related to enum lttng_rate_policy type */
+LTTNG_HIDDEN const char * const mi_lttng_rate_policy_type_str_every_n = "EVERY-N";
+LTTNG_HIDDEN const char * const mi_lttng_rate_policy_type_str_once_after_n = "ONCE-AFTER-N";
+
 /* String related to add-context command */
 LTTNG_HIDDEN const char * const mi_lttng_element_context_symbol = "symbol";
 
@@ -549,7 +561,23 @@ const char *mi_lttng_trace_archive_location_relay_protocol_type_string(
 	case LTTNG_TRACE_ARCHIVE_LOCATION_RELAY_PROTOCOL_TYPE_TCP:
 		return mi_lttng_rotation_location_relay_protocol_str_tcp;
 	default:
-		/* Should not have an unknow relay protocol. */
+		/* Should not have an unknown relay protocol. */
+		assert(0);
+		return NULL;
+	}
+}
+
+LTTNG_HIDDEN
+const char *mi_lttng_rate_policy_type_string(enum lttng_rate_policy_type value)
+{
+	switch (value) {
+	case LTTNG_RATE_POLICY_TYPE_EVERY_N:
+		return mi_lttng_rate_policy_type_str_every_n;
+	case LTTNG_RATE_POLICY_TYPE_ONCE_AFTER_N:
+		return mi_lttng_rate_policy_type_str_once_after_n;
+	case LTTNG_RATE_POLICY_TYPE_UNKNOWN:
+		/* Fallthrough */
+	default:
 		assert(0);
 		return NULL;
 	}

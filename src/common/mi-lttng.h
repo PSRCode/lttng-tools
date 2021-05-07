@@ -212,6 +212,18 @@ LTTNG_HIDDEN extern const char * const mi_lttng_rotation_state_str_error;
 /* String related to enum lttng_trace_archive_location_relay_protocol_type */
 LTTNG_HIDDEN extern const char * const mi_lttng_rotation_location_relay_protocol_str_tcp;
 
+/* String related to rate_policy elements */
+LTTNG_HIDDEN extern const char *const mi_lttng_element_rate_policy;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_rate_policy_every_n;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_rate_policy_once_after_n;
+
+LTTNG_HIDDEN extern const char *const mi_lttng_element_rate_policy_every_n_interval;
+LTTNG_HIDDEN extern const char *const mi_lttng_element_rate_policy_once_after_n_threshold;
+
+/* String related to enum lttng_rate_policy type */
+LTTNG_HIDDEN extern const char * const mi_lttng_rate_policy_type_str_every_n;
+LTTNG_HIDDEN extern const char * const mi_lttng_rate_policy_type_str_once_after_n;
+
 /* String related to add-context command */
 LTTNG_HIDDEN extern const char * const mi_lttng_element_context_symbol;
 
@@ -224,6 +236,7 @@ const char *mi_lttng_buffertype_string(enum lttng_buffer_type value);
 const char *mi_lttng_rotation_state_string(enum lttng_rotation_state value);
 const char *mi_lttng_trace_archive_location_relay_protocol_type_string(
 		enum lttng_trace_archive_location_relay_protocol_type value);
+const char *mi_lttng_rate_policy_type_string(enum lttng_rate_policy_type value);
 
 /*
  * Create an instance of a machine interface writer.
