@@ -106,8 +106,6 @@ bool assign_event_rule_type(enum lttng_event_rule_type *dest, const char *arg)
 		*dest = LTTNG_EVENT_RULE_TYPE_KERNEL_KPROBE;
 	} else if (strcmp(arg, "kernel:uprobe") == 0) {
 		*dest = LTTNG_EVENT_RULE_TYPE_KERNEL_UPROBE;
-	} else if (strcmp(arg, "function") == 0) {
-		*dest = LTTNG_EVENT_RULE_TYPE_KERNEL_FUNCTION;
 	} else if (strncmp(arg, "syscall", strlen("syscall")) == 0 ||
 			strncmp(arg, "kernel:syscall",
 					strlen("kernel:syscall")) == 0) {
@@ -854,7 +852,6 @@ struct parse_event_rule_res parse_event_rule(int *argc, const char ***argv)
 	switch (event_rule_type) {
 	case LTTNG_EVENT_RULE_TYPE_KERNEL_KPROBE:
 	case LTTNG_EVENT_RULE_TYPE_KERNEL_UPROBE:
-	case LTTNG_EVENT_RULE_TYPE_KERNEL_FUNCTION:
 		if (!location) {
 			ERR("Event rule of type %s requires a --location.",
 			lttng_event_rule_type_str(event_rule_type));
