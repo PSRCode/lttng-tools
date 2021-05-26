@@ -15,6 +15,8 @@ LTTNG_BIN="lttng"
 BABELTRACE_BIN="babeltrace"
 OUTPUT_DEST=/dev/null
 ERROR_OUTPUT_DEST=/dev/null
+XML_PRETTY_BIN="$TESTDIR/utils/xml-utils/pretty_xml"
+XML_PRETTY_VALIDATE="$TESTDIR/utils/xml-utils/validate_xml"
 
 # To match 20201127-175802
 date_time_pattern="[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]"
@@ -2267,6 +2269,38 @@ function list_triggers_matches_ok ()
 	ok $? "${test_name}: expected stderr"
 
 	rm -f "${tmp_stdout}"
+	rm -f "${tmp_stderr}"
+}
+
+function list_triggers_matches_mi_ok ()
+{
+	local tmp_stdout
+	local tmp_stdout_raw
+	local tmp_stderr
+
+	local test_name="$1"
+	local expected_stdout_file="$2"
+
+	tmp_stdout_raw=$(mktemp --tmpdir -t "tmp.${FUNCNAME[0]}_stdout.XXXXXX")
+	tmp_stdout=$(mktemp --tmpdir -t "tmp.${FUNCNAME[0]}_stdout.XXXXXX")
+	tmp_stderr=$(mktemp --tmpdir -t "tmp.${FUNCNAME[0]}_stderr.XXXXXX")
+
+	diag "$TESTDIR/../src/bin/lttng/$LTTNG_BIN --mi xml list-triggers"
+
+	"$TESTDIR/../src/bin/lttng/$LTTNG_BIN" --mi=xml list-triggers > "${tmp_stdout_raw}" 2> "${tmp_stderr}"
+	ok $? "${test_name}: exit code is 0"
+
+	cat "${tmp_stdout_raw}"
+	$XML_PRETTY_BIN < "${tmp_stdout_raw}" > "${tmp_stdout}"
+
+	diff -u "${expected_stdout_file}" "${tmp_stdout}"
+	ok $? "${test_name}: expected stdout"
+
+	diff -u /dev/null "${tmp_stderr}"
+	ok $? "${test_name}: expected stderr"
+
+	rm -f "${tmp_stdout}"
+	rm -f "${tmp_stdout_raw}"
 	rm -f "${tmp_stderr}"
 }
 

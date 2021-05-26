@@ -69,6 +69,7 @@ test_top_level_options ()
 	EOF
 
 	list_triggers_matches_ok "top level options" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI top level options" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "hello"
 }
@@ -181,6 +182,7 @@ test_event_rule_matches_tracepoint ()
 	EOF
 
 	list_triggers_matches_ok "event-rule-matches, tracepoint event rule" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI event-rule-matches, tracepoint event rule" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "A"
 	lttng_remove_trigger_ok "B"
@@ -249,6 +251,7 @@ test_event_rule_matches_probe ()
 	EOF
 
 	list_triggers_matches_ok "event-rule-matches, probe event rule" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI event-rule-matches, probe event rule" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "T0"
 	lttng_remove_trigger_ok "T1"
@@ -275,6 +278,7 @@ test_event_rule_matches_userspace_probe_elf ()
 	EOF
 
 	list_triggers_matches_ok "event-rule-matches, userspace-probe event rule" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI event-rule-matches, userspace-probe event rule" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "T0"
 }
@@ -300,6 +304,7 @@ test_event_rule_matches_userspace_probe_sdt ()
 	EOF
 
 	list_triggers_matches_ok "event-rule-matches, userspace-probe event rule SDT" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI event-rule-matches, userspace-probe event rule SDT" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "T0"
 }
@@ -358,6 +363,7 @@ test_event_rule_matches_syscall ()
 	EOF
 
 	list_triggers_matches_ok "event-rule-matches, syscall event rule" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI event-rule-matches, syscall event rule" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "T0"
 	lttng_remove_trigger_ok "T1"
@@ -383,6 +389,7 @@ test_session_consumed_size_condition ()
 	EOF
 
 	list_triggers_matches_ok "session consumed size condition" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI session consumed size condition" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "trigger-with-session-consumed-size-condition"
 }
@@ -439,6 +446,7 @@ test_buffer_usage_conditions ()
 	EOF
 
 	list_triggers_matches_ok "buffer usage condition" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI buffer usage condition" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "trigger-with-buffer-usage-high-bytes-condition"
 	lttng_remove_trigger_ok "trigger-with-buffer-usage-high-ratio-condition"
@@ -470,6 +478,7 @@ test_session_rotation_conditions ()
 	EOF
 
 	list_triggers_matches_ok "session rotation conditions" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI session rotation conditions" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "trigger-with-session-rotation-completed-condition"
 	lttng_remove_trigger_ok "trigger-with-session-rotation-ongoing-condition"
@@ -574,6 +583,7 @@ test_snapshot_action ()
 	EOF
 
 	list_triggers_matches_ok "snapshot action" "${tmp_expected_stdout}"
+	list_triggers_matches_ok "MI snapshot action" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "T0"
 	lttng_remove_trigger_ok "T1"
@@ -612,6 +622,7 @@ test_notify_action ()
 	EOF
 
 	list_triggers_matches_ok "notify action" "${tmp_expected_stdout}"
+	list_triggers_matches_mi_ok "MI notify action" "${tmp_expected_stdout}"
 
 	lttng_remove_trigger_ok "T0"
 	lttng_remove_trigger_ok "T1"
