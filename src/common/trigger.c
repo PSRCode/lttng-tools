@@ -9,6 +9,7 @@
 #include <common/credentials.h>
 #include <common/dynamic-array.h>
 #include <common/error.h>
+#include <common/mi-lttng.h>
 #include <common/optional.h>
 #include <common/payload-view.h>
 #include <common/payload.h>
@@ -1017,4 +1018,118 @@ LTTNG_HIDDEN
 void lttng_trigger_unlock(struct lttng_trigger *trigger)
 {
 	pthread_mutex_unlock(&trigger->lock);
+}
+
+LTTNG_HIDDEN
+enum lttng_error_code lttng_trigger_mi(
+		const struct lttng_trigger *trigger, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_trigger_status trigger_status;
+	const struct lttng_condition *condition = NULL;
+	const struct lttng_action *action = NULL;
+	uid_t owner_uid;
+
+	assert(trigger);
+	assert(writer);
+
+	/* Open trigger */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_trigger);
+	if (ret) {
+		goto mi_error;
+	}
+
+	trigger_status = lttng_trigger_get_owner_uid(trigger, &owner_uid);
+	assert(trigger_status == LTTNG_TRIGGER_STATUS_OK);
+
+	/* Name */
+	ret = mi_lttng_writer_write_element_string(
+			writer, config_element_name, trigger->name);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Owner uid */
+	ret = mi_lttng_writer_write_element_signed_int(writer,
+			mi_lttng_element_trigger_owner_uid,
+			(int64_t) owner_uid);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Condition. */
+	condition = lttng_trigger_get_const_condition(trigger);
+	assert(condition);
+	ret_code = lttng_condition_mi(condition, writer);
+	if (ret_code != LTTNG_OK) {
+		goto end;
+	}
+
+	/* Action. */
+	action = lttng_trigger_get_const_action(trigger);
+	assert(action);
+	ret_code = lttng_action_mi(action, writer);
+	if (ret_code != LTTNG_OK) {
+		goto end;
+	}
+
+	/* Close trigger */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
+
+	ret_code = LTTNG_OK;
+	goto end;
+
+mi_error:
+	ret_code = LTTNG_ERR_MI_IO_FAIL;
+end:
+	return ret_code;
+}
+
+LTTNG_HIDDEN
+enum lttng_error_code lttng_triggers_mi(
+		const struct lttng_triggers *triggers, struct mi_writer *writer)
+{
+	int ret;
+	enum lttng_error_code ret_code;
+	enum lttng_trigger_status status;
+	unsigned int count, i;
+
+	assert(triggers);
+	assert(writer);
+
+	status = lttng_triggers_get_count(triggers, &count);
+	if (status != LTTNG_TRIGGER_STATUS_OK) {
+		ret_code = LTTNG_ERR_UNK;
+		goto error;
+	}
+
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_triggers);
+	if (ret) {
+		ret_code = LTTNG_ERR_MI_IO_FAIL;
+		goto error;
+	}
+
+	for (i = 0; i < count; i++) {
+		const struct lttng_trigger *trigger =
+				lttng_triggers_get_at_index(triggers, i);
+		ret_code = lttng_trigger_mi(trigger, writer);
+		if (ret_code != LTTNG_OK) {
+			goto error;
+		}
+	}
+
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		ret_code = LTTNG_ERR_MI_IO_FAIL;
+		goto error;
+	}
+
+	ret_code = LTTNG_OK;
+
+error:
+	return ret_code;
 }

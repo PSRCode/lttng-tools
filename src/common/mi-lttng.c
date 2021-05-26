@@ -359,6 +359,14 @@ LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_tracep
 LTTNG_HIDDEN const char * const mi_lttng_element_userspace_probe_location_function_instrumentation_type = "instrumentation_type";
 LTTNG_HIDDEN const char * const mi_lttng_userspace_probe_location_function_instrumentation_type_entry = "ENTRY";
 
+/* String related to trigger */
+LTTNG_HIDDEN const char * const mi_lttng_element_triggers = "triggers";
+LTTNG_HIDDEN const char * const mi_lttng_element_trigger = "trigger";
+/* TODO JORAJ: do we want a lttng_credentials mi reprensentation with gid and
+ * uid for futur proofing?
+ */
+LTTNG_HIDDEN const char * const mi_lttng_element_trigger_owner_uid = "uid";
+
 /* String related to add-context command */
 LTTNG_HIDDEN const char * const mi_lttng_element_context_symbol = "symbol";
 
