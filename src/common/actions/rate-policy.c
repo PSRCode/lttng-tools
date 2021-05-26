@@ -798,7 +798,7 @@ enum lttng_error_code lttng_rate_policy_mi(
 	}
 
 	/* Underlying rate policy */
-	ret_code = lttng_rate_policy_mi(rate_policy, writer);
+	ret_code = rate_policy->mi(rate_policy, writer);
 	if (ret_code != LTTNG_OK) {
 		goto end;
 	}
