@@ -1116,62 +1116,16 @@ int compare_triggers_by_name(const void *a, const void *b)
 	return strcmp(name_a, name_b);
 }
 
-int cmd_list_triggers(int argc, const char **argv)
+static
+int print_sorted_triggers(const struct lttng_triggers *triggers)
 {
 	int ret;
-	struct argpar_parse_ret argpar_parse_ret = {};
-	struct lttng_triggers *triggers = NULL;
 	int i;
 	struct lttng_dynamic_pointer_array sorted_triggers;
 	enum lttng_trigger_status trigger_status;
 	unsigned int num_triggers;
 
 	lttng_dynamic_pointer_array_init(&sorted_triggers, NULL);
-
-	argpar_parse_ret = argpar_parse(
-			argc - 1, argv + 1, list_trigger_options, true);
-	if (!argpar_parse_ret.items) {
-		ERR("%s", argpar_parse_ret.error);
-		goto error;
-	}
-
-	for (i = 0; i < argpar_parse_ret.items->n_items; i++) {
-		const struct argpar_item *item =
-				argpar_parse_ret.items->items[i];
-
-		if (item->type == ARGPAR_ITEM_TYPE_OPT) {
-			const struct argpar_item_opt *item_opt =
-					(const struct argpar_item_opt *) item;
-
-			switch (item_opt->descr->id) {
-			case OPT_HELP:
-				SHOW_HELP();
-				ret = 0;
-				goto end;
-
-			case OPT_LIST_OPTIONS:
-				list_cmd_options_argpar(stdout,
-					list_trigger_options);
-				ret = 0;
-				goto end;
-
-			default:
-				abort();
-			}
-
-		} else {
-			const struct argpar_item_non_opt *item_non_opt =
-				(const struct argpar_item_non_opt *) item;
-
-			ERR("Unexpected argument: %s", item_non_opt->arg);
-		}
-	}
-
-	ret = lttng_list_triggers(&triggers);
-	if (ret != LTTNG_OK) {
-		ERR("Error listing triggers: %s.", lttng_strerror(-ret));
-		goto error;
-	}
 
 	trigger_status = lttng_triggers_get_count(triggers, &num_triggers);
 	if (trigger_status != LTTNG_TRIGGER_STATUS_OK) {
@@ -1220,6 +1174,128 @@ int cmd_list_triggers(int argc, const char **argv)
 
 	ret = 0;
 	goto end;
+error:
+	ret = 1;
+
+end:
+	lttng_dynamic_pointer_array_reset(&sorted_triggers);
+	return ret;
+}
+
+int cmd_list_triggers(int argc, const char **argv)
+{
+	int ret;
+	struct argpar_parse_ret argpar_parse_ret = {};
+	struct lttng_triggers *triggers = NULL;
+	int i;
+	struct mi_writer *mi_writer = NULL;
+
+
+	argpar_parse_ret = argpar_parse(
+			argc - 1, argv + 1, list_trigger_options, true);
+	if (!argpar_parse_ret.items) {
+		ERR("%s", argpar_parse_ret.error);
+		goto error;
+	}
+
+	for (i = 0; i < argpar_parse_ret.items->n_items; i++) {
+		const struct argpar_item *item =
+				argpar_parse_ret.items->items[i];
+
+		if (item->type == ARGPAR_ITEM_TYPE_OPT) {
+			const struct argpar_item_opt *item_opt =
+					(const struct argpar_item_opt *) item;
+
+			switch (item_opt->descr->id) {
+			case OPT_HELP:
+				SHOW_HELP();
+				ret = 0;
+				goto end;
+
+			case OPT_LIST_OPTIONS:
+				list_cmd_options_argpar(stdout,
+					list_trigger_options);
+				ret = 0;
+				goto end;
+
+			default:
+				abort();
+			}
+
+		} else {
+			const struct argpar_item_non_opt *item_non_opt =
+				(const struct argpar_item_non_opt *) item;
+
+			ERR("Unexpected argument: %s", item_non_opt->arg);
+		}
+	}
+
+	ret = lttng_list_triggers(&triggers);
+	if (ret != LTTNG_OK) {
+		ERR("Error listing triggers: %s.", lttng_strerror(-ret));
+		goto error;
+	}
+
+	/* Mi check */
+	if (lttng_opt_mi) {
+		mi_writer = mi_lttng_writer_create(
+				fileno(stdout), lttng_opt_mi);
+		if (!mi_writer) {
+			ret = CMD_ERROR;
+			goto end;
+		}
+
+		/* Open command element */
+		ret = mi_lttng_writer_command_open(
+				mi_writer, mi_lttng_element_command_list_trigger);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto end;
+		}
+
+		/* Open output element */
+		ret = mi_lttng_writer_open_element(
+				mi_writer, mi_lttng_element_command_output);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto end;
+		}
+	}
+
+	if (lttng_opt_mi) {
+		ret = lttng_triggers_mi(triggers, mi_writer);
+		if (ret != LTTNG_OK) {
+			ERR("Error printing MI triggers: %s.",
+					lttng_strerror(-ret));
+			goto error;
+		}
+	} else {
+		ret = print_sorted_triggers(triggers);
+		if (ret) {
+			ERR("Error printing triggers");
+			goto error;
+		}
+	}
+
+	/* Mi closing */
+	if (lttng_opt_mi) {
+		/* Close  output element */
+		ret = mi_lttng_writer_close_element(mi_writer);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto end;
+		}
+
+		/* Command element close */
+		ret = mi_lttng_writer_command_close(mi_writer);
+		if (ret) {
+			ret = CMD_ERROR;
+			goto end;
+		}
+	}
+
+	ret = 0;
+	goto end;
 
 error:
 	ret = 1;
@@ -1227,7 +1303,10 @@ error:
 end:
 	argpar_parse_ret_fini(&argpar_parse_ret);
 	lttng_triggers_destroy(triggers);
-	lttng_dynamic_pointer_array_reset(&sorted_triggers);
-
+	/* Mi clean-up */
+	if (mi_writer && mi_lttng_writer_destroy(mi_writer)) {
+		/* Preserve original error code */
+		ret = ret ? ret : CMD_ERROR;
+	}
 	return ret;
 }
