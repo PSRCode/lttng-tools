@@ -1217,6 +1217,7 @@ AC_CONFIG_FILES([
 	tests/utils/testapp/userspace-probe-elf-binary/Makefile
 	tests/utils/testapp/userspace-probe-elf-cxx-binary/Makefile
 	tests/utils/testapp/userspace-probe-sdt-binary/Makefile
+	tests/utils/xml-utils/Makefile
 ])
 
 # Inject variable into python test script.
