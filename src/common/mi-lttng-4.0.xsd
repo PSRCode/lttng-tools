@@ -945,21 +945,21 @@ SPDX-License-Identifier: MIT
 	<xs:element name="condition_buffer_usage_high" type="tns:condition_buffer_usage_type" substitutionGroup="tns:condition_sub_type" />
 	<xs:element name="condition_buffer_usage_low" type="tns:condition_buffer_usage_type" substitutionGroup="tns:condition_sub_type" />
 	<xs:element name="condition_event_rule_matches" type="tns:condition_event_rule_matches_type" substitutionGroup="tns:condition_sub_type" />
-	<xs:element name="condition_session_consumed_size" type="tns:condition_event_session_consumed_size_type" substitutionGroup="tns:condition_sub_type" />
-	<xs:element name="condition_session_rotation" type="tns:condition_session_rotation" substitutionGroup="tns:condition_sub_type" />
+	<xs:element name="condition_session_consumed_size" type="tns:condition_session_consumed_size_type" substitutionGroup="tns:condition_sub_type" />
+	<xs:element name="condition_session_rotation" type="tns:condition_session_rotation_type" substitutionGroup="tns:condition_sub_type" />
 
 	<!-- Allow expression of the threshold in ratio or in bytes -->
 	<xs:element name="buffer_usage_threshold_sub_type" abstract="true" />
-	<xs:element name="threshold_bytes" type="tns:uint64_t", substitutionGroup="tns:buffer_usage_threshold_sub_type" />
-        <xs:element name="threshold_ratio" type="tns:ratio", substitutionGroup="tns:buffer_usage_threshold_sub_type" />
+	<xs:element name="threshold_bytes" type="tns:uint64_type" substitutionGroup="tns:buffer_usage_threshold_sub_type" />
+        <xs:element name="threshold_ratio" type="tns:ratio_type" substitutionGroup="tns:buffer_usage_threshold_sub_type" />
 
 	<!-- Maps to a lttng_condition buffer usage for both low and high -->
-	<xs:complexType name="condition_buffer_usage_high_type">
+	<xs:complexType name="condition_buffer_usage_type">
 		<xs:all>
 			<xs:element name="session_name" type="xs:string" minOccurs="1" />
 			<xs:element name="channel_name" type="xs:string" minOccurs="1" />
 			<xs:element name="domain_type" type="tns:domain_type" minOccurs="1" />
-			<xs:element ref="buffer_usage_threshold_sub_type" minOccurs="1" />
+			<xs:element ref="tns:buffer_usage_threshold_sub_type" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
 
@@ -968,7 +968,7 @@ SPDX-License-Identifier: MIT
 	<xs:element name="event_expr_payload_field" type="tns:event_expr_payload_field_type" substitutionGroup="tns:event_expr_sub_type" />
 	<xs:element name="event_expr_context_field" type="tns:event_expr_context_field_type" substitutionGroup="tns:event_expr_sub_type" />
 	<xs:element name="event_expr_specific_context_field" type="tns:event_expr_specific_context_field_type" substitutionGroup="tns:event_expr_sub_type" />
-	<xs:element name="event_expr_array_field_element" type="tns:event_expr_array_field_element" substitutionGroup="tns:event_expr_sub_type" />
+	<xs:element name="event_expr_array_field_element" type="tns:event_expr_array_field_element_type" substitutionGroup="tns:event_expr_sub_type" />
 
 	<!-- Maps to lttng_event_expr payload_field -->
 	<xs:complexType name="event_expr_payload_field_type">
@@ -991,17 +991,19 @@ SPDX-License-Identifier: MIT
 		</xs:all>
 	</xs:complexType>
 	<!-- Maps to lttng_event_expr array field -->
-	<xs:complexType name="event_expr_array_field_type">
+	<xs:complexType name="event_expr_array_field_element_type">
 		<xs:all>
-			<xs:element name="index" type="tns:uint64_t" minOccurs="1" />
+			<xs:element name="index" type="tns:uint64_type" minOccurs="1" />
 			<xs:element name="event_expr" type="tns:event_expr_type" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
 
 	<!-- Maps to a lttng_event_expr -->
 	<xs:complexType name="event_expr_type">
+		<xs:all>
 			<xs:element name="type" type="xs:string" minOccurs="1" />
 			<xs:element ref="tns:event_expr_sub_type" minOccurs="1" />
+		</xs:all>
 	</xs:complexType>
 
 	<!-- Maps to an array of lttng_event_expr aka capture descriptor -->
@@ -1023,7 +1025,7 @@ SPDX-License-Identifier: MIT
 	<xs:complexType name="condition_session_consumed_size_type">
 		<xs:all>
 			<xs:element name="session_name" type="xs:string" minOccurs="1" />
-			<xs:element name="threshold_bytes" type="tns:uint64_t" minOccurs="1" />
+			<xs:element name="threshold_bytes" type="tns:uint64_type" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
 
