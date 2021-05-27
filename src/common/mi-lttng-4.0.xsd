@@ -205,6 +205,31 @@ SPDX-License-Identifier: MIT
 		</xs:restriction>
 	</xs:simpleType>
 
+	<!-- Maps to the lttng_event_rule_kernel_syscall_emission_site enum -->
+	<xs:simpleType name="event_rule_kernel_syscall_emission_site">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="entry+exit" />
+			<xs:enumeration value="entry" />
+			<xs:enumeration value="exit" />
+		</xs:restriction>
+	</xs:simpleType>
+
+	<!-- Maps to the lttng_userspace_probe_location_function_instrumentation_type enum -->
+	<xs:simpleType name="userspace_probe_location_function_instrumentation">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="ENTRY" />
+		</xs:restriction>
+	</xs:simpleType>
+
+	<!-- Maps to the lttng_userspace_probe_location_lookup_method enum -->
+	<xs:simpleType name="userspace_probe_location_lookup_method">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="FUNCTION-DEFAULT" />
+			<xs:enumeration value="FUNCTION-ELF" />
+			<xs:enumeration value="TRACEPOINT-SDT" />
+		</xs:restriction>
+	</xs:simpleType>
+
 	<!-- Maps to the lttng_event_probe_attr struct -->
 	<xs:complexType name="event_probe_attributes_type">
 		<xs:all>
@@ -936,6 +961,143 @@ SPDX-License-Identifier: MIT
 		<xs:all>
 			<xs:element name="type" type="xs:string" minOccurs="1" />
 			<xs:element ref="tns:action_sub_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to lttng_kernel_probe_location sub types -->
+        <xs:element name="kernel_probe_location_sub_type" abstract="true"/>
+        <xs:element name="kernel_probe_location_address" type="tns:kernel_probe_location_address_type" substitutionGroup="tns:kernel_probe_location_sub_type" />
+        <xs:element name="kernel_probe_location_symbol_offset" type="tns:kernel_probe_location_symbol_offset_type" substitutionGroup="tns:kernel_probe_location_sub_type" />
+
+	<!-- Maps to a lttng_kernel_probe_location_address. -->
+	<xs:complexType name="kernel_probe_location_address_type">
+		<xs:all>
+			<xs:element name="address" type="tns:uint64_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_kernel_probe_location_symbol_offset_type. -->
+	<xs:complexType name="kernel_probe_location_symbol_offset_type">
+		<xs:all>
+			<xs:element name="name" type="xs:string" minOccurs="1" />
+			<xs:element name="offset" type="tns:uint64_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_kernel_probe_location. -->
+	<xs:complexType name="kernel_probe_location_type">
+		<xs:all>
+			<xs:element name="type" type="xs:string" minOccurs="1" />
+			<xs:element ref="tns:kernel_probe_location_sub_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+
+	<!-- Maps to lttng_user_probe_location sub types -->
+	<xs:element name="userspace_probe_location_sub_type" abstract="true"/>
+        <xs:element name="userspace_probe_location_function" type="tns:userspace_probe_location_function_type" substitutionGroup="tns:userspace_probe_location_sub_type" />
+        <xs:element name="userspace_probe_location_tracepoint" type="tns:userspace_probe_location_tracepoint_type" substitutionGroup="tns:userspace_probe_location_sub_type" />
+
+       	<!-- Maps to a lttng_userspace_probe_location_lookup_method. -->
+	<xs:complexType name="userspace_probe_location_lookup_method_type">
+		<xs:all>
+			<xs:element name="type" type="tns:userspace_probe_location_lookup_method" minOccurs="1" />
+			<!-- JORAJ TODO do we want to have an empty userspace_probe_location_lookup_method_<type> element ? -->
+		</xs:all>
+	</xs:complexType>
+
+       	<!-- Maps to a lttng_userspace_probe_location_function. -->
+	<xs:complexType name="userspace_probe_location_function_type">
+		<xs:all>
+			<xs:element name="function_name" type="xs:string" minOccurs="1" />
+			<xs:element name="binary_path" type="xs:string" minOccurs="1" />
+			<xs:element name="function_instrumentation_type" type="tns:lttng_userspace_probe_location_function_instrumentation" minOccurs="1" />
+			<xs:element name="userspace_probe_location_lookup_method" type="tns:userspace_probe_location_lookup_method_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+       	<!-- Maps to a lttng_userspace_probe_location_tracepoint. -->
+	<xs:complexType name="userspace_probe_location_tracepoint_type">
+		<xs:all>
+			<xs:element name="probe_name" type="xs:string" minOccurs="1" />
+			<xs:element name="provider_name" type="xs:string" minOccurs="1" />
+			<xs:element name="binary_path" type="xs:string" minOccurs="1" />
+			<xs:element name="userspace_probe_location_lookup_method" type="tns:userspace_probe_location_lookup_method_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+ 
+	<!-- Maps to a lttng_userspace_probe_location. -->
+	<xs:complexType name="userspace_probe_location_type">
+		<xs:all>
+			<xs:element name="type" type="xs:string" minOccurs="1" />
+			<xs:element ref="tns:userspace_probe_location_sub_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+		
+	
+	<!-- Maps to a lttng_event_rule subtypes -->
+        <xs:element name="event_rule_sub_type" abstract="true"/>
+        <xs:element name="event_rule_jul_logging" type="tns:event_rule_logging_type" substitutionGroup="tns:event_rule_sub_type" />
+        <xs:element name="event_rule_kernel_kprobe" type="tns:event_rule_kernel_kprobe_type" substitutionGroup="tns:event_rule_sub_type" />
+        <xs:element name="event_rule_kernel_syscall" type="tns:event_rule_kernel_syscall_type" substitutionGroup="tns:event_rule_sub_type" />
+        <xs:element name="event_rule_kernel_tracepoint" type="tns:event_rule_kernel_tracepoint_type" substitutionGroup="tns:event_rule_sub_type" />
+        <xs:element name="event_rule_kernel_uprobe" type="tns:event_rule_kernel_uprobe_type" substitutionGroup="tns:event_rule_sub_type" />
+        <xs:element name="event_rule_log4j_logging" type="tns:event_rule_logging_type" substitutionGroup="tns:event_rule_sub_type" />
+        <xs:element name="event_rule_python_logging" type="tns:event_rule_logging_type" substitutionGroup="tns:event_rule_sub_type" />
+        <xs:element name="event_rule_user_tracepoint" type="tns:event_rule_user_tracepoint_type" substitutionGroup="tns:event_rule_sub_type" />
+	
+	<!-- Maps to a lttng_event_rule_kernel_kprobe. -->
+	<xs:complexType name="event_rule_kernel_kprobe_type">
+		<xs:all>
+			<xs:element name="event_name" type="xs:string" minOccurs="1" />
+			<xs:element name="kernel_probe_location" type="tns:kernel_probe_location_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_event_rule_kernel_syscall. -->
+        <xs:complexType name="event_rule_kernel_syscall_type">
+		<xs:all>
+			<xs:element name="emission_site" type="tns:event_rule_kernel_syscall_emission_site" minOccurs="1" />
+			<xs:element name="name_pattern" type="xs:string" minOccurs="1" />
+			<xs:element name="filter_expression" type="xs:string" minOccurs="0" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_event_rule_kernel_tracepoint. -->
+        <xs:complexType name="event_rule_kernel_tracepoint_type">
+		<xs:all>
+			<xs:element name="name_pattern" type="xs:string" minOccurs="1" />
+			<xs:element name="filter_expression" type="xs:string" minOccurs="0" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_event_rule_kernel_uprobe. -->
+        <xs:complexType name="event_rule_kernel_uprobe_type">
+		<xs:all>
+			<xs:element name="event_name" type="xs:string" minOccurs="1" />
+			<xs:element name="userspace_probe_location" type="tns:userspace_probe_location_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_event_rule_*_logging. -->
+	<xs:complexType name="event_rule_logging_type">
+		<xs:all>
+			JORAJ
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_event_rule_user_tracepoint. -->
+        <xs:complexType name="event_rule_user_tracepoint_type">
+		<xs:all>
+			JORAJ
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_event_rule. -->
+	<xs:complexType name="event_rule_type">
+		<xs:all>
+			<xs:element name="type" type="xs:string" minOccurs="1" />
+			<xs:element ref="tns:event_rule_sub_type" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
 
