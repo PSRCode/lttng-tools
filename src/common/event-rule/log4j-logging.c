@@ -527,9 +527,9 @@ static enum lttng_error_code lttng_event_rule_log4j_logging_mi(
 	}
 
 	if (log_level_rule) {
-		ret = lttng_log_level_rule_mi(log_level_rule, writer);
-		if (ret) {
-			goto mi_error;
+		ret_code = lttng_log_level_rule_mi(log_level_rule, writer);
+		if (ret_code != LTTNG_OK) {
+			goto end;
 		}
 	}
 
