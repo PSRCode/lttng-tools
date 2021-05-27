@@ -244,9 +244,9 @@ static enum lttng_error_code lttng_event_rule_kernel_uprobe_mi(
 		goto mi_error;
 	}
 
-	/* Name */
+	/* Event Name */
 	ret = mi_lttng_writer_write_element_string(writer,
-			mi_lttng_element_event_rule_name_pattern, event_name);
+			mi_lttng_element_event_rule_event_name, event_name);
 	if (ret) {
 		goto mi_error;
 	}

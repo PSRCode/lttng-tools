@@ -2220,7 +2220,7 @@ enum lttng_error_code lttng_userspace_probe_location_function_mi(
 
 	ret = mi_lttng_writer_write_element_string(writer,
 			mi_lttng_element_userspace_probe_location_function_instrumentation_type,
-			binary_path);
+			instrumentation_type_str);
 	if (ret) {
 		goto mi_error;
 	}

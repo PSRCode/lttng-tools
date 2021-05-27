@@ -290,6 +290,7 @@ LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_python_logging = "P
 LTTNG_HIDDEN const char * const mi_lttng_event_rule_type_str_user_tracepoint = "USER-TRACEPOINT";
 
 /* String related to lttng_event_rule_type */
+LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_event_name = "event_name";
 LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_name_pattern = "name_pattern";
 LTTNG_HIDDEN const char * const mi_lttng_element_event_rule_filter_expression = "filter_expression";
 

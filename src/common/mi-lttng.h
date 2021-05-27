@@ -286,6 +286,7 @@ LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_log4j_loggin
 LTTNG_HIDDEN extern const char * const mi_lttng_event_rule_type_str_python_logging;
 
 /* String related to lttng_event_rule */
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_event_name;
 LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_name_pattern;
 LTTNG_HIDDEN extern const char * const mi_lttng_element_event_rule_filter_expression;
 
