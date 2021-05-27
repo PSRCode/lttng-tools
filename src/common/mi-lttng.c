@@ -366,7 +366,7 @@ LTTNG_HIDDEN const char * const mi_lttng_element_trigger = "trigger";
 /* TODO JORAJ: do we want a lttng_credentials mi reprensentation with gid and
  * uid for futur proofing?
  */
-LTTNG_HIDDEN const char * const mi_lttng_element_trigger_owner_uid = "uid";
+LTTNG_HIDDEN const char * const mi_lttng_element_trigger_owner_uid = "owner_uid";
 
 /* String related to add-context command */
 LTTNG_HIDDEN const char * const mi_lttng_element_context_symbol = "symbol";
