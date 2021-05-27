@@ -247,17 +247,13 @@ enum lttng_error_code lttng_condition_buffer_usage_mi(const struct lttng_conditi
 	}
 
 	/* Channel name */
-	/* TODO JORAJ: do we want to do <channel><name/></channel ? */
 	ret = mi_lttng_writer_write_element_string(
 			writer, mi_lttng_element_condition_channel_name, channel_name);
 	if (ret) {
 		goto mi_error;
 	}
 
-	/* TODO JORAJ: Do we want <domain></type></domain?
-	 * or domain_type?
-	 * Stick to domain for now.
-	 */
+	/* Domain */
 	ret = mi_lttng_writer_write_element_string(
 			writer, config_element_domain, mi_lttng_domaintype_string(domain_type));
 	if (ret) {
@@ -284,7 +280,7 @@ enum lttng_error_code lttng_condition_buffer_usage_mi(const struct lttng_conditi
 	} else {
 		/* Ratio. */
 		ret = mi_lttng_writer_write_element_unsigned_int(
-				writer, mi_lttng_element_condition_threshold_ratio, threshold_bytes);
+				writer, mi_lttng_element_condition_threshold_ratio, threshold_ratio);
 		if (ret) {
 			goto mi_error;
 		}

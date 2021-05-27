@@ -744,7 +744,7 @@ enum lttng_error_code lttng_event_expr_app_specific_context_field_mi(const struc
 	}
 
 	/* Type name */
-	ret = mi_lttng_writer_write_element_string(writer, mi_lttng_element_event_expr_type_name, provider_name);
+	ret = mi_lttng_writer_write_element_string(writer, mi_lttng_element_event_expr_type_name, type_name);
 	if (ret) {
 		goto mi_error;
 	}
