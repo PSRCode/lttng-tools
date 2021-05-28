@@ -159,6 +159,12 @@ enum lttng_error_code lttng_condition_session_consumed_size_mi(const struct lttn
 	status = lttng_condition_session_consumed_size_get_threshold(condition, &threshold_bytes);
 	assert(status == LTTNG_CONDITION_STATUS_OK);
 
+	/* Open condition_session_consumed_size . */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_condition_session_consumed_size);
+	if (ret) {
+		goto mi_error;
+	}
+
 	/* Session name */
 	ret = mi_lttng_writer_write_element_string(writer, mi_lttng_element_session_name, session_name);
 	if (ret) {
@@ -167,6 +173,12 @@ enum lttng_error_code lttng_condition_session_consumed_size_mi(const struct lttn
 
 	/* Threshold bytes */
 	ret = mi_lttng_writer_write_element_unsigned_int(writer, mi_lttng_element_condition_threshold_bytes, threshold_bytes);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close condition_session_consumed_size . */
+	ret = mi_lttng_writer_close_element(writer);
 	if (ret) {
 		goto mi_error;
 	}

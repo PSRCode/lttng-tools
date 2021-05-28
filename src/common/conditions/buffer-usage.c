@@ -205,12 +205,10 @@ enum lttng_error_code lttng_condition_buffer_usage_mi(const struct lttng_conditi
 	bool is_threshold_bytes = false;
 	double threshold_ratio;
 	uint64_t threshold_bytes;
+	const char *condition_type_str = NULL;
 	
 	assert(condition);
 	assert(IS_USAGE_CONDITION(condition));
-	/* JORAJ TODO: should we use the *validate* call on MI to make sure an
-	 * object is valid ? We could then take some liberty on checks.
-	 */
 
 	/* Gather the data */
 	status = lttng_condition_buffer_usage_get_session_name(condition, &session_name);
@@ -237,7 +235,24 @@ enum lttng_error_code lttng_condition_buffer_usage_mi(const struct lttng_conditi
 		assert(status == LTTNG_CONDITION_STATUS_OK);
 	}
 
+	switch(lttng_condition_get_type(condition)) {
+		case LTTNG_CONDITION_TYPE_BUFFER_USAGE_HIGH:
+			condition_type_str = mi_lttng_element_condition_buffer_usage_high;
+			break;
+		case LTTNG_CONDITION_TYPE_BUFFER_USAGE_LOW:
+			condition_type_str = mi_lttng_element_condition_buffer_usage_low;
+			break;
+		default:
+			abort();
+			break;
+	}
+
 	/* Actual MI */
+	/* Open the sub type condition. */
+	ret = mi_lttng_writer_open_element(writer, condition_type_str);
+	if (ret) {
+		goto mi_error;
+	}
 
 	/* Session name */
 	ret = mi_lttng_writer_write_element_string(
@@ -260,17 +275,6 @@ enum lttng_error_code lttng_condition_buffer_usage_mi(const struct lttng_conditi
 		goto mi_error;
 	}
 
-	/* TODO JORAJ:
-	 * How do we want to express the threshold?? Do we want to ressemble
-	 * what is done on the rotation MI with
-	 * <size_threshold></bytes></size_threshold>
-	 *
-	 * and for ration something like
-	 * <ratio_threshold></ratio></ratio_threshold>
-	 *
-	 * or something like  <threshold></bytes></ratio></threshold>
-	 * ?
-	 */
 	if(is_threshold_bytes) {
 		ret = mi_lttng_writer_write_element_unsigned_int(
 				writer, mi_lttng_element_condition_threshold_bytes, threshold_bytes);
@@ -279,11 +283,17 @@ enum lttng_error_code lttng_condition_buffer_usage_mi(const struct lttng_conditi
 		}
 	} else {
 		/* Ratio. */
-		ret = mi_lttng_writer_write_element_unsigned_int(
+		ret = mi_lttng_writer_write_element_double(
 				writer, mi_lttng_element_condition_threshold_ratio, threshold_ratio);
 		if (ret) {
 			goto mi_error;
 		}
+	}
+
+	/* Closing sub·type·condition */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
 	}
 
 	ret_code = LTTNG_OK;

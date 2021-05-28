@@ -609,8 +609,20 @@ enum lttng_error_code lttng_condition_session_rotation_mi(const struct lttng_con
 	assert(status == LTTNG_CONDITION_STATUS_OK);
 	assert(session_name);
 
-	/* Session name */
+	/* Open condition_session_rotation. */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_condition_session_rotation);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Session name. */
 	ret = mi_lttng_writer_write_element_string(writer, mi_lttng_element_session_name, session_name);
+	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close condition_session_rotation. */
+	ret = mi_lttng_writer_close_element(writer);
 	if (ret) {
 		goto mi_error;
 	}

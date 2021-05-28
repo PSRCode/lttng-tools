@@ -455,6 +455,12 @@ enum lttng_error_code lttng_condition_event_rule_matches_mi(const struct lttng_c
 	status = lttng_condition_event_rule_matches_get_capture_descriptor_count(condition, &capture_descriptor_count);
 	assert(status == LTTNG_CONDITION_STATUS_OK);
 
+	/* Open condition_event_rule_matches. */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_condition_event_rule_matches);
+	if (ret) {
+		goto mi_error;
+	}
+
 	/* The event rule. */
 	ret_code = lttng_event_rule_mi(rule, writer);
 	if (ret_code != LTTNG_OK) {
@@ -478,11 +484,17 @@ enum lttng_error_code lttng_condition_event_rule_matches_mi(const struct lttng_c
 		}
 	}
 
+	/* Close capture_descriptors. */
 	ret = mi_lttng_writer_close_element(writer);
 	if (ret) {
 		goto mi_error;
 	}
 
+	/* Close condition_event_rule_matches. */
+	ret = mi_lttng_writer_close_element(writer);
+	if (ret) {
+		goto mi_error;
+	}
 	ret_code = LTTNG_OK;
 	goto end;
 

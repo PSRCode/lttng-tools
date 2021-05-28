@@ -673,9 +673,21 @@ enum lttng_error_code lttng_event_expr_event_payload_field_mi(const struct lttng
 	name = lttng_event_expr_event_payload_field_get_name(expression);
 	assert(name);
 
+	/* Open event_expr_payload_field. */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_event_expr_payload_field);
+	if(ret) {
+		goto mi_error;
+	}
+
 	/* Name */
 	ret = mi_lttng_writer_write_element_string(writer, config_element_name, name);
 	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close event_expr_payload_field. */
+	ret = mi_lttng_writer_close_element(writer);
+	if(ret) {
 		goto mi_error;
 	}
 
@@ -703,9 +715,21 @@ enum lttng_error_code lttng_event_expr_channel_context_field_mi(const struct ltt
 	name = lttng_event_expr_channel_context_field_get_name(expression);
 	assert(name);
 
+	/* Open event_expr_channel_context_field. */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_event_expr_channel_context_field);
+	if(ret) {
+		goto mi_error;
+	}
+
 	/* Name */
 	ret = mi_lttng_writer_write_element_string(writer, config_element_name, name);
 	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close event_expr_channel_context_field. */
+	ret = mi_lttng_writer_close_element(writer);
+	if(ret) {
 		goto mi_error;
 	}
 
@@ -737,6 +761,12 @@ enum lttng_error_code lttng_event_expr_app_specific_context_field_mi(const struc
 	type_name = lttng_event_expr_app_specific_context_field_get_type_name(expression);
 	assert(provider_name);
 
+	/* Open event_expr_app_specific_context_field. */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_event_expr_app_specific_context_field);
+	if(ret) {
+		goto mi_error;
+	}
+
 	/* Provider name */
 	ret = mi_lttng_writer_write_element_string(writer, mi_lttng_element_event_expr_provider_name, provider_name);
 	if (ret) {
@@ -746,6 +776,12 @@ enum lttng_error_code lttng_event_expr_app_specific_context_field_mi(const struc
 	/* Type name */
 	ret = mi_lttng_writer_write_element_string(writer, mi_lttng_element_event_expr_type_name, type_name);
 	if (ret) {
+		goto mi_error;
+	}
+
+	/* Close event_expr_app_specific_context_field. */
+	ret = mi_lttng_writer_close_element(writer);
+	if(ret) {
 		goto mi_error;
 	}
 
@@ -778,6 +814,12 @@ enum lttng_error_code lttng_event_expr_array_field_element_mi(const struct lttng
 	parent_expr = lttng_event_expr_array_field_element_get_parent_expr(expression);
 	assert(parent_expr != NULL);
 
+	/* Open event_expr_array_field_element. */
+	ret = mi_lttng_writer_open_element(writer, mi_lttng_element_event_expr_array_field_element);
+	if(ret) {
+		goto mi_error;
+	}
+
 	/* Index */
 	ret = mi_lttng_writer_write_element_unsigned_int(writer, mi_lttng_element_event_expr_index, index);
 	if (ret) {
@@ -788,6 +830,12 @@ enum lttng_error_code lttng_event_expr_array_field_element_mi(const struct lttng
 	ret_code = lttng_event_expr_mi(parent_expr, writer);
 	if (ret_code != LTTNG_OK) {
 		goto end;
+	}
+
+	/* Close event_expr_array_field_element. */
+	ret = mi_lttng_writer_close_element(writer);
+	if(ret) {
+		goto mi_error;
 	}
 
 	ret_code = LTTNG_OK;

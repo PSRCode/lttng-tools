@@ -355,7 +355,7 @@ enum lttng_error_code lttng_log_level_rule_mi(
 		goto mi_error;
 	}
 
-	/* Levell. */
+	/* Level. */
 	ret = mi_lttng_writer_write_element_signed_int(
 			writer, mi_lttng_element_log_level_rule_level, level);
 	if (ret) {

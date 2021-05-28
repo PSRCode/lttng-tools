@@ -212,7 +212,7 @@ LTTNG_HIDDEN const char * const mi_lttng_rotation_location_relay_protocol_str_tc
 /* String related to rate_policy elements */
 LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy = "rate_policy";
 LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_every_n = "rate_policy_every_n";
-LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_once_after_n = "rate_policy_oncer_after_n";
+LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_once_after_n = "rate_policy_once_after_n";
 
 LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_every_n_interval = "interval";
 LTTNG_HIDDEN const char *const mi_lttng_element_rate_policy_once_after_n_threshold = "threshold";
@@ -248,6 +248,12 @@ LTTNG_HIDDEN const char *const mi_lttng_action_type_str_list = "LIST";
 
 /* String related to condition */
 LTTNG_HIDDEN const char * const mi_lttng_element_condition = "condition";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_buffer_usage_high = "condition_buffer_usage_high";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_buffer_usage_low = "condition_buffer_usage_low";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_event_rule_matches = "condition_event_rule_matches";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_session_consumed_size = "condition_session_consumed_size";
+LTTNG_HIDDEN const char * const mi_lttng_element_condition_session_rotation = "condition_session_rotation";
+
 LTTNG_HIDDEN const char * const mi_lttng_element_condition_channel_name = "channel_name";
 LTTNG_HIDDEN const char * const mi_lttng_element_condition_threshold_bytes = "threshold_bytes";
 LTTNG_HIDDEN const char * const mi_lttng_element_condition_threshold_ratio = "threshold_ratio";
@@ -265,7 +271,11 @@ LTTNG_HIDDEN const char * const mi_lttng_element_capture_descriptor = "capture_d
 LTTNG_HIDDEN const char * const mi_lttng_element_capture_descriptors = "capture_descriptors";
 
 /* String related to event expression */
-LTTNG_HIDDEN const char * const mi_lttng_element_event_expr = "event_expression";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr = "event_expr";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_payload_field = "event_expr_payload_field";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_channel_context_field = "event_expr_channel_context_field";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_app_specific_context_field = "event_expr_app_specific_context_field";
+LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_array_field_element = "event_expr_array_field_element";
 LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_provider_name = "provider_name";
 LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_type_name = "type_name";
 LTTNG_HIDDEN const char * const mi_lttng_element_event_expr_index = "index";

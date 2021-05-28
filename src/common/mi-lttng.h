@@ -244,6 +244,11 @@ LTTNG_HIDDEN extern const char * const mi_lttng_action_type_str_list;
 
 /* String related to condition */
 LTTNG_HIDDEN extern const char * const mi_lttng_element_condition;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_buffer_usage_high;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_buffer_usage_low;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_event_rule_matches;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_session_consumed_size;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_session_rotation;
 LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_channel_name;
 LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_threshold_ratio;
 LTTNG_HIDDEN extern const char * const mi_lttng_element_condition_threshold_bytes;
@@ -262,6 +267,11 @@ LTTNG_HIDDEN extern const char * const mi_lttng_element_capture_descriptors;
 
 /* String related to event expression */
 LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_payload_field;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_channel_context_field;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_app_specific_context_field;
+LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_array_field_element;
+
 LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_provider_name;
 LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_type_name;
 LTTNG_HIDDEN extern const char * const mi_lttng_element_event_expr_index;
