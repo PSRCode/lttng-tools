@@ -1011,7 +1011,7 @@ SPDX-License-Identifier: MIT
 		<xs:all>
 			<xs:element name="function_name" type="xs:string" minOccurs="1" />
 			<xs:element name="binary_path" type="xs:string" minOccurs="1" />
-			<xs:element name="function_instrumentation_type" type="tns:lttng_userspace_probe_location_function_instrumentation" minOccurs="1" />
+			<xs:element name="function_instrumentation_type" type="tns:userspace_probe_location_function_instrumentation" minOccurs="1" />
 			<xs:element name="userspace_probe_location_lookup_method" type="tns:userspace_probe_location_lookup_method_type" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
@@ -1031,6 +1031,26 @@ SPDX-License-Identifier: MIT
 		<xs:all>
 			<xs:element name="type" type="xs:string" minOccurs="1" />
 			<xs:element ref="tns:userspace_probe_location_sub_type" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_log_level_rule subtypes -->
+        <xs:element name="log_level_rule_sub_type" abstract="true"/>
+        <xs:element name="log_level_rule_exactly" type="tns:log_level_rule_generic_type" substitutionGroup="tns:log_level_rule_sub_type" />
+        <xs:element name="log_level_rule_at_least_as_severe_as" type="tns:log_level_rule_generic_type" substitutionGroup="tns:log_level_rule_sub_type" />
+
+	<!-- Maps to a lttng_log_level_rule_*. -->
+	<xs:complexType name="log_level_rule_generic_type">
+		<xs:all>
+			<xs:element name="level" type="xs:integer" minOccurs="1" />
+		</xs:all>
+	</xs:complexType>
+
+	<!-- Maps to a lttng_log_level_rule. -->
+	<xs:complexType name="log_level_rule_type">
+		<xs:all>
+			<xs:element name="type" type="xs:string" minOccurs="1" />
+			<xs:element ref="tns:log_level_rule_sub_type" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
 		
@@ -1079,17 +1099,31 @@ SPDX-License-Identifier: MIT
 		</xs:all>
 	</xs:complexType>
 
+	
 	<!-- Maps to a lttng_event_rule_*_logging. -->
 	<xs:complexType name="event_rule_logging_type">
 		<xs:all>
-			JORAJ
+			<xs:element name="name_pattern" type="xs:string" minOccurs="1" />
+			<xs:element name="filter_expression" type="xs:string" minOccurs="0" />
+			<xs:element name="log_level_rule" type="tns:log_level_rule_type" minOccurs="0" />
 		</xs:all>
 	</xs:complexType>
+
+	<!-- Maps to exclusion type -->
+	<xs:complexType name="name_pattern_exclusions_type">
+		<xs:sequence>
+			<xs:element name="name_pattern_exclusion" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+		</xs:sequence>
+	</xs:complexType>
+
 
 	<!-- Maps to a lttng_event_rule_user_tracepoint. -->
         <xs:complexType name="event_rule_user_tracepoint_type">
 		<xs:all>
-			JORAJ
+			<xs:element name="name_pattern" type="xs:string" minOccurs="1" />
+			<xs:element name="filter_expression" type="xs:string" minOccurs="0" />
+			<xs:element name="log_level_rule" type="tns:log_level_rule_type" minOccurs="0" />
+			<xs:element name="name_pattern_exclusions" type="tns:name_pattern_exclusions_type" minOccurs="0" />
 		</xs:all>
 	</xs:complexType>
 
@@ -1120,7 +1154,7 @@ SPDX-License-Identifier: MIT
 		<xs:all>
 			<xs:element name="session_name" type="xs:string" minOccurs="1" />
 			<xs:element name="channel_name" type="xs:string" minOccurs="1" />
-			<xs:element name="domain_type" type="tns:domain_type" minOccurs="1" />
+			<xs:element name="domain" type="tns:domain_type_type" minOccurs="1" />
 			<xs:element ref="tns:buffer_usage_threshold_sub_type" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
@@ -1128,8 +1162,8 @@ SPDX-License-Identifier: MIT
 	<!-- Maps to lttng_event_expr sub type -->
 	<xs:element name="event_expr_sub_type" abstract="true" />
 	<xs:element name="event_expr_payload_field" type="tns:event_expr_payload_field_type" substitutionGroup="tns:event_expr_sub_type" />
-	<xs:element name="event_expr_context_field" type="tns:event_expr_context_field_type" substitutionGroup="tns:event_expr_sub_type" />
-	<xs:element name="event_expr_specific_context_field" type="tns:event_expr_specific_context_field_type" substitutionGroup="tns:event_expr_sub_type" />
+	<xs:element name="event_expr_channel_context_field" type="tns:event_expr_channel_context_field_type" substitutionGroup="tns:event_expr_sub_type" />
+	<xs:element name="event_expr_app_specific_context_field" type="tns:event_expr_app_specific_context_field_type" substitutionGroup="tns:event_expr_sub_type" />
 	<xs:element name="event_expr_array_field_element" type="tns:event_expr_array_field_element_type" substitutionGroup="tns:event_expr_sub_type" />
 
 	<!-- Maps to lttng_event_expr payload_field -->
@@ -1139,14 +1173,14 @@ SPDX-License-Identifier: MIT
 		</xs:all>
 	</xs:complexType>
 	<!-- Maps to lttng_event_expr context field -->
-	<xs:complexType name="event_expr_context_field_type">
+	<xs:complexType name="event_expr_channel_context_field_type">
 		<xs:all>
 			<xs:element name="name" type="xs:string" minOccurs="1" />
 		</xs:all>
 	</xs:complexType>
 
-	<!-- Maps to lttng_event_expr specific context field -->
-	<xs:complexType name="event_expr_specific_context_field_type">
+	<!-- Maps to lttng_event_expr app_specific context field -->
+	<xs:complexType name="event_expr_app_specific_context_field_type">
 		<xs:all>
 			<xs:element name="provider_name" type="xs:string" minOccurs="1" />
 			<xs:element name="type_name" type="xs:string" minOccurs="1" />
